@@ -15,9 +15,9 @@ const opt = {
   fileName : './json/card.json'
 }
 
-var allCard = JSON.parse(fs.readFileSync(opt.fileName, 'utf8'))
+const allCard = JSON.parse(fs.readFileSync(opt.fileName, 'utf8'))
 
-var Card = function(name, cardType, effectType){
+const Card = function(name, cardType, effectType){
   this.name = name
   this.cardType = cardType
   this.effectType = effectType
@@ -32,6 +32,7 @@ const room = {}
 function buildPlayer(player){ // player = client
   var index = []
 
+  player.actionPoint = 1
   player.handMax = 7
   player.deckMax = 10
   player.lifeMax = 6
@@ -61,9 +62,37 @@ function buildLife(player){
 }
 
 function drawCard(player){
-  var cardName = player.DECK[player.DECK.length - 1].name
-  player.HAND.push(player.DECK.pop())
+  var cardName
+  if(player.DECK.length > 0 ){
+    if(player.HAND.length < 7){
+      player.actionPoint -= 1
+      cardName = player.DECK[player.DECK.length - 1].name
+      player.HAND.push(player.DECK.pop())
+    }
+    else{
+      cardName = "full"
+    }
+  }
+
   return cardName
+}
+
+function playCard(player, cardName){
+  for(var i = 0; i < player.HAND.length; i++){
+    if(player.HAND[i].name === cardName){
+      if(player.HAND[i].cardType === 'item' || player.HAND.cardType !== 'item' && player.HAND.cardType !== 'vanish' && player.actionPoint > 0){
+        player.actionPoint -= 1
+        player.BATTLE.push(player.HAND[i])
+        player.HAND.splice(i,1)
+        return 'done'
+        break
+      }
+      else{
+        return 'error'
+        break
+      }
+    }
+  }
 }
 
 function shuffle(array){
@@ -112,21 +141,16 @@ io.on('connection', client => {
       room[it.roomID].player_2.emit('buildLIFE', JSON.stringify(room[it.roomID].player_2.LIFE))
       room[it.roomID].player_1.emit('foeBuiltLife', null)
 
-      // <new>
-      // player emit all its life field as a json
-      // another emit "foe life built" to build blank cards
-      // *use Phaser loadtexture on sprite to change its image when the card shows
-
       room[it.roomID].player_1.emit('gameStart', { msg: 'your turn' })
       room[it.roomID].player_2.emit('gameStart', { msg: 'waiting for opponent' })
     }
   })
 
   // turn finished
-
   client.on('finish', (roomID, cb) => {
     if (room[roomID]) {
       if (room[roomID].cursor === client._name) {
+        client.actionPoint = 1
         room[roomID].cursor = room[roomID][room[roomID].cursor]._next
         cb({ msg: 'waiting for opponent' })
 
@@ -134,7 +158,6 @@ io.on('connection', client => {
           room[roomID].player_1.emit('turnStart', { msg: 'your turn'})
         else
           room[roomID].player_2.emit('turnStart', { msg: 'your turn'})
-
       }
       else {
         //cb({ msg: `waiting for ${room[roomID].cursor}...` })
@@ -143,25 +166,60 @@ io.on('connection', client => {
     }
   })
 
-
-  client.on('drawCard', (roomID, action, cb) => {
+  // draw card
+  client.on('drawCard', (roomID, cb) => {
     if (room[roomID]) {
       if (room[roomID].cursor === client._name) {
+        if(client.actionPoint > 0){
+          var cardName = drawCard(client)
+          var result
 
-        var cardName = drawCard(client)
-        cb({ yourCard: cardName})
+          if(cardName !== "full"){
+            if(client.DECK.length == 0)
+              result = "empty"
 
-        if(client._name === "player_1")
-          room[roomID].player_2.emit('foeDrawCard', null)
+            cb({ cardName: cardName, deckStatus: result})
+
+            if(client._name === "player_1")
+              room[roomID].player_2.emit('foeDrawCard', {deckStatus: result})
+            else
+              room[roomID].player_1.emit('foeDrawCard', {deckStatus: result})
+          }
+          else
+            cb({msg: "your hand is full"})
+        }
         else
-          room[roomID].player_1.emit('foeDrawCard', null)
+          cb({ msg: "not enough action point"})
       }
-      else {
-        cb({ yourCard: 'foeTurn' })
-      }
+      else
+        cb({ msg: 'waiting for opponent' })
+
     }
   })
 
+  // play card
+  client.on('playCard', (roomID, msg, cb) => {
+    if(room[roomID]){
+      if(room[roomID].cursor === client._name){
+        var msg = JSON.parse(msg)
+        var result = playCard(client, msg.name)
+        if(result !== 'error' ){
+          cb({ msg: 'playCard' })
+
+          if(client._name === "player_1")
+            room[roomID].player_2.emit('foePlayCard', {cardName: msg.name})
+          else
+            room[roomID].player_1.emit('foePlayCard', {cardName: msg.name})
+        }
+        else
+          cb({ msg: 'not enough action point'})
+      }
+      else
+        cb({ msg: 'waiting for opponent'})
+    }
+  })
+
+  // player disconnect
   client.on('disconnect', (it)=>{
 
   })
