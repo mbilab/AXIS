@@ -5,10 +5,7 @@ const screenH = screen.height
 const ratio = w/h
 
 const app = {
-  display: {
-
-  }
-
+  counter: 0
 }
 
 const display = {
@@ -61,6 +58,7 @@ function preload(){
 
 	game.load.spritesheet('cardback', 'assets/images/CARDBACK.jpg')
 	game.load.spritesheet('cardface', 'assets/images/cardface.png')
+  game.load.spritesheet('transparent', 'assets/images/transparent.png')
 
 	game.load.spritesheet('katana', 'assets/images/katana.jpg')
 	game.load.spritesheet('claymore', 'assets/images/claymore.jpg')
@@ -117,12 +115,16 @@ socket.on('foeDrawCard', it => {
    }
 })
 
-socket.on('foePlayCard', it => {
+socket.on('foePlayHand', it => {
    foe['hand'][0].face.destroy()
    foe['hand'].splice(0,1)
    foe['battle'].push(new Card(it.cardName, 'battle', false, false))
    fixPos('foe', 'hand')
    fixPos('foe', 'battle')
+})
+
+socket.on('foePlayLife', it => {
+
 })
 
 var Card = function (name, field, faceInput, cover){
@@ -149,7 +151,7 @@ Card.prototype.changeInputFunction = function(){
 
   if("hand" === this.field){
     if("vanish" !== this.face.name){
-      this.face.events.onInputDown.add(this.playCard, this)
+      this.face.events.onInputDown.add(this.playHandCard, this)
     }
   }
 
@@ -159,8 +161,8 @@ Card.prototype.changeInputFunction = function(){
   }
   else{
     this.face.loadTexture(this.face.name)
-    if("artifact" === this.cardType){
-      this.face.events.onInputDown.add(this.playCard, this)
+    if("vanish" !== this.face.name){
+      this.face.events.onInputDown.add(this.playLifeCard, this)
     }
   }
 
@@ -193,12 +195,11 @@ Card.prototype.drawCard = function(){
   })
 }
 
-Card.prototype.playCard = function(){
-	console.log('playCard')
+Card.prototype.playHandCard = function(){
   msg.field = this.field
 	msg.name = this.face.name
 
-  socket.emit('playCard', roomID, JSON.stringify(msg), it => {
+  socket.emit('playHandCard', roomID, JSON.stringify(msg), it => {
     if(it.msg === 'playCard'){
 	    text.setText('play '+msg.name)
 
@@ -220,6 +221,58 @@ Card.prototype.playCard = function(){
   })
 }
 
+Card.prototype.playLifeCard = function(){
+  msg.field = this.field
+  msg.name = this.face.name
+  /*
+  if(self['hand'].length > 0){
+    text.setText('choose 1 hand card')
+
+    var sprite = game.add.sprite(0, 0, 'transparent')
+    var endTime = app.counter + 41
+    var x1 = self['hand'][0].face.x,
+        x2 = x1 + self['hand'].length*display.cardWidth + (self['hand'].length - 1)*display.cardWidth/5,
+        y1 = self['hand'][0].face.y,
+        y2 = y1 + display.cardHeight,
+        xloc = game.input.mousePointer.x,
+        yloc = game.input.mousePointer.y
+
+    sprite.scale.setTo(display.gameWidth/sprite.width, display.gameHeight/sprite.height)
+
+    while(app.counter <= endTime){
+      if(!msg.hand){
+        if(xloc >= x1 && xloc <= x2 && yloc >= y1 && yloc <= y2){
+          for(var i = 0; i < self['hand'].length; i++){
+            if((xloc > x1 + 6*display.cardWidth*i/5) && (xloc < x1 + display.cardWidth + 6*display.cardWidth*i/5)){
+              msg.hand = self['hand'][i].face.name
+              break
+            }
+          }
+        }
+        else
+          text.setText('not here')
+      }
+      else
+        break
+    }
+
+    if(!msg.hand)
+      msg.hand = self['hand'][Math.floor(Math.random()*(self['hand'].length - 1))]
+
+    socket.emit('playLifeCard', (roomID, JSON.stringify(msg), cb) => {
+      if(it.msg === 'playCard'){
+
+      }
+      else
+        text.setText(it.msg)
+    })
+  }
+  else{
+    text.setText('not enough hand card')
+  }
+  */
+}
+
 Card.prototype.activateCard = function(){
 	msg.field = this.field
 	msg.name = this.face.name
@@ -232,6 +285,9 @@ Card.prototype.checkCard = function(){
   // change to => hover card for couple secs, and show the card's face sprite beside
 }
 
+function updateCounter(){
+  app.counter++
+}
 
 function endTurn(){
   socket.emit('finish', roomID, it => {text.setText(it.msg)})
@@ -263,7 +319,7 @@ function create(){
 	game.add.tileSprite(0, 0, display.gameWidth, display.gameHeight, 'background')
 	game.world.setBounds(0, 0, display.gameWidth, display.gameHeight)
   game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL
-
+  game.time.events.loop(Phaser.Timer.SECOND, updateCounter, this)
 
   text = game.add.text(0,0, 'matching opponent...', {font: ' 50px Arial', fill:'#ffffff', align: 'left'})
   text.fixedToCamera = true
