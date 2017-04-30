@@ -68,6 +68,7 @@ function drawCard(player){
       player.actionPoint -= 1
       cardName = player.DECK[player.DECK.length - 1].name
       player.HAND.push(player.DECK.pop())
+      player.HAND[player.HAND.length - 1].cover = false
     }
     else{
       cardName = "full"
@@ -77,10 +78,10 @@ function drawCard(player){
   return cardName
 }
 
-function playCard(player, cardName){
+function playHandCard(player, cardName){
   for(var i = 0; i < player.HAND.length; i++){
     if(player.HAND[i].name === cardName){
-      if(player.HAND[i].cardType === 'item' || player.HAND.cardType !== 'item' && player.HAND.cardType !== 'vanish' && player.actionPoint > 0){
+      if(player.HAND[i].cardType === 'item' || (player.HAND[i].cardType !== 'item' && player.HAND[i].cardType !== 'vanish' && player.actionPoint > 0)){
         player.actionPoint -= 1
         player.BATTLE.push(player.HAND[i])
         player.HAND.splice(i,1)
@@ -88,7 +89,33 @@ function playCard(player, cardName){
         break
       }
       else{
-        return 'error'
+        return 'not enough action point'
+        break
+      }
+    }
+  }
+}
+
+function playLifeCard(player, lifeCardName, handCardName){
+  // search life
+  for(var i = 0; i < player.LIFE.length; i++){
+    if(player.LIFE[i].name === lifeCardName && player.LIFE[i].cover == false){
+      if( player.LIFE[i].cardType === 'item' || (player.LIFE[i].cardType !== 'item' && player.LIFE[i].cardType !== 'vanish' && player.actionPoint)){
+        // search hand
+        for(var j = 0; j < player.HAND.length; j++){
+          if(player.HAND[i].name === handCardName){
+            // switch both cards
+            player.actionPoint -= 1
+            player.BATTLE.push(player.LIFE[i])
+            player.LIFE.splice(i, 1, player.HAND[j])
+            player.HAND.splice(j, 1)
+            return 'done'
+            break
+          }
+        }
+      }
+      else{
+        return 'not enough action point'
         break
       }
     }
@@ -197,25 +224,47 @@ io.on('connection', client => {
     }
   })
 
-  // play card
-  client.on('playCard', (roomID, msg, cb) => {
+  // play card in your hand
+  client.on('playHandCard', (roomID, msg, cb) => {
     if(room[roomID]){
       if(room[roomID].cursor === client._name){
         var msg = JSON.parse(msg)
-        var result = playCard(client, msg.name)
-        if(result !== 'error' ){
+        var result = playHandCard(client, msg.name)
+        if(result === 'done' ){
           cb({ msg: 'playCard' })
 
           if(client._name === "player_1")
-            room[roomID].player_2.emit('foePlayCard', {cardName: msg.name})
+            room[roomID].player_2.emit('foePlayHand', {cardName: msg.name})
           else
-            room[roomID].player_1.emit('foePlayCard', {cardName: msg.name})
+            room[roomID].player_1.emit('foePlayHand', {cardName: msg.name})
         }
         else
-          cb({ msg: 'not enough action point'})
+          cb({ msg: result})
       }
       else
         cb({ msg: 'waiting for opponent'})
+    }
+  })
+
+  // play uncoverred card in life field
+  client.on('playLifeCard', (roomID, msg, cb) => {
+    if(room[roomID]){
+      if(room[roomID].cursor === client._name){
+        var msg = JSON.parse(msg)
+        var result = playLifeCard(client, msg.name, msg.hand)
+        if(result === 'done'){
+          cb({msg: 'playCard'})
+
+          if(client._name === "player_1")
+            room[roomID].player_2.emit('foePlayLife', {lifeCardName: msg.name, handCardName: msg.hand})
+          else
+            room[roomID].player_1.emit('foePlayLife', {lifeCardName: msg.name, handCardName: msg.hand})
+        }
+        else
+          cb({msg: result})
+      }
+      else
+        cb({msg: 'waiting for opponent'})
     }
   })
 
