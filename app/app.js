@@ -9,7 +9,7 @@ const app = {
 }
 
 const display = {
-	gameWidth: 2600,
+  gameWidth: 2600,
 	gameHeight: 2600/ratio,
 	cardWidth: 120,
 	cardHeight: 165,
@@ -44,42 +44,53 @@ const foe = {
   grave: []
 }
 
+// e.g. pos = [{x:0, y:0}, {x:10, y:20}]
+const page = {
+  currPage: "login",
+  login: {elem:[], pos:[]},
+  signup: {elem:[], pos:[]},
+  lobby: {elem: [], pos: []},
+  deckBuild: {elem:[], pos:[]},
+  matchSearch: {elem:[], pos:[]},
+  loading: {next: 'game', elem:[], pos:[]},
+  game: {elem: [], pos: []}
+}
+
 const msg = {
 	field: "",
 	name: ""
 }
 
-//var button1
-//var loadPage
-//var searchPage
-//var loginPage
-
-const game = new Phaser.Game(2600, 2600/ratio, Phaser.WebGL, 'game', {preload: preload, create: create, update: update, render:render})
+const game = new Phaser.Game(2600, 2600/ratio, Phaser.HEADLESS, 'game', {preload: preload, create: create, update: update, render:render})
 
 function preload(){
-	game.load.image('background', 'assets/images/yellow.png')
-	game.load.image('endTurn', 'assets/images/button.png')
-	game.load.image('attack', 'assets/images/atk.png')
-  game.load.image('search', 'assets/images/search.png')
+  game.load.image('background', 'assets/image/yellow.png')
+	game.load.image('endTurn', 'assets/image/button.png')
+	game.load.image('attack', 'assets/image/atk.png')
+  game.load.image('search', 'assets/image/search.png')
+  game.load.image('battle', 'assets/image/battle.png')
+  game.load.image('decks', 'assets/image/deck.png')
+  game.load.image('back', 'assets/image/back.png')
+  game.load.image('login', 'assets/image/login.png')
+  game.load.image('leave', 'assets/image/leave.png')
 
-	game.load.spritesheet('cardback', 'assets/images/CARDBACK.jpg')
-	game.load.spritesheet('cardface', 'assets/images/cardface.png')
-  game.load.spritesheet('transparent', 'assets/images/transparent.png')
+	game.load.spritesheet('cardback', 'assets/image/CARDBACK.jpg')
+	game.load.spritesheet('cardface', 'assets/image/cardface.png')
+  game.load.spritesheet('transparent', 'assets/image/transparent.png')
 
-	game.load.spritesheet('katana', 'assets/images/katana.jpg')
-	game.load.spritesheet('claymore', 'assets/images/claymore.jpg')
-  game.load.spritesheet('judge', 'assets/images/judge.jpg')
-  game.load.spritesheet('hawkeye', 'assets/images/hawkeye.jpg')
-  game.load.spritesheet('aquarius', 'assets/images/aquarius.jpg')
-  game.load.spritesheet('vesper', 'assets/images/vesper.jpg')
-  game.load.spritesheet('doom', 'assets/images/doom.jpg')
-  game.load.spritesheet('aria', 'assets/images/aria.jpg')
-  game.load.spritesheet('shadow', 'assets/images/shadow.jpg')
-  game.load.spritesheet('muse', 'assets/images/muse.jpg')
+	game.load.spritesheet('katana', 'assets/image/katana.jpg')
+	game.load.spritesheet('claymore', 'assets/image/claymore.jpg')
+  game.load.spritesheet('judge', 'assets/image/judge.jpg')
+  game.load.spritesheet('hawkeye', 'assets/image/hawkeye.jpg')
+  game.load.spritesheet('aquarius', 'assets/image/aquarius.jpg')
+  game.load.spritesheet('vesper', 'assets/image/vesper.jpg')
+  game.load.spritesheet('doom', 'assets/image/doom.jpg')
+  game.load.spritesheet('aria', 'assets/image/aria.jpg')
+  game.load.spritesheet('shadow', 'assets/image/shadow.jpg')
+  game.load.spritesheet('muse', 'assets/image/muse.jpg')
 }
 
 // server
-
 var socket = io()
 const roomID = location.search.replace(/\?roomID=/, '')
 
@@ -87,27 +98,31 @@ socket.on('buildLIFE', it => {
   var life = JSON.parse(it)
 
   for(var i = 0; i < life.length; i++){
-    self['life'].push(new Card(life[i].name, 'life', true, true))//
-    self['life'][i].changeInputFunction()//
+    self['life'].push(new Card(life[i].name, 'life', true, true))
+    self['life'][i].changeInputFunction()
   }
   fixPos("self", "life")
 })
 
 socket.on('foeBuiltLife', it => {
   for(var i = 0; i < 6; i++){
-    foe['life'].push(new Card('cardback', 'life', false, true))//
+    foe['life'].push(new Card('cardback', 'life', false, true))
   }
   fixPos("foe", "life")
 })
 
-socket.on('joinGame', it => {
-  loadPage.destroy()
+
+socket.on('joinGame', it => {//
+  //loadPage.destroy()
   text.setText(it.msg)
+  //changePage(searchBtn)
+  changePage(page.loading)
 })
 
-socket.on('gameStart', it => {
-  self['deck'][0].face.inputEnabled = true
-  button1.inputEnabled = true;
+socket.on('gameStart', it => {//
+  //self['deck'][0].face.inputEnabled = true
+  //button1.inputEnabled = true;
+
   text.setText(it.msg)
 })
 
@@ -117,13 +132,11 @@ socket.on('turnStart', it => {
 
 socket.on('foeDrawCard', it => {
 
-  foe['hand'].push(new Card('unknown', 'hand', false, true))//
+  foe['hand'].push(new Card('unknown', 'hand', false, true))
   fixPos("foe", "hand")
 
   if(it.deckStatus === "empty"){
     foe['deck'][0].face.kill()
-    //foe['deck'][0].face.destroy()
-    //foe['deck'].splice(0,1)
   }
 })
 
@@ -143,6 +156,7 @@ socket.on('foePlayLife', it => {
 socket.on('interrupt', it => {
   alert(it.msg)
   text.setText(' ')
+  /*
   button1.inputEnabled = false
 
   if(!loadPage.alive)
@@ -153,7 +167,8 @@ socket.on('interrupt', it => {
 
   if(!searchButton.alive)
     searchButton.reset(0,0)
-
+*/
+  changePage(backBtn)
   cleanAllData()
 })
 
@@ -218,8 +233,6 @@ Card.prototype.drawCard = function(){
 
       if(it.deckStatus === "empty"){
         self['deck'][0].face.kill()
-        //self['deck'][0].face.destroy()
-        //self['deck'].splice(0,1)
       }
     }
     else
@@ -320,7 +333,6 @@ function endTurn(){
 }
 
 function fixPos(player, field){
-
     if(player === "self"){
       for(var i = 0; i < self[field].length; i++){
         self[field][i].face.x = (display.gameWidth/2) - 80 - display.cardWidth/2 - (display.cardWidth*3/5)*(self[field].length - 1) + (display.cardWidth*6/5)*i
@@ -342,12 +354,16 @@ function fixPos(player, field){
 
 function cleanAllData(){
   var field = ['hand', 'life', 'grave', 'battle']
+
+  text.setText(' ')
+
+  /*
   for(var i = 0; i < field.length; i++){
     for(var j = 0; j < self[field[i]].length; j++){
       self[field[i]][j].face.destroy()
     }
     self[field[i]].splice(0,self[field[i]].length)
-    fixPos('self', field[i])
+    //fixPos('self', field[i])
   }
 
   for(var i = 0; i < field.length; i++){
@@ -355,25 +371,34 @@ function cleanAllData(){
       foe[field[i]][j].face.destroy()
     }
     foe[field[i]].splice(0,foe[field[i]].length)
-    fixPos('foe', field[i])
+    //fixPos('foe', field[i])
   }
 
   self['deck'][0].face.inputEnabled = false
 
   if(!self['deck'][0].face.alive)
     self['deck'][0].face.reset(display.gameWidth - 200, self['deckYloc'])
-
   if(!foe['deck'][0].face.alive)
     foe['deck'][0].face.reset(display.gameWidth - 200, foe['deckYloc'])
+*/
+
+  for(var i = 0; i < field.length; i++){
+    self[field[i]].splice(0,self[field[i]].length)
+    foe[field[i]].splice(0,foe[field[i]].length)
+  }
+
 }
 
 function login(){
   socket.emit('login', {acc: $('#account').val(), passwd: $('#passwd').val()})
   $('#login').remove()
-  loginPage.kill()
+  //loginPage.kill()
+
+  changePage(loginBtn)
 }
 
 function search(){
+  /*
   searchButton.kill()
   searchPage.kill()
   socket.emit('search', it => {
@@ -382,25 +407,136 @@ function search(){
     if(it.msg !== "searching for match...")
       loadPage.kill()
   })
+*/
+
+  socket.emit('search', it => {
+    text.setText(it.msg)
+    //searchBtn.kill()
+    //backBtn.kill()
+    if(it.msg !== "searching for match...")
+      //changePage(searchBtn)
+      changePage(page.loading)
+    else
+      changePage(searchBtn)
+  })
+}
+
+function leaveMatch(){
+  socket.emit('leaveMatch')
+  changePage(backBtn)
+  cleanAllData()
+}
+
+function pageInit(){
+  var field = ['deck', 'hand', 'life', 'grave', 'battle']
+
+  // login page
+  page.login.elem.push(loginBtn)
+  page.login.pos.push({x: loginBtn.x, y: loginBtn.y})
+  loginBtn.next = 'lobby'
+  loginBtn.kill()
+
+  // the lobby
+  page.lobby.elem.push(deckBtn)
+  page.lobby.pos.push({x: deckBtn.x, y: deckBtn.y})
+  deckBtn.next = 'deckBuild'
+  deckBtn.kill()
+
+  page.lobby.elem.push(matchBtn)
+  page.lobby.pos.push({x: matchBtn.x, y: matchBtn.y})
+  matchBtn.next = 'matchSearch'
+  matchBtn.kill()
+
+  // deck building page
+  page.deckBuild.elem.push(backBtn)
+  page.deckBuild.pos.push({x: backBtn.x, y: backBtn.y})
+  backBtn.next = 'lobby'
+
+  // match searching page
+  page.matchSearch.elem.push(searchBtn)
+  page.matchSearch.pos.push({x: searchBtn.x, y: searchBtn.y })
+  searchBtn.next = 'loading'
+  searchBtn.kill()
+
+  page.matchSearch.elem.push(backBtn)
+  page.matchSearch.pos.push({x: backBtn.x, y: backBtn.y})
+  backBtn.kill()
+
+  // loading page
+
+  // game page
+  page.game.elem.push(endBtn)
+  page.game.pos.push({x: endBtn.x, y: endBtn.y})
+  endBtn.kill()
+
+  page.game.elem.push(leaveBtn)
+  page.game.pos.push({x: leaveBtn.x, y: leaveBtn.y})
+  leaveBtn.kill()
+
+  for(var i = 0; i < field.length; i++){
+    page.game.elem.push(self[field[i]])
+    page.game.elem.push(foe[field[i]])
+  }
+
+  page.game.pos.push({x: self['deck'][0].face.x, y: self['deck'][0].face.y})
+  page.game.pos.push({x: foe['deck'][0].face.x, y: foe['deck'][0].face.y})
+  self['deck'][0].face.kill()
+  foe['deck'][0].face.kill()
+
+}
+
+function changePage(currPage){
+  var oldElem = page[page['currPage']]['elem']
+  var newPage = page[currPage.next]
+
+  // kill current page elements
+  if(oldElem != []){
+    for(var i = 0; i < oldElem.length; i++){
+      // check elem[i] type, e.g deck
+      if(Array.isArray(oldElem[i])){
+        if(oldElem[i] == self['deck'] || oldElem[i] == foe['deck'])
+          oldElem[i][0].face.kill()
+        else
+          for(var j = 0; j < oldElem[i].length; j++)
+            oldElem[i][j].face.destroy()
+      }
+      else
+        oldElem[i].kill()
+    }
+  }
+
+  // change current page
+  page['currPage'] = currPage.next
+
+  // revive page elements on the page you move to
+  if(newPage['elem'] != []){
+    for(var i = 0; i < newPage['elem'].length; i++){
+      if(!Array.isArray(newPage['elem'][i]))
+        newPage['elem'][i].reset(newPage['pos'][i].x, newPage['pos'][i].y)
+      else{
+        if(newPage['pos'][i])
+          newPage['elem'][i][0].face.reset(newPage['pos'][i].x, newPage['pos'][i].y)
+      }
+    }
+  }
+
 }
 
 function create(){
-  game.physics.startSystem(Phaser.Physics.ARCADE)
-	game.add.tileSprite(0, 0, display.gameWidth, display.gameHeight, 'background')
-	game.world.setBounds(0, 0, display.gameWidth, display.gameHeight)
+  game.add.sprite(0, 0, 'background')
   game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL
   game.time.events.loop(Phaser.Timer.SECOND, updateCounter, this)
 
+
   textGroup = game.add.group()
-  text = game.add.text(0,0, '', {font: ' 50px Arial', fill:'#ffffff', align: 'left'})
+  text = game.add.text(0,0, '', {font: '50px Arial', fill:'#ffffff', align: 'left'})
   text.fixedToCamera = true
   text.cameraOffset.setTo(40, display.gameHeight/2 - 80/display.scale)
   textGroup.add(text)
 
-  socket.emit('init', {roomID: roomID}, it => {
-    //alert(it.msg)
-
-    // create DECK
+  socket.emit('init', it => {
+   /*
+   // create DECK
 	  self['deck'].push(new Card('cardback', 'deck', false, true))//
 
     // create foe DECK
@@ -414,8 +550,24 @@ function create(){
     searchPage = game.add.sprite(0,0,'background')
     searchButton = game.add.button(0, 0, 'search', search, this)
     loginPage = game.add.sprite(0,0,'background')
-  })
+    */
 
+    // back.kill()
+    // grow it here first
+    backBtn = game.add.button(0, display.gameHeight-77, 'back', changePage, this)
+    loginBtn = game.add.button(display.gameWidth - 83, display.gameHeight*0.75,'login', login, this)
+    deckBtn = game.add.button(0, 0, 'decks', changePage, this)
+    matchBtn = game.add.button(0, 77, 'battle', changePage, this)
+    searchBtn = game.add.button(0, 0, 'search', search, this)
+    endBtn = game.add.button(display.gameWidth - 230, display.gameHeight/2 - 80/display.scale, 'endTurn', endTurn, this)
+    leaveBtn = game.add.button(0, display.gameHeight - 77, 'leave', leaveMatch, this)
+
+	  self['deck'].push(new Card('cardback', 'deck', true, true))
+    foe['deck'].push(new Card('cardback', 'deck', false, true))
+    fixPos('foe', 'deck')
+
+    pageInit()
+  })
 }
 
 function update(){
