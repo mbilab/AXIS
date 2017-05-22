@@ -1,3 +1,7 @@
+const MongoClient = require('mongodb').MongoClient
+const assert = require('assert')
+const url = 'mongodb://axis:abvesa2014@localhost/axis' // mongodb://[account]:[passwd]@localhost/[dbname]
+
 const express = require('express')
 const fs = require('fs')
 const http = require('http')
@@ -191,7 +195,7 @@ io.on('connection', client => {
   })
 
   // player open this website
-  client.on('init', (it, cb) => {
+  client.on('init', (cb) => {
 
     buildPlayer(client)
 
@@ -408,6 +412,23 @@ io.on('connection', client => {
     }
   })
 
+  client.on('leaveMatch', it => {
+    var rid = client._rid
+    var pid = client._pid
+    var fid = client._fid
+
+    room[rid].player.map(it => {
+      if(it._pid === fid)
+        it.emit('interrupt', {msg: 'opponent leave'})
+
+      buildPlayer(it)
+      pool[it._pid] = it
+      delete it._rid
+    })
+
+    delete room[rid]
+  })
+
   // player disconnect
   client.on('disconnect', (it)=>{
 
@@ -432,7 +453,7 @@ io.on('connection', client => {
         buildPlayer(it)
         pool[client._fid] = it
         delete it._rid
-        it.emit('interrupt', {msg: 'redirect to pool'})
+        it.emit('interrupt', {msg: 'opponent disconnect'})
       })
 
       delete room[rid]
