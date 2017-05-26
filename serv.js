@@ -1,6 +1,6 @@
 const MongoClient = require('mongodb').MongoClient
 const assert = require('assert')
-const url = 'mongodb://axis:abvesa2014@localhost/axis' // mongodb://[account]:[passwd]@localhost/[dbname]
+const url = '' // mongodb://[account]:[passwd]@localhost/[dbname]
 
 const express = require('express')
 const fs = require('fs')
