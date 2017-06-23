@@ -9,39 +9,62 @@ const app = {
 }
 
 const display = {
+  /*
   gameWidth: 2600,
 	gameHeight: 2600/ratio,
-	cardWidth: 120,
+  cardWidth: 120,
 	cardHeight: 165,
   scale: 1400*ratio/2600
+  */
+
+  gameWidth: w,
+	gameHeight: h,
+	cardWidth: 64,
+	cardHeight: 91,
+  scale: 768*ratio/1366
+
 }
 
-const self = {
-  deckYloc: display.gameHeight - 200/display.scale,
-  handYloc: display.gameHeight - 400/display.scale,
-  lifeYloc: display.gameHeight - 200/display.scale,
-  battleYloc: display.gameHeight - 600/display.scale,
-  graveYloc: display.gameHeight - 400/display.scale,
+const player = function(d, h, l, b, g){
 
-  deck: [],
-  hand: [],
-  life: [],
-  battle: [],
-  grave: []
+  this.deckYloc = display.gameHeight - d/display.scale
+  this.handYloc = display.gameHeight - h/display.scale
+  this.lifeYloc = display.gameHeight - l/display.scale
+  this.battleYloc = display.gameHeight - b/display.scale
+  this.graveYloc = display.gameHeight - g/display.scale
+
+  this.deck = []
+  this.deck.name = ''
+  this.hand = []
+  this.life = []
+  this.battle = []
+  this.grave = []
 }
 
-const foe = {
-  deckYloc: display.gameHeight - 1368/display.scale,
-  handYloc: display.gameHeight - 1168/display.scale,
-  lifeYloc: display.gameHeight - 1368/display.scale,
-  battleYloc: display.gameHeight - 968/display.scale,
-  graveYloc: display.gameHeight - 1168/display.scale,
+//const self = new player(200, 400, 200, 600, 400)
+//const foe = new player(1368, 1168, 1368, 968, 1168)
+const self = new player(110, 220, 110, 330, 220)
+const foe = new player(758, 648, 758, 538, 648)
 
-  deck: [],
-  hand: [],
-  life: [],
-  battle: [],
-  grave: []
+var Card = function (name, field, faceInput, cover){
+
+  this.field = field
+  this.cover = cover
+
+  if(this.cover == false)
+    //this.face = game.add.sprite(display.gameWidth - 200, display.gameHeight - 200/display.scale, name)
+    this.face = game.add.sprite(display.gameWidth*(1 - 1/13), self['deckYloc'], name)
+  else
+    //this.face = game.add.sprite(display.gameWidth - 200, display.gameHeight - 200/display.scale, 'cardback')
+    this.face = game.add.sprite(display.gameWidth*(1 - 1/13), self['deckYloc'], 'cardback')
+
+
+  this.face.inputEnabled = faceInput
+  if(this.field === "deck"){
+    this.face.events.onInputDown.add(this.drawCard, this)
+  }
+
+  this.face.name = name
 }
 
 // e.g. pos = [{x:0, y:0}, {x:10, y:20}]
@@ -61,11 +84,12 @@ const msg = {
 	name: ""
 }
 
-const game = new Phaser.Game(2600, 2600/ratio, Phaser.HEADLESS, 'game', {preload: preload, create: create, update: update, render:render})
+//const game = new Phaser.Game(2600, 2600/ratio, Phaser.HEADLESS, 'game', {preload: preload, create: create, update: update, render:render})
+const game = new Phaser.Game(display.gameWidth, display.gameHeight, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render:render})
 
 function preload(){
   game.load.image('background', 'assets/image/yellow.png')
-	game.load.image('endTurn', 'assets/image/button.png')
+	game.load.image('endTurn', 'assets/image/button.jpg')
 	game.load.image('attack', 'assets/image/atk.png')
   game.load.image('search', 'assets/image/search.png')
   game.load.image('battle', 'assets/image/battle.png')
@@ -113,16 +137,11 @@ socket.on('foeBuiltLife', it => {
 
 
 socket.on('joinGame', it => {//
-  //loadPage.destroy()
   text.setText(it.msg)
-  //changePage(searchBtn)
   changePage(page.loading)
 })
 
 socket.on('gameStart', it => {//
-  //self['deck'][0].face.inputEnabled = true
-  //button1.inputEnabled = true;
-
   text.setText(it.msg)
 })
 
@@ -131,7 +150,6 @@ socket.on('turnStart', it => {
 })
 
 socket.on('foeDrawCard', it => {
-
   foe['hand'].push(new Card('unknown', 'hand', false, true))
   fixPos("foe", "hand")
 
@@ -152,44 +170,12 @@ socket.on('foePlayLife', it => {
 
 })
 
-
 socket.on('interrupt', it => {
   alert(it.msg)
   text.setText(' ')
-  /*
-  button1.inputEnabled = false
-
-  if(!loadPage.alive)
-    loadPage.reset(0,0)
-
-  if(!searchPage.alive)
-    searchPage.reset(0,0)
-
-  if(!searchButton.alive)
-    searchButton.reset(0,0)
-*/
   changePage(backBtn)
   cleanAllData()
 })
-
-
-var Card = function (name, field, faceInput, cover){
-
-  this.field = field
-  this.cover = cover
-
-  if(this.cover == false)
-    this.face = game.add.sprite(display.gameWidth - 200, display.gameHeight - 200/display.scale, name)
- else
-    this.face = game.add.sprite(display.gameWidth - 200, display.gameHeight - 200/display.scale, 'cardback')
-
-  this.face.inputEnabled = faceInput
-  if(this.field === "deck"){
-    this.face.events.onInputDown.add(this.drawCard, this)
-  }
-
-  this.face.name = name
-}
 
 Card.prototype.changeInputFunction = function(){
 
@@ -224,7 +210,7 @@ Card.prototype.changeInputFunction = function(){
 }
 
 Card.prototype.drawCard = function(){
-	socket.emit('drawCard', roomID, it => {
+	socket.emit('drawCard', it => {
     if(!it.msg){
       text.setText('draw '+it.cardName)
       self['hand'].push(new Card(it.cardName, 'hand', true, false))
@@ -244,7 +230,7 @@ Card.prototype.playHandCard = function(){
   msg.field = this.field
 	msg.name = this.face.name
 
-  socket.emit('playHandCard', roomID, JSON.stringify(msg), it => {
+  socket.emit('playHandCard', JSON.stringify(msg), it => {
     if(it.msg === 'playCard'){
 	    text.setText('play '+msg.name)
 
@@ -299,7 +285,7 @@ Card.prototype.playLifeCard = function(){
     }
     if(!msg.hand)
       msg.hand = self['hand'][Math.floor(Math.random()*(self['hand'].length - 1))]
-    socket.emit('playLifeCard', (roomID, JSON.stringify(msg), cb) => {
+    socket.emit('playLifeCard', (JSON.stringify(msg), cb) => {
       if(it.msg === 'playCard'){
       }
       else
@@ -333,88 +319,60 @@ function endTurn(){
 }
 
 function fixPos(player, field){
-    if(player === "self"){
-      for(var i = 0; i < self[field].length; i++){
-        self[field][i].face.x = (display.gameWidth/2) - 80 - display.cardWidth/2 - (display.cardWidth*3/5)*(self[field].length - 1) + (display.cardWidth*6/5)*i
-			  self[field][i].face.y = self[field+'Yloc']
-      }
+  if(player === "self"){
+    for(var i = 0; i < self[field].length; i++){
+      //self[field][i].face.x = (display.gameWidth/2) - 80 - display.cardWidth/2 - (display.cardWidth*3/5)*(self[field].length - 1) + (display.cardWidth*6/5)*i
+      self[field][i].face.x = (display.gameWidth/2) - display.cardWidth*1.25 - display.cardWidth/2 - (display.cardWidth*3/5)*(self[field].length - 1) + (display.cardWidth*6/5)*i
+   	  self[field][i].face.y = self[field+'Yloc']
     }
+  }
+  else{
+    if(field !== 'deck')
+      for(var i = 0; i < foe[field].length; i++){
+        //foe[field][i].face.x = (display.gameWidth/2) - 80 - display.cardWidth/2 - (display.cardWidth*3/5)*(foe[field].length - 1) + (display.cardWidth*6/5)*i
+        foe[field][i].face.x = (display.gameWidth/2) - display.cardWidth*1.25 - display.cardWidth/2 - (display.cardWidth*3/5)*(foe[field].length - 1) + (display.cardWidth*6/5)*i
+  	    foe[field][i].face.y = foe[field+'Yloc']
+      }
     else{
-      if(field !== 'deck')
-        for(var i = 0; i < foe[field].length; i++){
-          foe[field][i].face.x = (display.gameWidth/2) - 80 - display.cardWidth/2 - (display.cardWidth*3/5)*(foe[field].length - 1) + (display.cardWidth*6/5)*i
-			    foe[field][i].face.y = foe[field+'Yloc']
-        }
-      else{
-        foe[field][0].face.x = display.gameWidth - 200
-			  foe[field][0].face.y = foe[field+'Yloc']
-      }
+      //foe[field][0].face.x = display.gameWidth - 200
+		  foe[field][0].face.x = display.gameWidth*(1 - 1/13)
+      foe[field][0].face.y = foe[field+'Yloc']
     }
+  }
 }
 
 function cleanAllData(){
   var field = ['hand', 'life', 'grave', 'battle']
-
   text.setText(' ')
 
-  /*
-  for(var i = 0; i < field.length; i++){
-    for(var j = 0; j < self[field[i]].length; j++){
-      self[field[i]][j].face.destroy()
-    }
-    self[field[i]].splice(0,self[field[i]].length)
-    //fixPos('self', field[i])
-  }
-
-  for(var i = 0; i < field.length; i++){
-    for(var j = 0; j < foe[field[i]].length; j++){
-      foe[field[i]][j].face.destroy()
-    }
-    foe[field[i]].splice(0,foe[field[i]].length)
-    //fixPos('foe', field[i])
-  }
-
-  self['deck'][0].face.inputEnabled = false
-
-  if(!self['deck'][0].face.alive)
-    self['deck'][0].face.reset(display.gameWidth - 200, self['deckYloc'])
-  if(!foe['deck'][0].face.alive)
-    foe['deck'][0].face.reset(display.gameWidth - 200, foe['deckYloc'])
-*/
-
   for(var i = 0; i < field.length; i++){
     self[field[i]].splice(0,self[field[i]].length)
     foe[field[i]].splice(0,foe[field[i]].length)
   }
-
 }
 
 function login(){
-  socket.emit('login', {acc: $('#account').val(), passwd: $('#passwd').val()})
-  $('#login').remove()
-  //loginPage.kill()
-
-  changePage(loginBtn)
+  if($('#account').val()){
+    socket.emit('login',  {acc: $('#account').val(), passwd: $('#passwd').val()}, it => {
+      if(it.msg === 'success'){
+        $('#login').remove()
+        changePage(loginBtn)
+      }
+      else{
+        alert(it.msg)
+        $('#account').val('')
+        $('#passwd').val('')
+      }
+    })
+  }
+  else
+    alert('please enter your account')
 }
 
 function search(){
-  /*
-  searchButton.kill()
-  searchPage.kill()
-  socket.emit('search', it => {
-    game.world.bringToTop(textGroup)
-    text.setText(it.msg)
-    if(it.msg !== "searching for match...")
-      loadPage.kill()
-  })
-*/
-
   socket.emit('search', it => {
     text.setText(it.msg)
-    //searchBtn.kill()
-    //backBtn.kill()
     if(it.msg !== "searching for match...")
-      //changePage(searchBtn)
       changePage(page.loading)
     else
       changePage(searchBtn)
@@ -529,38 +487,19 @@ function create(){
 
 
   textGroup = game.add.group()
-  text = game.add.text(0,0, '', {font: '50px Arial', fill:'#ffffff', align: 'left'})
+  text = game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
   text.fixedToCamera = true
-  text.cameraOffset.setTo(40, display.gameHeight/2 - 80/display.scale)
+  text.cameraOffset.setTo(21, display.gameHeight/2 - 44/display.scale)
   textGroup.add(text)
 
   socket.emit('init', it => {
-   /*
-   // create DECK
-	  self['deck'].push(new Card('cardback', 'deck', false, true))//
-
-    // create foe DECK
-	  foe['deck'].push(new Card('cardback', 'deck', false, true))//
-    fixPos("foe", "deck")
-
-    button1 = game.add.button(display.gameWidth - 230, display.gameHeight/2 - 80/display.scale, 'endTurn', endTurn, this)
-    button1.inputEnabled = false;
-
-    loadPage = game.add.sprite(0,0,'background')
-    searchPage = game.add.sprite(0,0,'background')
-    searchButton = game.add.button(0, 0, 'search', search, this)
-    loginPage = game.add.sprite(0,0,'background')
-    */
-
-    // back.kill()
-    // grow it here first
-    backBtn = game.add.button(0, display.gameHeight-77, 'back', changePage, this)
+    backBtn = game.add.button(0, display.gameHeight-43, 'back', changePage, this)
     loginBtn = game.add.button(display.gameWidth - 83, display.gameHeight*0.75,'login', login, this)
     deckBtn = game.add.button(0, 0, 'decks', changePage, this)
-    matchBtn = game.add.button(0, 77, 'battle', changePage, this)
+    matchBtn = game.add.button(0, 43, 'battle', changePage, this)
     searchBtn = game.add.button(0, 0, 'search', search, this)
-    endBtn = game.add.button(display.gameWidth - 230, display.gameHeight/2 - 80/display.scale, 'endTurn', endTurn, this)
-    leaveBtn = game.add.button(0, display.gameHeight - 77, 'leave', leaveMatch, this)
+    endBtn = game.add.button(display.gameWidth - 121, display.gameHeight/2 - 44/display.scale, 'endTurn', endTurn, this)
+    leaveBtn = game.add.button(0, display.gameHeight - 43, 'leave', leaveMatch, this)
 
 	  self['deck'].push(new Card('cardback', 'deck', true, true))
     foe['deck'].push(new Card('cardback', 'deck', false, true))
