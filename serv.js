@@ -22,6 +22,18 @@ const opt = {
 const settings = JSON.parse(fs.readFileSync(opt.settings, 'utf8'))
 const url = 'mongodb://' + settings.mongo.account + ':' + settings.mongo.passwd + '@localhost/' + settings.mongo.dbname
 
+const game = {
+  pool: {},
+  queue: [],
+  room: {},
+  allCard: {},
+  db: null
+}
+
+
+const pool = {}
+const pending = []
+const room = {}
 const allCard = {}
 var db
 
@@ -34,16 +46,14 @@ const Card = function(name, cardType, effectType){
   this.cover = true
 }
 
-const pool = {}
-const pending = []
-const room = {}
-
 function buildPlayer(player){ // player = client
 
   player.actionPoint = 1
   player.handMax = 7
   player.deckMax = 10
   player.lifeMax = 6
+  player.deckList = {}
+  player.ownCard = []
   player.DECK = []
   player.HAND = []
   player.LIFE = []
@@ -144,10 +154,10 @@ function idGenerate(length){
 io.on('connection', client => {
   // init settings
   MongoClient.connect(url, (err, _db) => {
-    db = _db
-    db.collection('card').find({}).toArray((err, rlt) => {
+    game.db = _db
+    game.db.collection('card').find({}).toArray((err, rlt) => {
       for(let i = 0; i < rlt.length; i++)
-        allCard[rlt[i].name] = rlt[i]
+        game.allCard[rlt[i].name] = rlt[i]
 
      // console.log(allCard)
     })
@@ -161,16 +171,17 @@ io.on('connection', client => {
 
   // player login
   client.on('login', (it, cb) => {
-    var user = db.collection('user')
+    var user = game.db.collection('user')
     var pid = idGenerate(16)
     client._pid = pid
-    pool[pid] = client
+    game.pool[pid] = client
 
     user.find({account: it.acc}).toArray((err, result) => {
       if(result.length != 0){
         if(result[0].passwd === it.passwd){
           cb({msg: 'success'})
           client._account = it.acc
+          client.deckList = result[0].decks
         }
         else
           cb({msg: 'wrong password'})
@@ -199,71 +210,80 @@ io.on('connection', client => {
     })
   })
 
+  // player need to get data when changing page
+  client.on('changePage', (it, cb) => {
+    if(it.page === 'matchSearch' || it.page === 'deckBuild'){
+      cb(client.deckList)
+    }
+
+  })
+
+
   // player waiting for match
   client.on('search', cb => {
-    var user = db.collection('user')
-    var cards = db.collection('card')
+    var user = game.db.collection('user')
+    var cards = game.db.collection('card')
     var deck = []
 
     user.find({account: client._account}).toArray((err, result) => {
       deck = result[0].decks['deck1'] // change
 
       for(let i = 0; i < deck.length; i++){
-        curr = allCard[deck[i]]
+        curr = game.allCard[deck[i]]
         client.DECK.push(new Card(curr.name, curr.type.base, curr.type.effect))
       }
 
       shuffle(client.DECK)
 
-      if(pending.length != 0){
+      if(game.queue.length != 0){
         var rid = idGenerate(16)
-        var opponent = pending.shift()
+        var opponent = game.queue.shift()
         opponent._rid = rid
         opponent._fid = client._pid  // fid = foe id
         client._rid = rid
         client._fid = opponent._pid
 
-        room[rid] = {counter: 0, player: [opponent, client]}
-        room[rid].player[0].emit('joinGame', {msg: 'joining section...'})
+        game.room[rid] = {counter: 0, player: [opponent, client]}
+        game.room[rid].player[0].emit('joinGame', {msg: 'joining section...'})
         cb({msg: 'joining section...'})
 
         // game start
 
         // build life field
-        buildLife(room[rid].player[0])
-        room[rid].player[0].emit('buildLIFE', JSON.stringify(room[rid].player[0].LIFE))
-        room[rid].player[1].emit('foeBuiltLife', null)
+        buildLife(game.room[rid].player[0])
+        game.room[rid].player[0].emit('buildLIFE', JSON.stringify(game.room[rid].player[0].LIFE))
+        game.room[rid].player[1].emit('foeBuiltLife', null)
 
-        buildLife(room[rid].player[1])
-        room[rid].player[1].emit('buildLIFE', JSON.stringify(room[rid].player[1].LIFE))
-        room[rid].player[0].emit('foeBuiltLife', null)
+        buildLife(game.room[rid].player[1])
+        game.room[rid].player[1].emit('buildLIFE', JSON.stringify(game.room[rid].player[1].LIFE))
+        game.room[rid].player[0].emit('foeBuiltLife', null)
 
-        room[rid].player[0].emit('gameStart', { msg: 'your turn' })
-        room[rid].player[1].emit('gameStart', { msg: 'waiting for opponent' })
+        game.room[rid].player[0].emit('gameStart', { msg: 'your turn' })
+        game.room[rid].player[1].emit('gameStart', { msg: 'waiting for opponent' })
       }
       else{
         var pid = client._pid
-        pending.push(client)
-        delete pool.pid
+        game.queue.push(client)
+        delete game.pool.pid
         cb({msg: 'searching for match...'})
       }
     })
   })
 
   // game turn finished
-  client.on('finish', (roomID, cb) => {
+  client.on('finish', (cb) => {
     var rid = client._rid
-    var curr = room[rid].counter
+    var curr = game.room[rid].counter
 
-    if(room[rid]){
-      if(room[rid].player[curr]._pid === client._pid) {
+    if(game.room[rid]){
+      if(game.room[rid].player[curr]._pid === client._pid) {
         client.actionPoint = 1
 
-        room[rid].counter = 1-curr
-        curr = room[rid].counter
+        game.room[rid].counter = 1-curr
+        curr = game.room[rid].counter
 
         cb({ msg: 'waiting for opponent' })
-        room[rid].player[curr].emit('turnStart', {msg: 'your turn'})
+        game.room[rid].player[curr].emit('turnStart', {msg: 'your turn'})
       }
       else
         cb({msg: 'waiting for opponent'})
@@ -273,9 +293,9 @@ io.on('connection', client => {
   // player draw card
   client.on('drawCard', (cb) => {
     var rid = client._rid
-    var curr = room[rid].counter
-    if (room[rid]) {
-      if (room[rid].player[curr]._pid === client._pid) {
+    var curr = game.room[rid].counter
+    if (game.room[rid]) {
+      if (game.room[rid].player[curr]._pid === client._pid) {
         if(client.actionPoint > 0){
           var cardName = drawCard(client)
           var result
@@ -285,7 +305,7 @@ io.on('connection', client => {
               result = "empty"
 
             cb({ cardName: cardName, deckStatus: result})
-               room[rid].player[1-curr].emit('foeDrawCard', {deckStatus: result})
+               game.room[rid].player[1-curr].emit('foeDrawCard', {deckStatus: result})
           }
           else
             cb({msg: "your hand is full"})
@@ -301,15 +321,15 @@ io.on('connection', client => {
   // play card in your hand
   client.on('playHandCard', (msg, cb) => {
     var rid = client._rid
-    var curr = room[rid].counter
+    var curr = game.room[rid].counter
 
-    if(room[rid]){
-      if(room[rid].player[curr]._pid === client._pid){
+    if(game.room[rid]){
+      if(game.room[rid].player[curr]._pid === client._pid){
         var msg = JSON.parse(msg)
         var result = playHandCard(client, msg.name)
         if(result === 'done' ){
           cb({ msg: 'playCard' })
-          room[rid].player[1-curr].emit('foePlayHand', {cardName: msg.name})
+          game.room[rid].player[1-curr].emit('foePlayHand', {cardName: msg.name})
         }
         else
           cb({ msg: result})
@@ -322,14 +342,14 @@ io.on('connection', client => {
   // play uncoverred card in life field
   client.on('playLifeCard', (msg, cb) => {
     var rid = client._rid
-    var curr = room[rid].counter
-    if(room[rid]){
-      if(room[rid].player[curr]._pid === client._pid){
+    var curr = game.room[rid].counter
+    if(game.room[rid]){
+      if(game.room[rid].player[curr]._pid === client._pid){
         var msg = JSON.parse(msg)
         var result = playLifeCard(client, msg.name, msg.hand)
         if(result === 'done'){
           cb({msg: 'playCard'})
-          room[roomID].player[1-curr].emit('foePlayLife', {lifeCardName: msg.name, handCardName: msg.hand})
+          game.room[game.roomID].player[1-curr].emit('foePlayLife', {lifeCardName: msg.name, handCardName: msg.hand})
         }
         else
           cb({msg: result})
@@ -344,16 +364,16 @@ io.on('connection', client => {
     var pid = client._pid
     var fid = client._fid
 
-    room[rid].player.map(it => {
+    game.room[rid].player.map(it => {
       if(it._pid === fid)
         it.emit('interrupt', {msg: 'opponent leave'})
 
       buildPlayer(it)
-      pool[it._pid] = it
+      game.pool[it._pid] = it
       delete it._rid
     })
 
-    delete room[rid]
+    delete game.room[rid]
   })
 
   // player disconnect
@@ -362,28 +382,28 @@ io.on('connection', client => {
     var rid = client._rid
     var pid = client._pid
 
-    if(pool[pid]){   // if client is still in pool
-      delete pool[pid]
+    if(game.pool[pid]){   // if client is still in pool
+      delete game.pool[pid]
     }
 
-    for(var i = 0; i < pending.length; i++){ // if client already waiting for match
-      if(pending[i]._pid === pid){
-        pending.splice(i,1)
+    for(var i = 0; i < game.queue.length; i++){ // if client already waiting for match
+      if(game.queue[i]._pid === pid){
+        game.queue.splice(i,1)
         break
       }
     }
 
     if(client._rid){  // if client is in a match
-      room[rid].player.map(it => {
+      game.room[rid].player.map(it => {
         if (it._pid !== client._fid) return
 
         buildPlayer(it)
-        pool[client._fid] = it
+        game.pool[client._fid] = it
         delete it._rid
         it.emit('interrupt', {msg: 'opponent disconnect'})
       })
 
-      delete room[rid]
+      delete game.room[rid]
     }
 
   })
