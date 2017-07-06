@@ -1,207 +1,226 @@
+const socket = io()
+
+// global variables (default values)
+
+// system define or belongs to system
+const opt = {
+  game: null,
+  screen: {
+    w: document.documentElement.clientWidth, //browser width
+    h: document.documentElement.clientHeight, //browser height
+  }
+}
+
+// self define
 const app = {
-  w: document.documentElement.clientWidth, //browser width
-  h: document.documentElement.clientHeight, //browser height
-  counter: 0
+  counter: 0,
+  data: {},
+  display: {
+	  cardHeight: 91,
+	  cardWidth: 64,
+	  gameHeight: 700,
+    gameWidth: 1366,
+    scale: 768*(opt.screen.w/opt.screen.h)/1366
+  }
 }
 
-const display = {
-  gameWidth: 1366,
-	gameHeight: 700,
-	cardWidth: 64,
-	cardHeight: 91,
-  scale: 768*(app.w/app.h)/1366
+// dynamic
+const page = {
+  currPage: ['login'],
+  login: [
+    {x: app.display.gameWidth - 83, y: app.display.gameHeight*0.75, img: 'login', func: login, next: 'lobby'}
+  ],
+  signup: [],
+  lobby: [
+    {x: 0, y: 0, img: 'decks', func: changePage, next: 'deckBuild'},
+    {x: 0, y: 43, img: 'battle', func: changePage, next: 'matchSearch'}
+  ],
+  deckBuild: [
+    {x: 0, y: app.display.gameHeight - 43, img: 'back', func: changePage, next: 'lobby'}
+  ],
+  matchSearch: [
+    {x: app.display.gameWidth - 88, y: app.display.gameHeight - 43, img: 'search', func: search, next: 'loading'},
+    {x: 0, y: app.display.gameHeight - 43, img: 'back', func: changePage, next: 'lobby'}
+  ],
+  loading: [],
+  game: [
+    {x: app.display.gameWidth - 121, y: app.display.gameHeight/2 - 44/app.display.scale, img: 'endTurn', func: endTurn, next: null},
+    {x: 0, y: app.display.gameHeight - 43, img: 'leave', func: leaveMatch, next: 'lobby'}
+  ]
 }
 
-const player = function(d, h, l, b, g){
+//////////////////////////////////////////////////////////////////////////////////////
 
-  this.deckYloc = display.gameHeight - d/display.scale
-  this.handYloc = display.gameHeight - h/display.scale
-  this.lifeYloc = display.gameHeight - l/display.scale
-  this.battleYloc = display.gameHeight - b/display.scale
-  this.graveYloc = display.gameHeight - g/display.scale
+// classes
+
+const Card = function (name, field, faceInput, cover) {
+  this.cover = cover
+  this.face = opt.game.add.sprite(app.display.gameWidth * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
+  this.face.inputEnabled = faceInput
+  this.face.name = name
+  this.field = field
+  if(this.field === "deck")
+    this.face.events.onInputDown.add(this.drawCard, this)
+}
+
+Card.prototype.activateCard = function(){
+	this.changeInputFunction()
+}
+
+Card.prototype.changeInputFunction = function(){
+  this.face.events.onInputDown.removeAll()
+
+  switch (this.field) {
+    case 'battle':
+      if("artifact" === this.cardType)
+        this.face.events.onInputDown.add(this.activateCard, this)
+      break
+
+    case 'deck':
+      this.face.events.onInputDown.add(this.drawCard, this)
+      break
+
+    case 'hand':
+      if ("vanish" !== this.face.name)
+        this.face.events.onInputDown.add(this.playHandCard, this)
+      break
+
+    case 'life':
+      if (this.cover) {
+        this.face.events.onInputDown.add(this.checkCard, this)
+        this.face.loadTexture('cardback')
+      }
+      else {
+        this.face.loadTexture(this.face.name)
+        if ("vanish" !== this.face.name)
+          this.face.events.onInputDown.add(this.playLifeCard, this)
+      }
+      break
+  }
+}
+
+Card.prototype.checkCard = function(){
+  text.setText(`This is ${this.face.name}`);
+  // change to => hover card for couple secs, and show the card's face sprite beside
+}
+
+Card.prototype.drawCard = function(){
+	socket.emit('drawCard', it => {
+    if(it.err) return text.setText(it.err)
+
+    text.setText(`draw ${it.cardName}`)
+    personal['hand'].push(new Card(it.cardName, 'hand', true, false))
+    personal['hand'][personal['hand'].length - 1].changeInputFunction()
+    fixPos("self", "hand")
+
+    if(it.deckStatus === "empty")
+      personal['deck'][0].face.kill()
+  })
+}
+
+Card.prototype.playHandCard = function(){
+  socket.emit('playHandCard', {name: this.face.name}, it => {
+    if(it.err) return text.setText(it.err)
+
+    text.setText(`play ${this.face.name}`)
+
+    for(let i in personal['hand']){
+	    if(personal['hand'][i].face.name === this.face.name){
+	      personal['battle'].push(personal['hand'][i])
+	      personal['hand'][i].face.destroy
+        personal['hand'].splice(i,1)
+	      break
+      }
+	  }
+	  personal['battle'][personal['battle'].length -1].field = 'battle'
+    personal['battle'][personal['battle'].length -1].changeInputFunction()
+    fixPos('self', 'hand')
+    fixPos('self', 'battle')
+  })
+}
+
+const player = function(obj){
+  for (let field of ['deckY', 'handY', 'lifeY', 'battleY', 'graveY'])
+    this[`${field}loc`] = app.display.gameHeight - obj[field] / app.display.scale
 
   this.deck = []
   this.deck.name = ''
+  this.deckList = {}
   this.hand = []
   this.life = []
   this.battle = []
   this.grave = []
 }
-const self = new player(110, 220, 110, 330, 220)
-const foe = new player(758, 648, 758, 538, 648)
 
-// e.g. pos = [{x:0, y:0}, {x:10, y:20}]
-const page = {
-  currPage: "login",
-  login: {elem:[], pos:[]},
-  signup: {elem:[], pos:[]},
-  lobby: {elem: [], pos: []},
-  deckBuild: {elem:[], pos:[]},
-  matchSearch: {elem:[], pos:[]},
-  loading: {next: 'game', elem:[], pos:[]},
-  game: {elem: [], pos: []}
-}
+//////////////////////////////////////////////////////////////////////////////////////
 
-const msg = {
-	field: "",
-	name: ""
-}
+// utility
 
-const Card = function (name, field, faceInput, cover){
+function changePage(currPage){
+  let oldPage = page[page['currPage'][0]]
+  let newPage = page[currPage.next]
 
-  this.field = field
-  this.cover = cover
+  console.log(currPage.next)
 
-  if(this.cover == false)
-    this.face = game.add.sprite(display.gameWidth*(1 - 1/13), self['deckYloc'], name)
-  else
-    this.face = game.add.sprite(display.gameWidth*(1 - 1/13), self['deckYloc'], 'cardback')
-
-
-  this.face.inputEnabled = faceInput
-  if(this.field === "deck"){
-    this.face.events.onInputDown.add(this.drawCard, this)
-  }
-
-  this.face.name = name
-}
-
-Card.prototype.changeInputFunction = function(){
-
-  this.face.events.onInputDown.removeAll()
-
-  if("hand" === this.field){
-    if("vanish" !== this.face.name){
-      this.face.events.onInputDown.add(this.playHandCard, this)
-    }
-  }
-
-  if("life" === this.field && this.cover == true){
-    this.face.events.onInputDown.add(this.checkCard, this)
-    this.face.loadTexture('cardback')
-  }
-  else{
-    this.face.loadTexture(this.face.name)
-    if("vanish" !== this.face.name){
-      this.face.events.onInputDown.add(this.playLifeCard, this)
-    }
-  }
-
-  if("battle" === this.field){
-    if("artifact" === this.cardType)
-      this.face.events.onInputDown.add(this.activateCard, this)
-  }
-
-  if("deck" === this.field){
-    this.face.events.onInputDown.add(this.drawCard, this)
-  }
-
-}
-
-Card.prototype.drawCard = function(){
-	socket.emit('drawCard', it => {
-    if(!it.msg){
-      text.setText('draw '+it.cardName)
-      self['hand'].push(new Card(it.cardName, 'hand', true, false))
-      self['hand'][self['hand'].length - 1].changeInputFunction()
-      fixPos("self", "hand")
-
-      if(it.deckStatus === "empty"){
-        self['deck'][0].face.kill()
-      }
-    }
-    else
-      text.setText(it.msg)
-  })
-}
-
-Card.prototype.playHandCard = function(){
-  msg.field = this.field
-	msg.name = this.face.name
-
-  socket.emit('playHandCard', JSON.stringify(msg), it => {
-    if(it.msg === 'playCard'){
-	    text.setText('play '+msg.name)
-
-      for(let i = 0; i < self['hand'].length; i++){
-	      if(self['hand'][i].face.name === msg.name){
-	        self['battle'].push(self['hand'][i])
-	        self['hand'][i].face.destroy
-          self['hand'].splice(i,1)
-	        break
-        }
-	    }
-	    self['battle'][self['battle'].length -1].field = 'battle'
-      self['battle'][self['battle'].length -1].changeInputFunction()
-      fixPos('self', 'hand')
-      fixPos('self', 'battle')
-    }
-    else
-      text.setText(it.msg)
-  })
-}
-
-Card.prototype.playLifeCard = function(){
-  msg.field = this.field
-  msg.name = this.face.name
-  /*
-  if(self['hand'].length > 0){
-    text.setText('choose 1 hand card')
-    var sprite = game.add.sprite(0, 0, 'transparent')
-    var endTime = app.counter + 41
-    var x1 = self['hand'][0].face.x,
-        x2 = x1 + self['hand'].length*display.cardWidth + (self['hand'].length - 1)*display.cardWidth/5,
-        y1 = self['hand'][0].face.y,
-        y2 = y1 + display.cardHeight,
-        xloc = game.input.mousePointer.x,
-        yloc = game.input.mousePointer.y
-    sprite.scale.setTo(display.gameWidth/sprite.width, display.gameHeight/sprite.height)
-    while(app.counter <= endTime){
-      if(!msg.hand){
-        if(xloc >= x1 && xloc <= x2 && yloc >= y1 && yloc <= y2){
-          for(var i = 0; i < self['hand'].length; i++){
-            if((xloc > x1 + 6*display.cardWidth*i/5) && (xloc < x1 + display.cardWidth + 6*display.cardWidth*i/5)){
-              msg.hand = self['hand'][i].face.name
-              break
-            }
-          }
-        }
+  if(oldPage){
+    for(let i in oldPage) {
+      if(Array.isArray(oldPage[i])) {
+        if(oldPage[i] == personal['deck'] || oldPage[i] == opponent['deck'])
+          oldPage[i][0].face.kill()
         else
-          text.setText('not here')
+          for(let j in oldPage[i])
+            oldPage[i][j].face.destroy()
       }
       else
-        break
+        oldPage[i].kill()
     }
-    if(!msg.hand)
-      msg.hand = self['hand'][Math.floor(Math.random()*(self['hand'].length - 1))]
-    socket.emit('playLifeCard', (JSON.stringify(msg), cb) => {
-      if(it.msg === 'playCard'){
-      }
+  }
+
+  page['currPage'][0] = currPage.next
+
+  if(newPage){
+    for(let i in newPage){
+      if(!Array.isArray(newPage[i]))
+        newPage[i].reset(newPage[i].x, newPage[i].y)
       else
-        text.setText(it.msg)
-    })
+        if(newPage[i] == personal['deck'] || newPage[i] == opponent['deck'])
+          newPage[i][0].face.reset(newPage[i][0].face.x, newPage[i][0].face.y)
+    }
   }
-  else{
-    text.setText('not enough hand card')
+}
+
+function cleanAllData(){
+  let field = ['hand', 'life', 'grave', 'battle']
+  text.setText(' ')
+
+  for(let i in field){
+    personal[field[i]].splice(0,personal[field[i]].length)
+    opponent[field[i]].splice(0,opponent[field[i]].length)
   }
-  */
 }
 
-Card.prototype.activateCard = function(){
-	msg.field = this.field
-	msg.name = this.face.name
-	console.log(JSON.stringify(msg))
-	this.changeInputFunction()
-}
+function create(){
+  let top = (100*(1 - app.display.gameWidth/opt.screen.w)/2).toString()+'%'
+  let left = (100*(1 - app.display.gameHeight/opt.screen.h)/2).toString()+'%'
+  $('#game').css({top: top, left: left})
 
-Card.prototype.checkCard = function(){
-  text.setText('This is '+this.face.name);
-  // change to => hover card for couple secs, and show the card's face sprite beside
-}
+  opt.game.add.sprite(0, 0, 'background')
+  //game.scale.scaleMode = Phaser.ScaleManager.EXACT_FIT
+  opt.game.time.events.loop(Phaser.Timer.SECOND, updateCounter, this)
 
+  textGroup = opt.game.add.group()
+  text = opt.game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+  text.fixedToCamera = true
+  text.cameraOffset.setTo(21, app.display.gameHeight/2 - 44/app.display.scale)
+  textGroup.add(text)
 
-function updateCounter(){
-  app.counter++
+  socket.emit('init', it => {
+	  personal['deck'].push(new Card('cardback', 'deck', true, true))
+    opponent['deck'].push(new Card('cardback', 'deck', false, true))
+    fixPos('foe', 'deck')
+
+    pageInit()
+  })
 }
 
 function endTurn(){
@@ -210,176 +229,82 @@ function endTurn(){
 
 function fixPos(player, field){
   if(player === "self"){
-    for(let i = 0; i < self[field].length; i++){
-      self[field][i].face.x = (display.gameWidth/2) - display.cardWidth*1.25 - display.cardWidth/2 - (display.cardWidth*3/5)*(self[field].length - 1) + (display.cardWidth*6/5)*i
-   	  self[field][i].face.y = self[field+'Yloc']
+    for(let i in personal[field]){
+      personal[field][i].face.x = (app.display.gameWidth/2) - app.display.cardWidth*1.25 - app.display.cardWidth/2 - (app.display.cardWidth*3/5)*(personal[field].length - 1) + (app.display.cardWidth*6/5)*i
+   	  personal[field][i].face.y = personal[`${field}Yloc`]
     }
   }
   else{
     if(field !== 'deck')
-      for(let i = 0; i < foe[field].length; i++){
-        foe[field][i].face.x = (display.gameWidth/2) - display.cardWidth*1.25 - display.cardWidth/2 - (display.cardWidth*3/5)*(foe[field].length - 1) + (display.cardWidth*6/5)*i
-  	    foe[field][i].face.y = foe[field+'Yloc']
+      for(let i in opponent[field]){
+        opponent[field][i].face.x = (app.display.gameWidth/2) - app.display.cardWidth*1.25 - app.display.cardWidth/2 - (app.display.cardWidth*3/5)*(opponent[field].length - 1) + (app.display.cardWidth*6/5)*i
+  	    opponent[field][i].face.y = opponent[`${field}Yloc`]
       }
     else{
-		  foe[field][0].face.x = display.gameWidth*(1 - 1/13)
-      foe[field][0].face.y = foe[field+'Yloc']
+		  opponent[field][0].face.x = app.display.gameWidth*(1 - 1/13)
+      opponent[field][0].face.y = opponent[`${field}Yloc`]
     }
   }
 }
 
-function cleanAllData(){
-  var field = ['hand', 'life', 'grave', 'battle']
-  text.setText(' ')
-
-  for(let i = 0; i < field.length; i++){
-    self[field[i]].splice(0,self[field[i]].length)
-    foe[field[i]].splice(0,foe[field[i]].length)
-  }
+function leaveMatch(){
+  socket.emit('leaveMatch')
+  changePage({next:'lobby'})
+  cleanAllData()
 }
 
 function login(){
   if($('#account').val()){
     socket.emit('login',  {acc: $('#account').val(), passwd: $('#passwd').val()}, it => {
-      if(it.msg === 'success'){
-        $('#login').remove()
-        changePage(loginBtn)
+      if(it.err) {
+        alert(it.err)
+        $('#account, #passwd').val('')
+        return
       }
-      else{
-        alert(it.msg)
-        $('#account').val('')
-        $('#passwd').val('')
-      }
+
+      self['deckList'] = it.deckList
+      $('#login').remove()
+      changePage({next: 'lobby'})
     })
   }
   else
     alert('please enter your account')
 }
 
-function search(){
-  socket.emit('search', it => {
-    text.setText(it.msg)
-    if(it.msg !== "searching for match...")
-      changePage(page.loading)
-    else
-      changePage(searchBtn)
-  })
-}
-
-function leaveMatch(){
-  socket.emit('leaveMatch')
-  changePage(backBtn)
-  cleanAllData()
-}
-
 function pageInit(){
-  var field = ['deck', 'hand', 'life', 'grave', 'battle']
-
-  // login page
-  page.login.elem.push(loginBtn)
-  page.login.pos.push({x: loginBtn.x, y: loginBtn.y})
-  loginBtn.next = 'lobby'
-  loginBtn.kill()
-
-  // the lobby
-  page.lobby.elem.push(deckBtn)
-  page.lobby.pos.push({x: deckBtn.x, y: deckBtn.y})
-  deckBtn.next = 'deckBuild'
-  deckBtn.kill()
-
-  page.lobby.elem.push(matchBtn)
-  page.lobby.pos.push({x: matchBtn.x, y: matchBtn.y})
-  matchBtn.next = 'matchSearch'
-  matchBtn.kill()
-
-  // deck building page
-  page.deckBuild.elem.push(backBtn)
-  page.deckBuild.pos.push({x: backBtn.x, y: backBtn.y})
-  backBtn.next = 'lobby'
-
-  // match searching page
-  page.matchSearch.elem.push(searchBtn)
-  page.matchSearch.pos.push({x: searchBtn.x, y: searchBtn.y })
-  searchBtn.next = 'loading'
-  searchBtn.kill()
-
-  page.matchSearch.elem.push(backBtn)
-  page.matchSearch.pos.push({x: backBtn.x, y: backBtn.y})
-  backBtn.kill()
-
-  // loading page
-
-  // game page
-  page.game.elem.push(endBtn)
-  page.game.pos.push({x: endBtn.x, y: endBtn.y})
-  endBtn.kill()
-
-  page.game.elem.push(leaveBtn)
-  page.game.pos.push({x: leaveBtn.x, y: leaveBtn.y})
-  leaveBtn.kill()
-
-  for(let i = 0; i < field.length; i++){
-    page.game.elem.push(self[field[i]])
-    page.game.elem.push(foe[field[i]])
-  }
-
-  page.game.pos.push({x: self['deck'][0].face.x, y: self['deck'][0].face.y})
-  page.game.pos.push({x: foe['deck'][0].face.x, y: foe['deck'][0].face.y})
-  self['deck'][0].face.kill()
-  foe['deck'][0].face.kill()
-
-}
-
-function changePage(currPage){
-  var oldElem = page[page['currPage']]['elem']
-  var newPage = page[currPage.next]
-
-  // kill current page elements
-  if(oldElem != []){
-    for(let i = 0; i < oldElem.length; i++){
-      // check elem[i] type, e.g deck
-      if(Array.isArray(oldElem[i])){
-        if(oldElem[i] == self['deck'] || oldElem[i] == foe['deck'])
-          oldElem[i][0].face.kill()
-        else
-          for(let j = 0; j < oldElem[i].length; j++)
-            oldElem[i][j].face.destroy()
-      }
-      else
-        oldElem[i].kill()
-    }
-  }
-
-  // pages need to retrieve data first
-  /*
-  socket.emit('changePage', {page: page['currPage']}, it => {
-    //add new element to page
-    if(page['currPage'] === 'matchSearch' || page['currPage'] === 'deckBuild'){
-
-    }
-  })
-  */
-
-  // change current page
-  page['currPage'] = currPage.next
-
-  // revive page elements on the page you move to
-  if(newPage['elem'] != []){
-    for(let i = 0; i < newPage['elem'].length; i++){
-      if(!Array.isArray(newPage['elem'][i]))
-        newPage['elem'][i].reset(newPage['pos'][i].x, newPage['pos'][i].y)
-      else{
-        if(newPage['pos'][i])
-          newPage['elem'][i][0].face.reset(newPage['pos'][i].x, newPage['pos'][i].y)
+  for (let pages in page) {
+    for (let [index, elem] of page[pages].entries()) {
+      if(pages !== 'currPage' && page[pages].length){
+        page[pages].splice(index, 1, opt.game.add.button(elem.x, elem.y, elem.img, elem.func, this))
+        page[pages][index].next = elem.next
       }
     }
   }
-}
 
-//const game = new Phaser.Game(2600, 2600/ratio, Phaser.HEADLESS, 'game', {preload: preload, create: create, update: update, render:render})
-const game = new Phaser.Game(display.gameWidth, display.gameHeight, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render:render})
+  for(let currPage of Object.keys(page)){
+    if(currPage !== 'currPage')
+      for(let elem of page[currPage])
+        elem.kill()
+  }
+
+  for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
+    page.game.push(personal[i])
+    page.game.push(opponent[i])
+    if(i === 'deck'){
+      personal['deck'][0].face.kill()
+      opponent['deck'][0].face.kill()
+    }
+  }
+}
 
 function preload(){
+ // console.log(app.data)
+  for(let type in app.data){
+    for(let elem in app.data[type])
+      //console.log(type, elem, app.data[type][elem] )
+      opt.game.load[type](elem, app.data[type][elem])
+  }
+/*
   game.load.image('background', 'assets/image/yellow.png')
 	game.load.image('endTurn', 'assets/image/button.jpg')
 	game.load.image('attack', 'assets/image/atk.png')
@@ -404,55 +329,70 @@ function preload(){
   game.load.spritesheet('aria', 'assets/image/aria.jpg')
   game.load.spritesheet('shadow', 'assets/image/shadow.jpg')
   game.load.spritesheet('muse', 'assets/image/muse.jpg')
+*/
 }
 
-// server
-const socket = io()
+function render(){
+}
+
+function search(){
+  socket.emit('search', it => {
+    text.setText(it.msg)
+    if(it.msg !== 'searching for match...')
+      changePage({next:'game'})
+    else
+      changePage({next:'loading'})
+  })
+}
+
+function update(){
+  //Phaser.ScaleManager.RESIZE
+}
+
+function updateCounter(){
+  app.counter++
+}
+
+function updDeckList() {
+  socket.emit('updDeckList', personal.deckList, it => {
+
+  })
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+// socket server
 
 socket.on('buildLIFE', it => {
   var life = JSON.parse(it)
 
-  for(let i = 0; i < life.length; i++){
-    self['life'].push(new Card(life[i].name, 'life', true, true))
-    self['life'][i].changeInputFunction()
+  for(let i in life){
+    personal['life'].push(new Card(life[i].name, 'life', true, true))
+    personal['life'][i].changeInputFunction()
   }
   fixPos("self", "life")
 })
 
 socket.on('foeBuiltLife', it => {
   for(let i = 0; i < 6; i++){
-    foe['life'].push(new Card('cardback', 'life', false, true))
+    opponent['life'].push(new Card('cardback', 'life', false, true))
   }
   fixPos("foe", "life")
 })
 
-
-socket.on('joinGame', it => {//
-  text.setText(it.msg)
-  changePage(page.loading)
-})
-
-socket.on('gameStart', it => {//
-  text.setText(it.msg)
-})
-
-socket.on('turnStart', it => {
-  text.setText(it.msg)
-})
-
 socket.on('foeDrawCard', it => {
-  foe['hand'].push(new Card('unknown', 'hand', false, true))
+  opponent['hand'].push(new Card('unknown', 'hand', false, true))
   fixPos("foe", "hand")
 
   if(it.deckStatus === "empty"){
-    foe['deck'][0].face.kill()
+    opponent['deck'][0].face.kill()
   }
 })
 
 socket.on('foePlayHand', it => {
-  foe['hand'][0].face.destroy()
-  foe['hand'].splice(0,1)
-  foe['battle'].push(new Card(it.cardName, 'battle', false, false))
+  opponent['hand'][0].face.destroy()
+  opponent['hand'].pop() //-! only when no animation
+  opponent['battle'].push(new Card(it.cardName, 'battle', false, false))
   fixPos('foe', 'hand')
   fixPos('foe', 'battle')
 })
@@ -461,51 +401,35 @@ socket.on('foePlayLife', it => {
 
 })
 
+socket.on('gameStart', it => text.setText(it.msg))
+
 socket.on('interrupt', it => {
-  alert(it.msg)
+  alert(it.err)
   text.setText(' ')
-  changePage(backBtn)
+  changePage({next: 'lobby'})
   cleanAllData()
 })
 
+socket.on('joinGame', it => {//
+  text.setText(it.msg)
+  changePage({next:'game'})
+})
 
-function create(){
-  let top = (100*(1 - display.gameWidth/app.w)/2).toString()+'%'
-  let left = (100*(1 - display.gameHeight/app.h)/2).toString()+'%'
-  $('#game').css({top: top, left: left})
+socket.on('turnStart', it => text.setText(it.msg))
 
-  game.add.sprite(0, 0, 'background')
-  //game.scale.scaleMode = Phaser.ScaleManager.EXACT_FIT
-  game.time.events.loop(Phaser.Timer.SECOND, updateCounter, this)
+//////////////////////////////////////////////////////////////////////////////////////
 
-  textGroup = game.add.group()
-  text = game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
-  text.fixedToCamera = true
-  text.cameraOffset.setTo(21, display.gameHeight/2 - 44/display.scale)
-  textGroup.add(text)
+// game initialization
+const personal = new player({deckY:110, handY:220, lifeY:110, battleY:330, graveY:220})
+const opponent = new player({deckY:758, handY:648, lifeY:758, battleY:538, graveY:648})
 
-  socket.emit('init', it => {
-    backBtn = game.add.button(0, display.gameHeight-43, 'back', changePage, this)
-    loginBtn = game.add.button(display.gameWidth - 83, display.gameHeight*0.75,'login', login, this)
-    deckBtn = game.add.button(0, 0, 'decks', changePage, this)
-    matchBtn = game.add.button(0, 43, 'battle', changePage, this)
-    searchBtn = game.add.button(0, 0, 'search', search, this)
-    endBtn = game.add.button(display.gameWidth - 121, display.gameHeight/2 - 44/display.scale, 'endTurn', endTurn, this)
-    leaveBtn = game.add.button(0, display.gameHeight - 43, 'leave', leaveMatch, this)
+//var game
 
-	  self['deck'].push(new Card('cardback', 'deck', true, true))
-    foe['deck'].push(new Card('cardback', 'deck', false, true))
-    fixPos('foe', 'deck')
-
-    pageInit()
-  })
+socket.emit('preload', it => {
+   //console.log(it)
+   app.data = it
+   opt.game = new Phaser.Game(app.display.gameWidth, app.display.gameHeight, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render:render})
+})
 
 
-}
 
-function update(){
-  //Phaser.ScaleManager.RESIZE
-}
-
-function render(){
-}
