@@ -116,32 +116,32 @@ const Game = function (){
   }
   this.page = {
     start: [
-      {x: this.default.gameWidth/2 - 100, y: this.default.gameHeight*0.75, img: 'login', func: this.changePage, next: 'login'},
-      {x: this.default.gameWidth/2 + 12, y: this.default.gameHeight*0.75, img: 'signup', func: this.changePage, next: 'signup'}
+      {type: 'btn', x: this.default.gameWidth/2 - 100, y: this.default.gameHeight*0.75, img: 'login', func: this.changePage, next: 'login'},
+      {type: 'btn', x: this.default.gameWidth/2 + 12, y: this.default.gameHeight*0.75, img: 'signup', func: this.changePage, next: 'signup'}
     ],
     login: [
-      {id: 'login'},
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
+      {type: 'html', id: 'login'},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
     ],
     signup: [
-      {id: 'signup'},
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
+      {type: 'html', id: 'signup'},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
     ],
     lobby: [
-      {x: 0, y: 0, img: 'decks', func: this.changePage, next: 'deckBuild'},
-      {x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
+      {type: 'btn', x: 0, y: 0, img: 'decks', func: this.changePage, next: 'deckBuild'},
+      {type: 'btn', x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
     ],
     deckBuild: [
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
     ],
     matchSearch: [
-      {x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
+      {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
     ],
     loading: [],
     game: [
-      {x: this.default.gameWidth - 121, y: this.default.gameHeight/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
-      {x: 0, y: this.default.gameHeight - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
+      {type: 'btn', x: this.default.gameWidth - 121, y: this.default.gameHeight/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
     ]
   }
   this.text = null
@@ -162,8 +162,8 @@ Game.prototype.changePage = function(btn){
             oldPage[i][j].face.destroy()
       }
       else{
-        if(oldPage[i].id){
-          this.swapZ(oldPage[i].id, 'bottom')
+        if(oldPage[i].type === 'html'){
+          this.htmlSwap(oldPage[i], 'bottom')
         }
         else
           oldPage[i].kill()
@@ -176,8 +176,8 @@ Game.prototype.changePage = function(btn){
   if(newPage){
     for(let i in newPage){
       if(!Array.isArray(newPage[i])){
-        if(newPage[i].id)
-          this.swapZ(newPage[i].id, 'front')
+        if(newPage[i].type === 'html')
+          this.htmlSwap(newPage[i], 'front')
         else
           newPage[i].reset(newPage[i].x, newPage[i].y)
       }
@@ -221,6 +221,11 @@ Game.prototype.fixPos = function(player, field){
   }
 }
 
+Game.prototype.htmlSwap = function(elem, place){
+  let i = (place === 'front')? 1: -1
+  if(elem.id) $(`#${elem.id}`).css('zIndex', i)
+}
+
 Game.prototype.leaveMatch = function(){
   socket.emit('leaveMatch')
   this.changePage({next:'lobby'})
@@ -246,7 +251,7 @@ Game.prototype.login = function(){
 Game.prototype.pageInit = function(){
   for (let pageName in this.page) {
     for (let [index, elem] of this.page[pageName].entries()) {
-      if(!elem.id && this.page[pageName].length){
+      if(elem.type!=='html' && this.page[pageName].length){
         this.page[pageName].splice(index, 1, app.game.add.button(elem.x, elem.y, elem.img, elem.func, this))
         this.page[pageName][index].next = elem.next
         this.page[pageName][index].kill()
@@ -273,11 +278,6 @@ Game.prototype.search = function(){
     else
       this.changePage({next:'loading'})
   })
-}
-
-Game.prototype.swapZ = function(id, place){
-  let i = (place === 'front')? 1: -1
-  $(`#${id}`).css('zIndex', i)
 }
 
 Game.prototype.signup = function(){
