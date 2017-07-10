@@ -55,7 +55,8 @@ const Game = function(){
     leave   : 'opponent leave',
     noAP    : 'not enough action point',
     pswdErr : 'wrong password',
-    usrErr  : 'no such user'
+    usrErr  : 'no such user',
+    usrExist: 'user name already exists'
   }
   this.msg = {
     foeTurn : 'waiting for opponent',
@@ -290,23 +291,6 @@ io.on('connection', client => {
         //cb({msg: opt.usrErr})
         cb({err: game.err.usrErr})
 
-        /*
-        let signup = {
-          account: it.acc,
-          passwd: it.passwd,
-          decks: {
-            deck1: ['katana','katana','katana','katana','katana','katana','katana','katana','katana','katana']
-          }
-        }
-
-        user.insert(signup, (err, result) => {
-          if(!err){
-            console.log('player ' + signup.account + ' added')
-            client._account = signup.account
-            cb({msg:'success'})
-          }
-        })
-        */
       }
     })
   })
@@ -407,8 +391,25 @@ io.on('connection', client => {
     })
   })
 
-  client.on('signup',(it,cb) => {
-
+  client.on('signup',(it,cb) => { //it.acc .pswd
+    let user = app.db.collection('user')
+    user.find({account: it.acc}).toArray((err, rlt) => {
+      if(rlt.length) return cb({err: game.err.usrExist})
+      let signup = {
+        account: it.acc,
+        passwd: it.passwd,
+        decks: {
+          deck1: ['katana','katana','katana','katana','katana','katana','katana','katana','katana','katana']
+        }
+      }
+      user.insert(signup, (err, result) => {
+        if(!err){
+          console.log('player ' + signup.account + ' added')
+          client._account = signup.account
+          cb({})
+        }
+      })
+    })
   })
 
   client.on('updDeckList', (it, cb) => {

@@ -237,12 +237,11 @@ Game.prototype.login = function(){
   if(!$('#logPswd').val()) return alert('please enter your password')
 
   socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
-    if(it.err) {
+    if(it.err){
       alert(it.err)
       $('#logAcc, #logPswd').val('')
       return
     }
-
     self['deckList'] = it.deckList
     this.changePage({next: 'lobby'})
   })
@@ -285,18 +284,15 @@ Game.prototype.signup = function(){
   if(!$('#sgnPswd').val()) return alert('please enter your password')
   if(!$('#sgnRepswd').val()) return alert('please enter your password again')
   if($('#sgnPswd').val() !== $('#sgnRepswd').val()) return alert('passwords are different')
-  /*
-  socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
+
+  socket.emit('signup',  {acc: $('#sgnAcc').val(), passwd: $('#sgnPswd').val()}, it => {
     if(it.err) {
       alert(it.err)
-      $('#logAcc, #logPswd').val('')
+      $('#sgnAcc, #sgnPswd, #sgnRepswd').val('')
       return
     }
-
-    self['deckList'] = it.deckList
-    this.changePage({next: 'lobby'})
+    this.changePage({next: 'start'})
   })
-  */
 }
 
 const Player = function(obj){
