@@ -17,164 +17,6 @@ const app = {
 //////////////////////////////////////////////////////////////////////////////////////
 
 // classes
-const Game = function (){
-  this.counter = 0
-  this.currPage = 'login'
-
-  this.default = {
-    cardHeight: 91,
-	  cardWidth: 64,
-	  gameHeight: 700,
-    gameWidth: 1366,
-    scale: 768*(opt.screen.w/opt.screen.h)/1366
-  }
-  this.page = {
-    login: [
-      {x: this.default.gameWidth - 83, y: this.default.gameHeight*0.75, img: 'login', func: this.login, next: 'lobby'}
-    ],
-    signup: [],
-    lobby: [
-      {x: 0, y: 0, img: 'decks', func: this.changePage, next: 'deckBuild'},
-      {x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
-    ],
-    deckBuild: [
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
-    ],
-    matchSearch: [
-      {x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
-      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
-    ],
-    loading: [],
-    game: [
-      {x: this.default.gameWidth - 121, y: this.default.gameHeight/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
-      {x: 0, y: this.default.gameHeight - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
-    ]
-  }
-  this.text = null
-  this.textGroup = null
-}
-
-Game.prototype.changePage = function(btn){
-  let oldPage = this.page[this.currPage]
-  let newPage = this.page[btn.next]
-
-  if(oldPage){
-    for(let i in oldPage) {
-      if(Array.isArray(oldPage[i])) {
-        if(oldPage[i] == personal['deck'] || oldPage[i] == opponent['deck'])
-          oldPage[i][0].face.kill()
-        else
-          for(let j in oldPage[i])
-            oldPage[i][j].face.destroy()
-      }
-      else
-        oldPage[i].kill()
-    }
-  }
-
-  this.currPage = btn.next
-
-  if(newPage){
-    for(let i in newPage){
-      if(!Array.isArray(newPage[i]))
-        newPage[i].reset(newPage[i].x, newPage[i].y)
-      else
-        if(newPage[i] == personal['deck'] || newPage[i] == opponent['deck'])
-          newPage[i][0].face.reset(newPage[i][0].face.x, newPage[i][0].face.y)
-    }
-  }
-}
-
-Game.prototype.cleanAllData = function(){
-  let field = ['hand', 'life', 'grave', 'battle']
-  this.text.setText(' ')
-  for(let i in field){
-    personal[field[i]].splice(0,personal[field[i]].length)
-    opponent[field[i]].splice(0,opponent[field[i]].length)
-  }
-}
-
-Game.prototype.endTurn = function(){
-  socket.emit('finish', it => {this.text.setText(it.msg)})
-}
-
-Game.prototype.fixPos = function(player, field){
-  if(player === "self"){
-    for(let i in personal[field]){
-      personal[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i
-   	  personal[field][i].face.y = personal[`${field}Yloc`]
-    }
-  }
-  else{
-    if(field !== 'deck')
-      for(let i in opponent[field]){
-        opponent[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i
-  	    opponent[field][i].face.y = opponent[`${field}Yloc`]
-      }
-    else{
-		  opponent[field][0].face.x = this.default.gameWidth*(1 - 1/13)
-      opponent[field][0].face.y = opponent[`${field}Yloc`]
-    }
-  }
-}
-
-Game.prototype.leaveMatch = function(){
-  socket.emit('leaveMatch')
-  this.changePage({next:'lobby'})
-  this.cleanAllData()
-}
-
-Game.prototype.login = function(){
-  if($('#account').val()){
-    socket.emit('login',  {acc: $('#account').val(), passwd: $('#passwd').val()}, it => {
-      if(it.err) {
-        alert(it.err)
-        $('#account, #passwd').val('')
-        return
-      }
-
-      self['deckList'] = it.deckList
-      $('#login').remove()
-      this.changePage({next: 'lobby'})
-    })
-  }
-  else
-    alert('please enter your account')
-}
-
-Game.prototype.pageInit = function(){
-  for (let pageName in this.page) {
-    let pageElem = []
-    for (let [index, elem] of this.page[pageName].entries()) {
-      if(this.page[pageName].length){
-        pageElem.push(app.game.add.button(elem.x, elem.y, elem.img, elem.func, this))
-        pageElem[index].next = elem.next
-        pageElem[index].kill()
-       }
-    }
-    this.page[pageName] = pageElem
-  }
-
-  for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
-    this.page.game.push(personal[i])
-    this.page.game.push(opponent[i])
-    if(i === 'deck'){
-      personal['deck'][0].face.kill()
-      opponent['deck'][0].face.kill()
-    }
-  }
-}
-
-Game.prototype.search = function(){
-  socket.emit('search', it => {
-    this.text.setText(it.msg)
-    if(it.msg !== 'searching for match...')
-      this.changePage({next:'game'})
-    else
-      this.changePage({next:'loading'})
-  })
-}
-
 const Card = function (name, field, faceInput, cover) {
   this.cover = cover
   this.face = app.game.add.sprite(game.default.gameWidth * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
@@ -258,6 +100,203 @@ Card.prototype.playHandCard = function(){
     game.fixPos('self', 'hand')
     game.fixPos('self', 'battle')
   })
+}
+
+const Game = function (){
+  this.counter = 0
+  this.currPage = 'start'
+  this.default = {
+    buttonHeight: 43,
+    buttonWidth: 88,
+    cardHeight: 91,
+	  cardWidth: 64,
+	  gameHeight: 700,
+    gameWidth: 1366,
+    scale: 768*(opt.screen.w/opt.screen.h)/1366
+  }
+  this.page = {
+    start: [
+      {x: this.default.gameWidth/2 - 100, y: this.default.gameHeight*0.75, img: 'login', func: this.changePage, next: 'login'},
+      {x: this.default.gameWidth/2 + 12, y: this.default.gameHeight*0.75, img: 'signup', func: this.changePage, next: 'signup'}
+    ],
+    login: [
+      {id: 'login'},
+      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
+    ],
+    signup: [
+      {id: 'signup'},
+      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
+    ],
+    lobby: [
+      {x: 0, y: 0, img: 'decks', func: this.changePage, next: 'deckBuild'},
+      {x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
+    ],
+    deckBuild: [
+      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
+    ],
+    matchSearch: [
+      {x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
+      {x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
+    ],
+    loading: [],
+    game: [
+      {x: this.default.gameWidth - 121, y: this.default.gameHeight/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
+      {x: 0, y: this.default.gameHeight - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
+    ]
+  }
+  this.text = null
+  this.textGroup = null
+}
+
+Game.prototype.changePage = function(btn){
+  let oldPage = this.page[this.currPage]
+  let newPage = this.page[btn.next]
+
+  if(oldPage){
+    for(let i in oldPage) {
+      if(Array.isArray(oldPage[i])) {
+        if(oldPage[i] == personal['deck'] || oldPage[i] == opponent['deck'])
+          oldPage[i][0].face.kill()
+        else
+          for(let j in oldPage[i])
+            oldPage[i][j].face.destroy()
+      }
+      else{
+        if(oldPage[i].id){
+          this.swapZ(oldPage[i].id, 'bottom')
+        }
+        else
+          oldPage[i].kill()
+      }
+    }
+  }
+
+  this.currPage = btn.next
+
+  if(newPage){
+    for(let i in newPage){
+      if(!Array.isArray(newPage[i])){
+        if(newPage[i].id)
+          this.swapZ(newPage[i].id, 'front')
+        else
+          newPage[i].reset(newPage[i].x, newPage[i].y)
+      }
+      else
+        if(newPage[i] == personal['deck'] || newPage[i] == opponent['deck'])
+          newPage[i][0].face.reset(newPage[i][0].face.x, newPage[i][0].face.y)
+    }
+  }
+}
+
+Game.prototype.cleanAllData = function(){
+  let field = ['hand', 'life', 'grave', 'battle']
+  this.text.setText(' ')
+  for(let i in field){
+    personal[field[i]].splice(0,personal[field[i]].length)
+    opponent[field[i]].splice(0,opponent[field[i]].length)
+  }
+}
+
+Game.prototype.endTurn = function(){
+  socket.emit('finish', it => {this.text.setText(it.msg)})
+}
+
+Game.prototype.fixPos = function(player, field){
+  if(player === "self"){
+    for(let i in personal[field]){
+      personal[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i
+   	  personal[field][i].face.y = personal[`${field}Yloc`]
+    }
+  }
+  else{
+    if(field !== 'deck')
+      for(let i in opponent[field]){
+        opponent[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i
+  	    opponent[field][i].face.y = opponent[`${field}Yloc`]
+      }
+    else{
+		  opponent[field][0].face.x = this.default.gameWidth*(1 - 1/13)
+      opponent[field][0].face.y = opponent[`${field}Yloc`]
+    }
+  }
+}
+
+Game.prototype.leaveMatch = function(){
+  socket.emit('leaveMatch')
+  this.changePage({next:'lobby'})
+  this.cleanAllData()
+}
+
+Game.prototype.login = function(){
+  if(!$('#logAcc').val()) return alert('please enter your account')
+  if(!$('#logPswd').val()) return alert('please enter your password')
+
+  socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
+    if(it.err) {
+      alert(it.err)
+      $('#logAcc, #logPswd').val('')
+      return
+    }
+
+    self['deckList'] = it.deckList
+    this.changePage({next: 'lobby'})
+  })
+}
+
+Game.prototype.pageInit = function(){
+  for (let pageName in this.page) {
+    for (let [index, elem] of this.page[pageName].entries()) {
+      if(!elem.id && this.page[pageName].length){
+        this.page[pageName].splice(index, 1, app.game.add.button(elem.x, elem.y, elem.img, elem.func, this))
+        this.page[pageName][index].next = elem.next
+        this.page[pageName][index].kill()
+      }
+    }
+  }
+
+  for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
+    this.page.game.push(personal[i])
+    this.page.game.push(opponent[i])
+    if(i === 'deck'){
+      personal['deck'][0].face.kill()
+      opponent['deck'][0].face.kill()
+    }
+  }
+  this.changePage({next: 'start'})
+}
+
+Game.prototype.search = function(){
+  socket.emit('search', it => {
+    this.text.setText(it.msg)
+    if(it.msg !== 'searching for match...')
+      this.changePage({next:'game'})
+    else
+      this.changePage({next:'loading'})
+  })
+}
+
+Game.prototype.swapZ = function(id, place){
+  let i = (place === 'front')? 1: -1
+  $(`#${id}`).css('zIndex', i)
+}
+
+Game.prototype.signup = function(){
+  if(!$('#sgnAcc').val()) return alert('please enter your account')
+  if(!$('#sgnPswd').val()) return alert('please enter your password')
+  if(!$('#sgnRepswd').val()) return alert('please enter your password again')
+  if($('#sgnPswd').val() !== $('#sgnRepswd').val()) return alert('passwords are different')
+  /*
+  socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
+    if(it.err) {
+      alert(it.err)
+      $('#logAcc, #logPswd').val('')
+      return
+    }
+
+    self['deckList'] = it.deckList
+    this.changePage({next: 'lobby'})
+  })
+  */
 }
 
 const Player = function(obj){
