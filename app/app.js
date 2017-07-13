@@ -112,6 +112,7 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
   this.cardList = cardList
   this.displayBlk = this.displayInit()
 
+  // sprite x, y need to define
   if(this.type === "deckList"){
     this.img = app.game.add.sprite(game.default.gameWidth/2, game.default.gameHeight/2, 'cardback')
     this.img.inputEnabled = true
@@ -178,7 +179,7 @@ const Game = function (){
       {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'edit', func: this.editDeck, next: 'deckEdit'}
     ],
     deckEdit: [
-      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'deckBuild'}
+      {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'save', func: this.editSave, next: 'deckBuild'}
     ],
     matchSearch: [
       {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
@@ -260,6 +261,13 @@ Game.prototype.deckListInit = function(deckList/*,ownList*/){
 Game.prototype.editDeck = function(){
   if(personal['deckName'] == null) return alert('choose a deck')
   this.changePage({next: 'deckEdit'})
+  //! display all cards in specific deck and player owned cards
+}
+
+Game.prototype.editSave = function(){
+  //! kill all cards in specific deck and player owned cards
+  //! send info to database and rewrite document
+  this.changePage({next: 'deckBuild'})
 }
 
 Game.prototype.endTurn = function(){
@@ -361,20 +369,6 @@ Game.prototype.signup = function(){
     }
     this.changePage({next: 'start'})
   })
-}
-
-Game.prototype.slider = function(elem, direction) {
-  if(elem.length){ //own card, cards in deck
-    for(let card in elem){
-      card.img.reset(deck.img.x + direction*game.default.cardWidth, deck.img.y)
-    }
-  }
-  else{ // deck choose
-    for(let deck in elem){
-      deck.img.reset(deck.img.x + direction*game.default.cardWidth, deck.img.y)
-      deck.text.reset(deck.text.x + direction*game.default.cardWidth, deck.text.y)
-    }
-  }
 }
 
 const Player = function(obj){
