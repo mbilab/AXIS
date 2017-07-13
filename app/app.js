@@ -60,6 +60,8 @@ Card.prototype.changeInputFunction = function(){
           this.face.events.onInputDown.add(this.playLifeCard, this)
       }
       break
+
+    default: break
   }
 }
 
@@ -102,6 +104,46 @@ Card.prototype.playHandCard = function(){
   })
 }
 
+const Deck = function(type, name, cardList) { //type: deckList, ownList
+  this.currCard = 0
+  this.maxDisplay = 5
+  this.type = type
+  this.name = name
+  this.cardList = cardList
+  this.displayBlk = this.displayInit()
+
+  if(this.type === "deckList"){
+    this.img = app.game.add.sprite(game.default.gameWidth/2, game.default.gameHeight/2, 'cardback')
+    this.img.inputEnabled = true
+    this.img.events.onInputDown.add(this.deckChoose, this)
+    this.text = app.game.add.text(game.default.gameWidth/2, game.default.gameHeight/2, this.name, {font: '20px Arial', fill:'#000000', align: 'left'})
+    this.img.kill()
+    this.text.kill()
+  }
+}
+
+Deck.prototype.editCard = function(){
+  if(this.type === 'deckList'){
+
+  }
+}
+
+Deck.prototype.deckChoose = function(){
+  personal['deckName'] = this.name
+}
+
+Deck.prototype.displayInit = function(){
+  let list = []
+  let y = (this.type === 'deckList')? 190: 300
+  for(let i = 0; i < this.maxDisplay; i++){
+    list.push(app.game.add.sprite(500 + i*80, y, this.cardList[i]))
+    list[i].inputEnabled = true
+    list[i].events.onInputDown.add(this.editCard,this)
+    list[i].kill()
+  }
+  return list
+}
+
 const Game = function (){
   this.counter = 0
   this.currPage = 'start'
@@ -132,7 +174,11 @@ const Game = function (){
       {type: 'btn', x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
     ],
     deckBuild: [
-      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'},
+      {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'edit', func: this.editDeck, next: 'deckEdit'}
+    ],
+    deckEdit: [
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'deckBuild'}
     ],
     matchSearch: [
       {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
@@ -186,6 +232,9 @@ Game.prototype.changePage = function(btn){
           newPage[i][0].face.reset(newPage[i][0].face.x, newPage[i][0].face.y)
     }
   }
+
+  //variable reset due to page change
+  personal['deckName'] = null
 }
 
 Game.prototype.cleanAllData = function(){
@@ -195,6 +244,22 @@ Game.prototype.cleanAllData = function(){
     personal[field[i]].splice(0,personal[field[i]].length)
     opponent[field[i]].splice(0,opponent[field[i]].length)
   }
+}
+
+Game.prototype.deckListInit = function(deckList/*,ownList*/){
+  //personal['ownList'] = new Deck('ownList', 'ownList', ownList)
+  for(let deckName in deckList) {
+    personal['deckList'][deckName] = new Deck('deckList', deckName, deckList[deckName])
+    game.page.matchSearch.push(personal['deckList'][deckName].img)
+    game.page.matchSearch.push(personal['deckList'][deckName].text)
+    game.page.deckBuild.push(personal['deckList'][deckName].img)
+    game.page.deckBuild.push(personal['deckList'][deckName].text)
+  }
+}
+
+Game.prototype.editDeck = function(){
+  if(personal['deckName'] == null) return alert('choose a deck')
+  this.changePage({next: 'deckEdit'})
 }
 
 Game.prototype.endTurn = function(){
@@ -242,7 +307,8 @@ Game.prototype.login = function(){
       $('#logAcc, #logPswd').val('')
       return
     }
-    self['deckList'] = it.deckList
+
+    game.deckListInit(it.deckList)
     this.changePage({next: 'lobby'})
   })
 }
@@ -270,7 +336,9 @@ Game.prototype.pageInit = function(){
 }
 
 Game.prototype.search = function(){
-  socket.emit('search', it => {
+  socket.emit('search', {deckName: personal['deckName']}, it => {
+    if(it.err) return alert(it.err)
+
     this.text.setText(it.msg)
     if(it.msg !== 'searching for match...')
       this.changePage({next:'game'})
@@ -295,13 +363,28 @@ Game.prototype.signup = function(){
   })
 }
 
+Game.prototype.slider = function(elem, direction) {
+  if(elem.length){ //own card, cards in deck
+    for(let card in elem){
+      card.img.reset(deck.img.x + direction*game.default.cardWidth, deck.img.y)
+    }
+  }
+  else{ // deck choose
+    for(let deck in elem){
+      deck.img.reset(deck.img.x + direction*game.default.cardWidth, deck.img.y)
+      deck.text.reset(deck.text.x + direction*game.default.cardWidth, deck.text.y)
+    }
+  }
+}
+
 const Player = function(obj){
   for (let field of ['deckY', 'handY', 'lifeY', 'battleY', 'graveY'])
     this[`${field}loc`] = game.default.gameHeight - obj[field] / game.default.scale
 
   this.deck = []
-  this.deck.name = ''
+  this.deckName = ''
   this.deckList = {}
+  this.ownList = {}
   this.hand = []
   this.life = []
   this.battle = []
