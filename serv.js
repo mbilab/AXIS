@@ -49,6 +49,7 @@ const Game = function(){
     lifeMax: 6
   }
   this.err = {
+    deckNull: 'choose a deck',
     dscnt   : 'opponent disconnect',
     foeTurn : 'waiting for opponent',
     handFull: 'your hand is full',
@@ -137,6 +138,12 @@ Game.prototype.playHandCard = function(player, cardName){
   }
 }
 
+Game.prototype.randomDeck = function(){
+  // !--
+  let allCard = Object.keys(game.default.allCard)
+  return allCard
+}
+
 Game.prototype.shuffle = function(array){
   var i = 0, j = 0, temp = null
 
@@ -160,8 +167,13 @@ io.on('connection', client => {
     app.db.collection('card').find({}).toArray((err, rlt) => {
       for(let i in rlt)
         game.default.allCard[rlt[i].name] = rlt[i]
-
     })
+  })
+
+  client.on('buildNewDeck', (it,cb) => {
+    console.log(`build new deck_${it.slot}`)
+    let newDeck = game.randomDeck()
+    cb({newDeck: newDeck})
   })
 
   // player disconnect
@@ -240,14 +252,14 @@ io.on('connection', client => {
         game.room[rid].player[curr].emit('turnStart', {msg: game.msg.selfTurn})
       }
       else
-        cb({msg: game.msg.forTurn})
+        cb({msg: game.msg.foeTurn})
     }
   })
 
   // player open this website
   client.on('init', (cb) => {
     game.buildPlayer(client)
-    cb()
+    cb({})
   })
 
   // opponent leave match
@@ -278,17 +290,14 @@ io.on('connection', client => {
     user.find({account: it.acc}).toArray((err, result) => {
       if(result.length != 0){
         if(result[0].passwd === it.passwd){
-          //cb({msg: opt.done, deckList: result[0].decks})
-          cb({deckList: result[0].decks})
           client._account = it.acc
           client.deckList = result[0].decks
+          cb({deckList: client.deckList})
         }
         else
-          //cb({msg: opt.pswdErr})
           cb({err: game.err.pswdErr})
       }
       else{
-        //cb({msg: opt.usrErr})
         cb({err: game.err.usrErr})
 
       }
@@ -304,7 +313,6 @@ io.on('connection', client => {
       if(game.room[rid].player[curr]._pid === client._pid){
         var result = game.playHandCard(client, it.name)
         if(result == true){
-          //cb({ msg: opt.done })
           cb({})
           game.room[rid].player[1-curr].emit('foePlayHand', {cardName: it.name})
         }
@@ -341,13 +349,15 @@ io.on('connection', client => {
   })
 
   // player waiting for match
-  client.on('search', cb => {
+  client.on('search', (it,cb) => {
     var user = app.db.collection('user')
     var cards = app.db.collection('card')
     var deck = []
 
+    if(!it.deckName) return cb({err: game.err.deckNull})
+
     user.find({account: client._account}).toArray((err, result) => {
-      deck = result[0].decks['deck1'] // change
+      deck = result[0].decks[it.deckName] // change
 
       for(let i in deck){
         curr = game.default.allCard[deck[i]]
@@ -398,9 +408,7 @@ io.on('connection', client => {
       let signup = {
         account: it.acc,
         passwd: it.passwd,
-        decks: {
-          deck1: ['katana','katana','katana','katana','katana','katana','katana','katana','katana','katana']
-        }
+        decks: {}
       }
       user.insert(signup, (err, result) => {
         if(!err){
