@@ -77,7 +77,7 @@ Card.prototype.drawCard = function(){
     game.text.setText(`draw ${it.cardName}`)
     personal['hand'].push(new Card(it.cardName, 'hand', true, false))
     personal['hand'][personal['hand'].length - 1].changeInputFunction()
-    game.fixPos("self", "hand")
+    game.fixPos('self', 'hand')
 
     if(it.deckStatus === "empty")
       personal['deck'][0].face.kill()
@@ -109,10 +109,7 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
   this.name = name
   this.cardList = cardList
 
-  // sprite x, y need to define
   if(this.type === "deckList"){
-
-    //!--
     this.index = name.split("_")[1]
     this.img = app.game.add.sprite((game.default.gameWidth-232)/2 + 84*(this.index-1), game.default.gameHeight/2, 'emptySlot')
     this.img.events.onInputDown.add(this.changeFunc, this)
@@ -135,8 +132,15 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
 }
 
 Deck.prototype.buildNewDeck = function(){
+  // !--
   socket.emit('buildNewDeck', {slot: this.index}, it => {
     console.log(it.newDeck)
+    //if(this.img.texture === 'emptySlot'){
+      this.img.loadTexture('cardback')
+      this.img.inputEnabled = true
+      this.text.setText(`deck_${this.index}`)
+    //}
+    alert('you build a new deck')
   })
 }
 
@@ -272,7 +276,7 @@ Game.prototype.deckSlotInit = function(deckList){
   let deckName = Object.keys(deckList)
   for(let slot = 1; slot <= personal.deckSlot.size; slot ++) {
     personal['deckSlot'][`slot_${slot}`] = new Deck('deckList', `deck_${slot}`, null)
-    if(deckName.length >= slot){
+    if(deckName.length >= slot && deckList[deckName[slot-1]].length){
       personal['deckSlot'][`slot_${slot}`].name = deckName[slot-1]
       personal['deckSlot'][`slot_${slot}`].text.setText(deckName[slot-1])
       personal['deckSlot'][`slot_${slot}`].img.loadTexture('cardback')
@@ -304,21 +308,25 @@ Game.prototype.endTurn = function(){
 }
 
 Game.prototype.fixPos = function(player, field){
-  if(player === "self"){
+  if(player === 'self'){
     for(let i in personal[field]){
-      personal[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i
-   	  personal[field][i].face.y = personal[`${field}Yloc`]
+      //personal[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i
+   	  //personal[field][i].face.y = personal[`${field}Yloc`]
+      personal[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i, personal[`${field}Yloc`])
     }
   }
   else{
-    if(field !== 'deck')
+    if(field !== 'deck'){
       for(let i in opponent[field]){
-        opponent[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i
-  	    opponent[field][i].face.y = opponent[`${field}Yloc`]
+        //opponent[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i
+  	    //opponent[field][i].face.y = opponent[`${field}Yloc`]
+        opponent[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i, opponent[`${field}Yloc`])
       }
+    }
     else{
-		  opponent[field][0].face.x = this.default.gameWidth*(1 - 1/13)
-      opponent[field][0].face.y = opponent[`${field}Yloc`]
+		  //opponent[field][0].face.x = this.default.gameWidth*(1 - 1/13)
+      //opponent[field][0].face.y = opponent[`${field}Yloc`]
+		  opponent[field][0].face.reset(this.default.gameWidth*(1 - 1/13), opponent[`${field}Yloc`])
     }
   }
 }
@@ -483,7 +491,8 @@ socket.on('foeDrawCard', it => {
 
 socket.on('foePlayHand', it => {
   opponent['hand'][0].face.destroy()
-  opponent['hand'].pop() //-! only when no animation
+  opponent['hand'].shift() //-! only when no animation
+  //opponent['hand'].splice(0,1)
   opponent['battle'].push(new Card(it.cardName, 'battle', false, false))
   game.fixPos('foe', 'hand')
   game.fixPos('foe', 'battle')

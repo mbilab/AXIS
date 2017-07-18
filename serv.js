@@ -141,11 +141,14 @@ Game.prototype.playHandCard = function(player, cardName){
 Game.prototype.randomDeck = function(){
   // !--
   let allCard = Object.keys(game.default.allCard)
-  return allCard
+  let random = this.shuffle(allCard)
+  let deck = random.slice(0, game.default.deckMax)
+
+  return deck
 }
 
 Game.prototype.shuffle = function(array){
-  var i = 0, j = 0, temp = null
+  let i = 0, j = 0, temp = null
 
   for(i = array.length-1; i > 0; i -= 1){
     j = Math.floor(Math.random()*(i + 1))
@@ -153,6 +156,8 @@ Game.prototype.shuffle = function(array){
     array[i] = array[j]
     array[j] = temp
   }
+
+  return array
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -171,9 +176,24 @@ io.on('connection', client => {
   })
 
   client.on('buildNewDeck', (it,cb) => {
+    // !--
     console.log(`build new deck_${it.slot}`)
     let newDeck = game.randomDeck()
-    cb({newDeck: newDeck})
+
+    // mongodb update
+    let user = app.db.collection('user')
+    user.find({account: client._account}).toArray((err, rlt) => {
+      let deck = rlt[0].decks
+      deck[`deck_${it.slot}`] = newDeck
+      let change = {$set: {decks: deck} }
+      user.update({account: client._account}, change, (err, res) => {
+        if(err) throw err
+        cb({newDeck: newDeck})
+      })
+    })
+
+
+    //cb({newDeck: newDeck})
   })
 
   // player disconnect
@@ -357,7 +377,7 @@ io.on('connection', client => {
     if(!it.deckName) return cb({err: game.err.deckNull})
 
     user.find({account: client._account}).toArray((err, result) => {
-      deck = result[0].decks[it.deckName] // change
+      deck = result[0].decks[it.deckName]
 
       for(let i in deck){
         curr = game.default.allCard[deck[i]]
@@ -408,7 +428,11 @@ io.on('connection', client => {
       let signup = {
         account: it.acc,
         passwd: it.passwd,
-        decks: {}
+        decks: {
+          deck_1: [],
+          deck_2: [],
+          deck_3: []
+        }
       }
       user.insert(signup, (err, result) => {
         if(!err){
@@ -420,15 +444,6 @@ io.on('connection', client => {
     })
   })
 
-  client.on('updDeckList', (it, cb) => {
-    // mongodb update
-    let user = app.db.collection('user')
-    let change = {$set: {decks: it} }
-    user.update({account: client._name}, change, (err, res) => {
-      if(err) throw err
-      cb()
-    })
-  })
 
 })
 
