@@ -17,10 +17,10 @@ const app = {
 //////////////////////////////////////////////////////////////////////////////////////
 
 // classes
-const Card = function (name, field, faceInput, cover) {
+const Card = function (name, field, onClick, cover) {
   this.cover = cover
   this.face = app.game.add.sprite(game.default.gameWidth * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
-  this.face.inputEnabled = faceInput
+  this.face.inputEnabled = onClick
   this.face.name = name
   this.field = field
   if(this.field === "deck")
@@ -136,6 +136,7 @@ Deck.prototype.buildNewDeck = function(){
   socket.emit('buildNewDeck', {slot: this.index}, it => {
     console.log(it.newDeck)
     //if(this.img.texture === 'emptySlot'){
+      this.cardList = it.newDeck
       this.img.loadTexture('cardback')
       this.img.inputEnabled = true
       this.text.setText(`deck_${this.index}`)
@@ -166,7 +167,8 @@ Deck.prototype.deckChoose = function(){
 
 Deck.prototype.deckView = function(){
   alert('deckView')
-  //game.changePage({next: 'deckView'})
+  this.deckChoose()
+  game.changePage({next: 'deckView'})
 }
 
 const Game = function (){
@@ -202,7 +204,7 @@ const Game = function (){
       {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'},
     ],
     deckView: [
-      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'deckBuild'},
     ],
     matchSearch: [
       {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
@@ -216,6 +218,14 @@ const Game = function (){
   }
   this.text = null
   this.textGroup = null
+  this.viewPos = 3 // include 2 slider buttons and 1 back button
+}
+
+Game.prototype.changeTexture = function(cardList){
+  for(let i = this.viewPos; i < this.viewPos + 10; i++){
+    this.page.deckView[i].loadTexture(cardList[i])
+    // this.page.deckView[i].
+  }
 }
 
 Game.prototype.changePage = function(btn){
@@ -271,7 +281,6 @@ Game.prototype.cleanAllData = function(){
 }
 
 Game.prototype.deckSlotInit = function(deckList){
-
   // !--
   let deckName = Object.keys(deckList)
   for(let slot = 1; slot <= personal.deckSlot.size; slot ++) {
@@ -369,6 +378,25 @@ Game.prototype.pageInit = function(){
     }
   }
 
+  // !--
+
+  // add cards in deck view page
+  for(let i = 0; i < 2; i++){
+    for(let j = 0; j < 5; j++){
+      let x = (this.default.gameWidth - (5*this.default.cardWidth + 4*84))/2 + (this.default.cardWidth + 84)*j
+      let y = this.default.gameHeight/2 - 40 - this.default.cardHeight + (80 + this.default.cardHeight)*i
+      let card = app.game.add.sprite(x, y, 'emptySlot')
+      card.describe = app.game.add.text(x + this.default.cardWidth, y, "aaa",  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
+      card.inputEnabled = true
+      card.events.onInputOver.add(function(){card.describe.reset(card.describe.x, card.describe.y)}, this)
+      card.events.onInputOut.add(function(){card.describe.kill()}, this)
+      card.kill()
+      card.describe.kill()
+      this.page.deckView.push(card)
+    }
+  }
+
+
   for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
     this.page.game.push(personal[i])
     this.page.game.push(opponent[i])
@@ -377,6 +405,7 @@ Game.prototype.pageInit = function(){
       opponent['deck'][0].face.kill()
     }
   }
+
   this.changePage({next: 'start'})
 }
 
