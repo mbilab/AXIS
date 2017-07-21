@@ -120,14 +120,6 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
 
     this.newBtn = app.game.add.button((game.default.gameWidth-232)/2 + 84*(this.index-1), game.default.gameHeight/2 + 110, 'new', this.buildNewDeck, this)
     this.newBtn.kill()
-    /*
-    this.img = app.game.add.sprite(game.default.gameWidth/2, game.default.gameHeight/2, 'cardback')
-    this.img.inputEnabled = true
-    this.img.events.onInputDown.add(this.deckChoose, this)
-    this.text = app.game.add.text(game.default.gameWidth/2, game.default.gameHeight/2, this.name, {font: '20px Arial', fill:'#ffffff', align: 'left', stroke: '#000000', strokeThickness: 4})
-    this.img.kill()
-    this.text.kill()
-    */
   }
 }
 
@@ -166,8 +158,8 @@ Deck.prototype.deckChoose = function(){
 }
 
 Deck.prototype.deckView = function(){
-  alert('deckView')
-  this.deckChoose()
+  //this.deckChoose()
+  game.changeTexture(this.cardList)
   game.changePage({next: 'deckView'})
 }
 
@@ -218,13 +210,13 @@ const Game = function (){
   }
   this.text = null
   this.textGroup = null
-  this.viewPos = 3 // include 2 slider buttons and 1 back button
+  this.viewPos = 1 // include 2 slider buttons and 1 back button
 }
 
 Game.prototype.changeTexture = function(cardList){
   for(let i = this.viewPos; i < this.viewPos + 10; i++){
-    this.page.deckView[i].loadTexture(cardList[i])
-    // this.page.deckView[i].
+    this.page.deckView[i].loadTexture(cardList[i - this.viewPos])
+    // this.page.deckView[i].describe.setText()
   }
 }
 
@@ -298,18 +290,6 @@ Game.prototype.deckSlotInit = function(deckList){
     game.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].text)
     game.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].newBtn)
   }
-
-/*
-  for(let deckName in deckList) {
-    personal['deckSlot'][deckName] = new Deck('deckList', deckName, deckList[deckName])
-
-    // add to page elements
-    game.page.matchSearch.push(personal['deckSlot'][deckName].img)
-    game.page.matchSearch.push(personal['deckSlot'][deckName].text)
-    game.page.deckBuild.push(personal['deckSlot'][deckName].img)
-    game.page.deckBuild.push(personal['deckSlot'][deckName].text)
-  }
-*/
 }
 
 Game.prototype.endTurn = function(){
@@ -319,22 +299,16 @@ Game.prototype.endTurn = function(){
 Game.prototype.fixPos = function(player, field){
   if(player === 'self'){
     for(let i in personal[field]){
-      //personal[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i
-   	  //personal[field][i].face.y = personal[`${field}Yloc`]
-      personal[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i, personal[`${field}Yloc`])
+     personal[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i, personal[`${field}Yloc`])
     }
   }
   else{
     if(field !== 'deck'){
       for(let i in opponent[field]){
-        //opponent[field][i].face.x = (this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i
-  	    //opponent[field][i].face.y = opponent[`${field}Yloc`]
-        opponent[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i, opponent[`${field}Yloc`])
+       opponent[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i, opponent[`${field}Yloc`])
       }
     }
     else{
-		  //opponent[field][0].face.x = this.default.gameWidth*(1 - 1/13)
-      //opponent[field][0].face.y = opponent[`${field}Yloc`]
 		  opponent[field][0].face.reset(this.default.gameWidth*(1 - 1/13), opponent[`${field}Yloc`])
     }
   }
@@ -368,6 +342,8 @@ Game.prototype.login = function(){
 }
 
 Game.prototype.pageInit = function(){
+
+  // add general items
   for (let pageName in this.page) {
     for (let [index, elem] of this.page[pageName].entries()) {
       if(elem.type!=='html' && this.page[pageName].length){
@@ -377,8 +353,6 @@ Game.prototype.pageInit = function(){
       }
     }
   }
-
-  // !--
 
   // add cards in deck view page
   for(let i = 0; i < 2; i++){
@@ -396,7 +370,7 @@ Game.prototype.pageInit = function(){
     }
   }
 
-
+  // add cards in game page
   for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
     this.page.game.push(personal[i])
     this.page.game.push(opponent[i])
