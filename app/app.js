@@ -108,6 +108,7 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
   this.type = type
   this.name = name
   this.cardList = cardList
+  this.page = 1
 
   if(this.type === "deckList"){
     this.index = name.split("_")[1]
@@ -158,9 +159,10 @@ Deck.prototype.deckChoose = function(){
 }
 
 Deck.prototype.deckView = function(){
-  //this.deckChoose()
-  game.changeTexture(this.cardList)
   game.changePage({next: 'deckView'})
+  this.deckChoose()
+  //game.changeTexture()
+  game.shiftTexture({next: 'in'})
 }
 
 const Game = function (){
@@ -184,7 +186,7 @@ const Game = function (){
       {type: 'html', id: 'login'},
       {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
     ],
-    signup: [
+    signup:[
       {type: 'html', id: 'signup'},
       {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'start'}
     ],
@@ -193,10 +195,12 @@ const Game = function (){
       {type: 'btn', x: 0, y: 43, img: 'battle', func: this.changePage, next: 'matchSearch'}
     ],
     deckBuild: [
-      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'},
+      {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'lobby'}
     ],
     deckView: [
       {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'back', func: this.changePage, next: 'deckBuild'},
+      {type: 'btn', x: this.default.gameWidth - 50, y: this.default.gameHeight/2, img: 'nextBtn', func: this.shiftTexture, next: 'next'},
+      {type: 'btn', x: 5, y: this.default.gameHeight/2, img: 'prevBtn', func: this.shiftTexture, next: 'prev'}
     ],
     matchSearch: [
       {type: 'btn', x: this.default.gameWidth - 88, y: this.default.gameHeight - 43, img: 'search', func: this.search, next: 'loading'},
@@ -208,15 +212,41 @@ const Game = function (){
       {type: 'btn', x: 0, y: this.default.gameHeight - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
     ]
   }
+  this.dst = ' '
   this.text = null
   this.textGroup = null
-  this.viewPos = 1 // include 2 slider buttons and 1 back button
+  this.viewPos = this.page.deckView.length // include 2 slider buttons and 1 back button
 }
 
-Game.prototype.changeTexture = function(cardList){
+
+
+Game.prototype.shiftTexture = function(curr){
+  let currDeck = personal['deckSlot'][`slot_${personal['deckName'].split("_")[1]}`]
+  let nextBtn = this.page.deckView[1]
+  let prevBtn = this.page.deckView[2]
+  let startPos = (currDeck.page - 1)*10
+  let cardList = currDeck.cardList.slice(startPos, startPos + 10)
+
+  // set current texture page
+  if(curr.next === 'next') currDeck.page += 1
+  if(curr.next === 'prev') currDeck.page -= 1
+  if(curr.next === 'in') currDeck.page = 1
+
+  // show or hide shift button
+  if(currDeck.page == 1)
+    prevBtn.kill()
+  else
+    prevBtn.reset(prevBtn.x, prevBtn.y)
+
+  if(currDeck.page == currDeck.cardList.length/10)
+    nextBtn.kill()
+  else
+    nextBtn.reset(nextBtn.x, nextBtn.y)
+
+  // change card texture
   for(let i = this.viewPos; i < this.viewPos + 10; i++){
     this.page.deckView[i].loadTexture(cardList[i - this.viewPos])
-    // this.page.deckView[i].describe.setText()
+    this.page.deckView[i].describe.setText(cardList[i - this.viewPos])
   }
 }
 
@@ -276,7 +306,7 @@ Game.prototype.deckSlotInit = function(deckList){
   // !--
   let deckName = Object.keys(deckList)
   for(let slot = 1; slot <= personal.deckSlot.size; slot ++) {
-    personal['deckSlot'][`slot_${slot}`] = new Deck('deckList', `deck_${slot}`, null)
+    personal['deckSlot'][`slot_${slot}`] = new Deck('deckList', `deck_${slot}`, [])
     if(deckName.length >= slot && deckList[deckName[slot-1]].length){
       personal['deckSlot'][`slot_${slot}`].name = deckName[slot-1]
       personal['deckSlot'][`slot_${slot}`].text.setText(deckName[slot-1])
@@ -284,11 +314,11 @@ Game.prototype.deckSlotInit = function(deckList){
       personal['deckSlot'][`slot_${slot}`].img.inputEnabled = true
       personal['deckSlot'][`slot_${slot}`].cardList = deckList[deckName[slot-1]]
     }
-    game.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].img)
-    game.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].text)
-    game.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].img)
-    game.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].text)
-    game.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].newBtn)
+    this.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].img)
+    this.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].text)
+    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].img)
+    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].text)
+    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].newBtn)
   }
 }
 
@@ -529,6 +559,7 @@ socket.on('turnStart', it => {
 const game = new Game()
 const personal = new Player({deckY:110, handY:220, lifeY:110, battleY:330, graveY:220})
 const opponent = new Player({deckY:758, handY:648, lifeY:758, battleY:538, graveY:648})
+
 
 socket.emit('preload', it => {
    opt.file.preload = it
