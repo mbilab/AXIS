@@ -77,7 +77,7 @@ Card.prototype.drawCard = function(){
     game.text.setText(`draw ${it.cardName}`)
     personal['hand'].push(new Card(it.cardName, 'hand', true, false))
     personal['hand'][personal['hand'].length - 1].changeInputFunction()
-    game.fixPos('self', 'hand')
+    game.fixPos('personal', 'hand')
 
     if(it.deckStatus === "empty")
       personal['deck'][0].face.kill()
@@ -87,7 +87,41 @@ Card.prototype.drawCard = function(){
 Card.prototype.playHandCard = function(){
   socket.emit('playHandCard', {name: this.face.name}, it => {
     if(it.err) return game.text.setText(it.err)
+    //!--
 
+    let dstField = ''
+    for(let i in personal['hand']){
+      if(personal['hand'][i].face.name === this.face.name){
+        game.text.setText(`${it.msg.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
+        switch(it.msg){
+          case 'equipArtifact':
+            dstField = 'battle'
+            break
+
+          case 'useNormalItem':
+            dstField = 'grave'
+            break
+
+          case 'castInstantSpell':
+            dstField = 'grave'
+            break
+
+          default: break
+        }
+
+        personal[dstField].push(personal['hand'][i])
+        personal['hand'][i].face.destroy
+        personal['hand'].splice(i,1)
+	      personal[dstField][personal[dstField].length -1].field = dstField
+        personal[dstField][personal[dstField].length -1].changeInputFunction()
+        game.fixPos('personal', 'hand')
+        game.fixPos('personal', dstField)
+
+        break
+      }
+    }
+
+    /*
     game.text.setText(`play ${this.face.name}`)
     for(let i in personal['hand']){
 	    if(personal['hand'][i].face.name === this.face.name){
@@ -101,6 +135,7 @@ Card.prototype.playHandCard = function(){
     personal['battle'][personal['battle'].length -1].changeInputFunction()
     game.fixPos('self', 'hand')
     game.fixPos('self', 'battle')
+    */
   })
 }
 
@@ -327,15 +362,22 @@ Game.prototype.endTurn = function(){
 }
 
 Game.prototype.fixPos = function(player, field){
-  if(player === 'self'){
+  // !-- refactor
+  if(player === 'personal'){
     for(let i in personal[field]){
-     personal[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i, personal[`${field}Yloc`])
+      if(field === 'battle'||'hand'||'life')
+        personal[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(personal[field].length - 1) + (this.default.cardWidth*6/5)*i, personal[`${field}Yloc`])
+      if(field === 'grave')
+        personal[field][i].face.reset(this.default.gameWidth*(1 - 1/13), personal[`${field}Yloc`])
     }
   }
   else{
     if(field !== 'deck'){
       for(let i in opponent[field]){
-       opponent[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i, opponent[`${field}Yloc`])
+        if(field === 'battle'||'hand'||'life')
+          opponent[field][i].face.reset((this.default.gameWidth/2) - this.default.cardWidth*1.25 - this.default.cardWidth/2 - (this.default.cardWidth*3/5)*(opponent[field].length - 1) + (this.default.cardWidth*6/5)*i, opponent[`${field}Yloc`])
+        if(field === 'grave')
+          opponent[field][i].face.reset(this.default.gameWidth*(1 - 1/13), opponent[`${field}Yloc`])
       }
     }
     else{
@@ -477,7 +519,7 @@ function create(){
   socket.emit('init', it => {
 	  personal['deck'].push(new Card('cardback', 'deck', true, true))
     opponent['deck'].push(new Card('cardback', 'deck', false, true))
-    game.fixPos('foe', 'deck')
+    game.fixPos('opponent', 'deck')
     game.pageInit()
   })
 }
@@ -503,19 +545,19 @@ socket.on('buildLIFE', it => {
     personal['life'].push(new Card(life[i].name, 'life', true, true))
     personal['life'][i].changeInputFunction()
   }
-  game.fixPos('self', 'life')
+  game.fixPos('personal', 'life')
 })
 
 socket.on('foeBuiltLife', it => {
   for(let i = 0; i < 6; i++){
     opponent['life'].push(new Card('cardback', 'life', false, true))
   }
-  game.fixPos('foe', 'life')
+  game.fixPos('opponent', 'life')
 })
 
 socket.on('foeDrawCard', it => {
   opponent['hand'].push(new Card('unknown', 'hand', false, true))
-  game.fixPos('foe', 'hand')
+  game.fixPos('opponent', 'hand')
 
   if(it.deckStatus === "empty"){
     opponent['deck'][0].face.kill()
@@ -523,12 +565,37 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('foePlayHand', it => {
+
+  switch(it.msg){
+    case 'equipArtifact':
+      dstField = 'battle'
+      break
+
+    case 'useNormalItem':
+      dstField = 'grave'
+      break
+
+    case 'castInstantSpell':
+      dstField = 'grave'
+      break
+
+    default: break
+  }
+
+  opponent['hand'][0].face.destroy()
+  opponent['hand'].shift()
+  opponent[dstField].push(new Card(it.cardName, dstField, false, false))
+	game.fixPos('opponent', 'hand')
+  game.fixPos('opponent', dstField)
+
+  /*
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift() //-! only when no animation
   //opponent['hand'].splice(0,1)
   opponent['battle'].push(new Card(it.cardName, 'battle', false, false))
   game.fixPos('foe', 'hand')
   game.fixPos('foe', 'battle')
+  */
 })
 
 socket.on('foePlayLife', it => {

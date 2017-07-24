@@ -43,8 +43,12 @@ const Card = function(name, cardType, effectType){
 const Game = function(){
   this.default = {
     allCard: {},
+    artifactMax: 5,//13,
+    spellMax: 3,//14,
+    itemMax: 2,//12,
+    vanishMax: 11,
     apMax  : 1,
-    deckMax: 10,
+    deckMax: 10, // 50
     handMax: 7,
     lifeMax: 6
   }
@@ -121,12 +125,53 @@ Game.prototype.idGenerate = function(length){
 }
 
 Game.prototype.playHandCard = function(player, cardName){
+  // !--
   for(let i in player.HAND){
     if(player.HAND[i].name === cardName){
+
+      switch(player.HAND[i].cardType){
+        case 'artifact':
+          if(player.actionPoint > 0){
+            player.actionPoint -= 1
+            player.BATTLE.push(player.HAND.splice(i,1))
+            return 'equipArtifact'
+          }
+          else
+            return {err: this.err.noAP}
+
+          break
+
+        case 'item':
+          if(player.HAND[i].effectType === 'normal'){
+            player.GRAVE.push(player.HAND.splice(i,1))
+            return 'useNormalItem'
+          }
+          break
+
+        case 'spell':
+          if(player.actionPoint > 0){
+            player.actionPoint -= 1
+            if(player.HAND[i].effectType === 'instant'){
+              player.GRAVE.push(player.HAND.splice(i,1))
+              return 'castInstantSpell'
+            }
+          }
+          else
+            return {err: this.err.noAP}
+
+          break
+
+        case 'vanish':
+          return {err: this.err.noAP}
+          break
+
+        default: break
+      }
+
+      /*
       if(player.HAND[i].cardType === 'item' || (player.HAND[i].cardType !== 'item' && player.HAND[i].cardType !== 'vanish' && player.actionPoint > 0)){
         player.actionPoint -= 1
-        player.BATTLE.push(player.HAND[i])
-        player.HAND.splice(i,1)
+        player.BATTLE.push(player.HAND.splice(i,1))
         return true
         break
       }
@@ -134,17 +179,49 @@ Game.prototype.playHandCard = function(player, cardName){
         return this.err.noAP
         break
       }
+      */
     }
   }
 }
 
 Game.prototype.randomDeck = function(){
   // !--
+
+  let card = {
+    artifact: [],
+    spell: [],
+    item: []//,
+    //vanish: []
+  }
+  let deck = []
+
+  for(let cardName in game.default.allCard){
+    for(let type in card)
+      if(game.default.allCard[cardName].type.base === type){
+        card[type].push(cardName)
+        break
+      }
+  }
+
+  for(let type in card){
+    //if(type !== 'vanish'){
+      let random = (this.shuffle(card[type])).slice(0, game.default[`${type}Max`])
+      deck = deck.concat(random)
+    //}
+    //else
+      //for(let i = 0; i < game.default[`${type}Max`]; i++)
+        //deck.push(card.vanish[0])
+  }
+
+  return deck
+
+  /*
   let allCard = Object.keys(game.default.allCard)
   let random = this.shuffle(allCard)
   let deck = random.slice(0, game.default.deckMax)
 
   return deck
+  */
 }
 
 Game.prototype.shuffle = function(array){
@@ -328,16 +405,24 @@ io.on('connection', client => {
   client.on('playHandCard', (it, cb) => {
     var rid = client._rid
     var curr = game.room[rid].counter
-
+    // !--
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid){
         var result = game.playHandCard(client, it.name)
+
+        if(result.err) return cb({err: result.err})
+
+        cb({msg: result})
+        game.room[rid].player[1-curr].emit('foePlayHand', {msg: result, cardName: it.name})
+
+        /*
         if(result == true){
           cb({})
           game.room[rid].player[1-curr].emit('foePlayHand', {cardName: it.name})
         }
         else
           cb({ err: result})
+        */
       }
       else
         cb({ err: game.err.foeTurn})
