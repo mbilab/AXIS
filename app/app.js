@@ -139,11 +139,14 @@ Card.prototype.playHandCard = function(){
   })
 }
 
-const Deck = function(type, name, cardList) { //type: deckList, ownList
+//const Deck = function(type, name, cardList) { //type: deckList, ownList
+const Deck = function(type, slot, name, cardList){
+  this.slot = slot
   this.type = type
   this.name = name
   this.cardList = cardList
   this.page = 1
+
 
   if(this.type === "deckList"){
     this.index = name.split("_")[1]
@@ -161,7 +164,8 @@ const Deck = function(type, name, cardList) { //type: deckList, ownList
 
 Deck.prototype.buildNewDeck = function(){
   // !--
-  socket.emit('buildNewDeck', {slot: this.index}, it => {
+  //socket.emit('buildNewDeck', {slot: this.index}, it => {
+  socket.emit('buildNewDeck', {slot: this.slot}, it => {
     console.log(it.newDeck)
     //if(this.img.texture === 'emptySlot'){
       this.cardList = it.newDeck
@@ -190,7 +194,10 @@ Deck.prototype.changeFunc = function(){
 }
 
 Deck.prototype.deckChoose = function(){
-  personal['deckName'] = this.name
+  //personal['deckName'] = this.name
+
+  personal['currDeck'] = this.slot
+
 }
 
 Deck.prototype.deckView = function(){
@@ -256,7 +263,8 @@ const Game = function (){
 
 
 Game.prototype.shiftTexture = function(curr){
-  let currDeck = personal['deckSlot'][`slot_${personal['deckName'].split("_")[1]}`]
+  let currDeck = personal['deckSlot'][personal['currDeck']]
+  //let currDeck = personal['deckSlot'][`slot_${personal['deckName'].split("_")[1]}`]
   let nextBtn = this.page.deckView[1]
   let prevBtn = this.page.deckView[2]
   let startPos = (currDeck.page - 1)*10
@@ -325,7 +333,8 @@ Game.prototype.changePage = function(btn){
   }
 
   //variable reset due to page change
-  personal['deckName'] = null
+  //personal['deckName'] = null
+  personal['currDeck'] = null
 }
 
 Game.prototype.cleanAllData = function(){
@@ -337,9 +346,28 @@ Game.prototype.cleanAllData = function(){
   }
 }
 
-Game.prototype.deckSlotInit = function(deckList){
+//Game.prototype.deckSlotInit = function(deckList){
   // !--
+Game.prototype.deckSlotInit = function(deckSlot){
+  for(let slot in deckSlot){
+    let deckName = deckSlot[slot].name
+    personal['deckSlot'][slot] = new Deck('deckList', slot, deckName, [])
+    if(deckSlot[slot].cardList.length){
+      personal['deckSlot'][slot].text.setText(deckName)
+      personal['deckSlot'][slot].img.loadTexture('cardback')
+      personal['deckSlot'][slot].img.inputEnabled = true
+      personal['deckSlot'][slot].cardList = deckSlot[slot].cardList
+    }
+    this.page.matchSearch.push(personal['deckSlot'][slot].img)
+    this.page.matchSearch.push(personal['deckSlot'][slot].text)
+    this.page.deckBuild.push(personal['deckSlot'][slot].img)
+    this.page.deckBuild.push(personal['deckSlot'][slot].text)
+    this.page.deckBuild.push(personal['deckSlot'][slot].newBtn)
+  }
+
+  /*
   let deckName = Object.keys(deckList)
+
   for(let slot = 1; slot <= personal.deckSlot.size; slot ++) {
     personal['deckSlot'][`slot_${slot}`] = new Deck('deckList', `deck_${slot}`, [])
     if(deckName.length >= slot && deckList[deckName[slot-1]].length){
@@ -355,6 +383,7 @@ Game.prototype.deckSlotInit = function(deckList){
     this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].text)
     this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].newBtn)
   }
+  */
 }
 
 Game.prototype.endTurn = function(){
@@ -400,7 +429,7 @@ Game.prototype.leaveMatch = function(){
 Game.prototype.login = function(){
   if(!$('#logAcc').val()) return alert('please enter your account')
   if(!$('#logPswd').val()) return alert('please enter your password')
-
+//!--
   socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
     if(it.err){
       alert(it.err)
@@ -408,7 +437,9 @@ Game.prototype.login = function(){
       return
     }
 
-    game.deckSlotInit(it.deckList)
+    //game.deckSlotInit(it.deckList)
+    game.deckSlotInit(it.deckSlot)
+    console.log(it.deckSlot)
     this.changePage({next: 'lobby'})
   })
 }
@@ -456,7 +487,8 @@ Game.prototype.pageInit = function(){
 }
 
 Game.prototype.search = function(){
-  socket.emit('search', {deckName: personal['deckName']}, it => {
+  //socket.emit('search', {deckName: personal['deckName']}, it => {
+  socket.emit('search', {currDeck: personal['currDeck']}, it => {
     if(it.err) return alert(it.err)
 
     this.text.setText(it.msg)
@@ -488,7 +520,8 @@ const Player = function(obj){
     this[`${field}loc`] = game.default.gameHeight - obj[field] / game.default.scale
 
   this.deck = []
-  this.deckName = ''
+  //this.deckName = ''
+  this.currDeck = ''
   this.deckSlot = {}
   this.deckSlot.size = 3
   this.ownList = {}

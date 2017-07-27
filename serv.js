@@ -83,7 +83,8 @@ Game.prototype.buildLife = function(player){
 Game.prototype.buildPlayer = function(player){ // player = client
   // attribute
   player.actionPoint = this.default.apMax
-  player.deckList = {}
+  //player.deckList = {}
+  player.deckSlot = {}
   player.deckMax = this.default.deckMax
   player.handMax = this.default.handMax
   player.lifeMax = this.default.lifeMax
@@ -260,16 +261,17 @@ io.on('connection', client => {
     // mongodb update
     let user = app.db.collection('user')
     user.find({account: client._account}).toArray((err, rlt) => {
-      let deck = rlt[0].decks
-      deck[`deck_${it.slot}`] = newDeck
-      let change = {$set: {decks: deck} }
+       let deck = rlt[0].deckSlot
+       deck[it.slot].cardList = newDeck
+       let change = {$set: {deckSlot: deck}}
+      //let deck = rlt[0].decks
+      //deck[`deck_${it.slot}`] = newDeck
+      //let change = {$set: {decks: deck} }
       user.update({account: client._account}, change, (err, res) => {
         if(err) throw err
         cb({newDeck: newDeck})
       })
     })
-
-
     //cb({newDeck: newDeck})
   })
 
@@ -384,12 +386,15 @@ io.on('connection', client => {
     client._pid = pid
     game.pool[pid] = client
 
+    //!--
     user.find({account: it.acc}).toArray((err, result) => {
       if(result.length != 0){
         if(result[0].passwd === it.passwd){
           client._account = it.acc
-          client.deckList = result[0].decks
-          cb({deckList: client.deckList})
+          //client.deckList = result[0].decks
+          //cb({deckList: client.deckList})
+          client.deckSlot = result[0].deckSlot
+          cb({deckSlot: client.deckSlot})
         }
         else
           cb({err: game.err.pswdErr})
@@ -459,11 +464,12 @@ io.on('connection', client => {
     var cards = app.db.collection('card')
     var deck = []
 
-    if(!it.deckName) return cb({err: game.err.deckNull})
+    //if(!it.deckName) return cb({err: game.err.deckNull})
+    if(!it.currDeck) return cb({err: game.err.deckNull})
 
     user.find({account: client._account}).toArray((err, result) => {
-      deck = result[0].decks[it.deckName]
-
+      //deck = result[0].decks[it.deckName]
+      deck = result[0].deckSlot[it.currDeck].cardList
       for(let i in deck){
         curr = game.default.allCard[deck[i]]
         client.DECK.push(new Card(curr.name, curr.type.base, curr.type.effect))
@@ -507,17 +513,25 @@ io.on('connection', client => {
   })
 
   client.on('signup',(it,cb) => { //it.acc .pswd
+    // !--
     let user = app.db.collection('user')
     user.find({account: it.acc}).toArray((err, rlt) => {
       if(rlt.length) return cb({err: game.err.usrExist})
       let signup = {
         account: it.acc,
         passwd: it.passwd,
-        decks: {
-          deck_1: [],
-          deck_2: [],
-          deck_3: []
+
+        deckSlot: {
+          slot_1: {name: 'deck_1', cardList: []},
+          slot_2: {name: 'deck_2', cardList: []},
+          slot_3: {name: 'deck_3', cardList: []}
         }
+
+        //decks: {
+          //deck_1: [],
+          //deck_2: [],
+          //deck_3: []
+        //}
       }
       user.insert(signup, (err, result) => {
         if(!err){
