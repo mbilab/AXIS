@@ -88,58 +88,25 @@ Card.prototype.playHandCard = function(){
   socket.emit('playHandCard', {name: this.face.name}, it => {
     if(it.err) return game.text.setText(it.err)
     //!--
-
-    let dstField = ''
     for(let i in personal['hand']){
       if(personal['hand'][i].face.name === this.face.name){
+        let dst_field = game.effectTrigger(it.msg)
+
         game.text.setText(`${it.msg.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
-        switch(it.msg){
-          case 'equipArtifact':
-            dstField = 'battle'
-            break
-
-          case 'useNormalItem':
-            dstField = 'grave'
-            break
-
-          case 'castInstantSpell':
-            dstField = 'grave'
-            break
-
-          default: break
-        }
-
-        personal[dstField].push(personal['hand'][i])
-        personal['hand'][i].face.destroy
+        personal[dst_field].push(personal['hand'][i])
+        personal['hand'][i].face.destroy()
         personal['hand'].splice(i,1)
-	      personal[dstField][personal[dstField].length -1].field = dstField
-        personal[dstField][personal[dstField].length -1].changeInputFunction()
+	      personal[dst_field][personal[dst_field].length -1].field = dst_field
+        personal[dst_field][personal[dst_field].length -1].changeInputFunction()
         game.fixPos('personal', 'hand')
-        game.fixPos('personal', dstField)
+        game.fixPos('personal', dst_field)
 
         break
       }
     }
-
-    /*
-    game.text.setText(`play ${this.face.name}`)
-    for(let i in personal['hand']){
-	    if(personal['hand'][i].face.name === this.face.name){
-	      personal['battle'].push(personal['hand'][i])
-	      personal['hand'][i].face.destroy
-        personal['hand'].splice(i,1)
-	      break
-      }
-	  }
-	  personal['battle'][personal['battle'].length -1].field = 'battle'
-    personal['battle'][personal['battle'].length -1].changeInputFunction()
-    game.fixPos('self', 'hand')
-    game.fixPos('self', 'battle')
-    */
   })
 }
 
-//const Deck = function(type, name, cardList) { //type: deckList, ownList
 const Deck = function(type, slot, name, cardList){
   this.slot = slot
   this.type = type
@@ -164,15 +131,12 @@ const Deck = function(type, slot, name, cardList){
 
 Deck.prototype.buildNewDeck = function(){
   // !--
-  //socket.emit('buildNewDeck', {slot: this.index}, it => {
   socket.emit('buildNewDeck', {slot: this.slot}, it => {
     console.log(it.newDeck)
-    //if(this.img.texture === 'emptySlot'){
       this.cardList = it.newDeck
       this.img.loadTexture('cardback')
       this.img.inputEnabled = true
       this.text.setText(`deck_${this.index}`)
-    //}
     alert('you build a new deck')
   })
 }
@@ -194,8 +158,6 @@ Deck.prototype.changeFunc = function(){
 }
 
 Deck.prototype.deckChoose = function(){
-  //personal['deckName'] = this.name
-
   personal['currDeck'] = this.slot
 
 }
@@ -203,7 +165,6 @@ Deck.prototype.deckChoose = function(){
 Deck.prototype.deckView = function(){
   game.changePage({next: 'deckView'})
   this.deckChoose()
-  //game.changeTexture()
   game.shiftTexture({next: 'in'})
 }
 
@@ -260,11 +221,28 @@ const Game = function (){
   this.viewPos = this.page.deckView.length // include 2 slider buttons and 1 back button
 }
 
+Game.prototype.effectTrigger = function(actionType){
+  let dstField = ''
+  switch(actionType){
+    case 'equipArtifact':
+      dstField = 'battle'
+      break
 
+    case 'useNormalItem':
+      dstField = 'grave'
+      break
+
+    case 'castInstantSpell':
+      dstField = 'grave'
+      break
+
+    default: break
+  }
+  return dstField
+}
 
 Game.prototype.shiftTexture = function(curr){
   let currDeck = personal['deckSlot'][personal['currDeck']]
-  //let currDeck = personal['deckSlot'][`slot_${personal['deckName'].split("_")[1]}`]
   let nextBtn = this.page.deckView[1]
   let prevBtn = this.page.deckView[2]
   let startPos = (currDeck.page - 1)*10
@@ -333,7 +311,6 @@ Game.prototype.changePage = function(btn){
   }
 
   //variable reset due to page change
-  //personal['deckName'] = null
   personal['currDeck'] = null
 }
 
@@ -346,8 +323,6 @@ Game.prototype.cleanAllData = function(){
   }
 }
 
-//Game.prototype.deckSlotInit = function(deckList){
-  // !--
 Game.prototype.deckSlotInit = function(deckSlot){
   for(let slot in deckSlot){
     let deckName = deckSlot[slot].name
@@ -365,25 +340,6 @@ Game.prototype.deckSlotInit = function(deckSlot){
     this.page.deckBuild.push(personal['deckSlot'][slot].newBtn)
   }
 
-  /*
-  let deckName = Object.keys(deckList)
-
-  for(let slot = 1; slot <= personal.deckSlot.size; slot ++) {
-    personal['deckSlot'][`slot_${slot}`] = new Deck('deckList', `deck_${slot}`, [])
-    if(deckName.length >= slot && deckList[deckName[slot-1]].length){
-      personal['deckSlot'][`slot_${slot}`].name = deckName[slot-1]
-      personal['deckSlot'][`slot_${slot}`].text.setText(deckName[slot-1])
-      personal['deckSlot'][`slot_${slot}`].img.loadTexture('cardback')
-      personal['deckSlot'][`slot_${slot}`].img.inputEnabled = true
-      personal['deckSlot'][`slot_${slot}`].cardList = deckList[deckName[slot-1]]
-    }
-    this.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].img)
-    this.page.matchSearch.push(personal['deckSlot'][`slot_${slot}`].text)
-    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].img)
-    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].text)
-    this.page.deckBuild.push(personal['deckSlot'][`slot_${slot}`].newBtn)
-  }
-  */
 }
 
 Game.prototype.endTurn = function(){
@@ -437,7 +393,6 @@ Game.prototype.login = function(){
       return
     }
 
-    //game.deckSlotInit(it.deckList)
     game.deckSlotInit(it.deckSlot)
     console.log(it.deckSlot)
     this.changePage({next: 'lobby'})
@@ -487,7 +442,6 @@ Game.prototype.pageInit = function(){
 }
 
 Game.prototype.search = function(){
-  //socket.emit('search', {deckName: personal['deckName']}, it => {
   socket.emit('search', {currDeck: personal['currDeck']}, it => {
     if(it.err) return alert(it.err)
 
@@ -520,7 +474,6 @@ const Player = function(obj){
     this[`${field}loc`] = game.default.gameHeight - obj[field] / game.default.scale
 
   this.deck = []
-  //this.deckName = ''
   this.currDeck = ''
   this.deckSlot = {}
   this.deckSlot.size = 3
@@ -598,37 +551,13 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('foePlayHand', it => {
-
-  switch(it.msg){
-    case 'equipArtifact':
-      dstField = 'battle'
-      break
-
-    case 'useNormalItem':
-      dstField = 'grave'
-      break
-
-    case 'castInstantSpell':
-      dstField = 'grave'
-      break
-
-    default: break
-  }
+  let dstField = game.effectTrigger(it.msg)
 
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift()
   opponent[dstField].push(new Card(it.cardName, dstField, false, false))
 	game.fixPos('opponent', 'hand')
   game.fixPos('opponent', dstField)
-
-  /*
-  opponent['hand'][0].face.destroy()
-  opponent['hand'].shift() //-! only when no animation
-  //opponent['hand'].splice(0,1)
-  opponent['battle'].push(new Card(it.cardName, 'battle', false, false))
-  game.fixPos('foe', 'hand')
-  game.fixPos('foe', 'battle')
-  */
 })
 
 socket.on('foePlayLife', it => {
@@ -665,6 +594,3 @@ socket.emit('preload', it => {
    opt.file.preload = it
    app.game = new Phaser.Game(game.default.gameWidth, game.default.gameHeight, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render: render})
 })
-
-
-
