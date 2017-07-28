@@ -36,7 +36,7 @@ Card.prototype.changeInputFunction = function(){
 
   switch (this.field) {
     case 'battle':
-      if("artifact" === this.cardType)
+      if("artifact" === this.card_type)
         this.face.events.onInputDown.add(this.activateCard, this)
       break
 
@@ -94,7 +94,6 @@ Card.prototype.playHandCard = function(){
 
         game.text.setText(`${it.msg.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
         personal[dst_field].push(personal['hand'][i])
-        personal['hand'][i].face.destroy()
         personal['hand'].splice(i,1)
 	      personal[dst_field][personal[dst_field].length -1].field = dst_field
         personal[dst_field][personal[dst_field].length -1].changeInputFunction()
@@ -107,11 +106,11 @@ Card.prototype.playHandCard = function(){
   })
 }
 
-const Deck = function(type, slot, name, cardList){
+const Deck = function(type, slot, name, card_list){
   this.slot = slot
   this.type = type
   this.name = name
-  this.cardList = cardList
+  this.cardList = card_list
   this.page = 1
 
 
@@ -241,72 +240,72 @@ Game.prototype.effectTrigger = function(actionType){
   return dstField
 }
 
-Game.prototype.shiftTexture = function(curr){
-  let currDeck = personal['deckSlot'][personal['currDeck']]
-  let nextBtn = this.page.deckView[1]
-  let prevBtn = this.page.deckView[2]
-  let startPos = (currDeck.page - 1)*10
-  let cardList = currDeck.cardList.slice(startPos, startPos + 10)
+Game.prototype.shiftTexture = function(btn){
+  let curr_deck = personal['deckSlot'][personal['currDeck']]
+  let next_btn = this.page.deckView[1]
+  let prev_btn = this.page.deckView[2]
+  let start_pos = (curr_deck.page - 1)*10
+  let card_list = curr_deck.cardList.slice(start_pos, start_pos + 10)
 
   // set current texture page
-  if(curr.next === 'next') currDeck.page += 1
-  if(curr.next === 'prev') currDeck.page -= 1
-  if(curr.next === 'in') currDeck.page = 1
+  if(btn.next === 'next') curr_deck.page += 1
+  if(btn.next === 'prev') curr_deck.page -= 1
+  if(btn.next === 'in') curr_deck.page = 1
 
   // show or hide shift button
-  if(currDeck.page == 1)
-    prevBtn.kill()
+  if(curr_deck.page == 1)
+    prev_btn.kill()
   else
-    prevBtn.reset(prevBtn.x, prevBtn.y)
+    prev_btn.reset(prev_btn.x, prev_btn.y)
 
-  if(currDeck.page == currDeck.cardList.length/10)
-    nextBtn.kill()
+  if(curr_deck.page == curr_deck.cardList.length/10)
+    next_btn.kill()
   else
-    nextBtn.reset(nextBtn.x, nextBtn.y)
+    next_btn.reset(next_btn.x, next_btn.y)
 
   // change card texture
   for(let i = this.viewPos; i < this.viewPos + 10; i++){
-    this.page.deckView[i].loadTexture(cardList[i - this.viewPos])
-    this.page.deckView[i].describe.setText(cardList[i - this.viewPos])
+    this.page.deckView[i].loadTexture(card_list[i - this.viewPos])
+    this.page.deckView[i].describe.setText(card_list[i - this.viewPos])
   }
 }
 
 Game.prototype.changePage = function(btn){
-  let oldPage = this.page[this.currPage]
-  let newPage = this.page[btn.next]
+  let old_page = this.page[this.currPage]
+  let new_page = this.page[btn.next]
 
-  if(oldPage){
-    for(let i in oldPage) {
-      if(Array.isArray(oldPage[i])) {
-        if(oldPage[i] == personal['deck'] || oldPage[i] == opponent['deck'])
-          oldPage[i][0].face.kill()
+  if(old_page){
+    for(let i in old_page) {
+      if(Array.isArray(old_page[i])) {
+        if(old_page[i] == personal['deck'] || old_page[i] == opponent['deck'])
+          old_page[i][0].face.kill()
         else
-          for(let j in oldPage[i])
-            oldPage[i][j].face.destroy()
+          for(let j in old_page[i])
+            old_page[i][j].face.destroy()
       }
       else{
-        if(oldPage[i].type === 'html'){
-          this.htmlSwap(oldPage[i], 'bottom')
+        if(old_page[i].type === 'html'){
+          this.htmlSwap(old_page[i], 'bottom')
         }
         else
-          oldPage[i].kill()
+          old_page[i].kill()
       }
     }
   }
 
   this.currPage = btn.next
 
-  if(newPage){
-    for(let i in newPage){
-      if(!Array.isArray(newPage[i])){
-        if(newPage[i].type === 'html')
-          this.htmlSwap(newPage[i], 'front')
+  if(new_page){
+    for(let i in new_page){
+      if(!Array.isArray(new_page[i])){
+        if(new_page[i].type === 'html')
+          this.htmlSwap(new_page[i], 'front')
         else
-          newPage[i].reset(newPage[i].x, newPage[i].y)
+          new_page[i].reset(new_page[i].x, new_page[i].y)
       }
       else
-        if(newPage[i] == personal['deck'] || newPage[i] == opponent['deck'])
-          newPage[i][0].face.reset(newPage[i][0].face.x, newPage[i][0].face.y)
+        if(new_page[i] == personal['deck'] || new_page[i] == opponent['deck'])
+          new_page[i][0].face.reset(new_page[i][0].face.x, new_page[i][0].face.y)
     }
   }
 
@@ -323,15 +322,15 @@ Game.prototype.cleanAllData = function(){
   }
 }
 
-Game.prototype.deckSlotInit = function(deckSlot){
-  for(let slot in deckSlot){
-    let deckName = deckSlot[slot].name
-    personal['deckSlot'][slot] = new Deck('deckList', slot, deckName, [])
-    if(deckSlot[slot].cardList.length){
-      personal['deckSlot'][slot].text.setText(deckName)
+Game.prototype.deckSlotInit = function(deck_slot){
+  for(let slot in deck_slot){
+    let deck_name = deck_slot[slot].name
+    personal['deckSlot'][slot] = new Deck('deckList', slot, deck_name, [])
+    if(deck_slot[slot].cardList.length){
+      personal['deckSlot'][slot].text.setText(deck_name)
       personal['deckSlot'][slot].img.loadTexture('cardback')
       personal['deckSlot'][slot].img.inputEnabled = true
-      personal['deckSlot'][slot].cardList = deckSlot[slot].cardList
+      personal['deckSlot'][slot].cardList = deck_slot[slot].cardList
     }
     this.page.matchSearch.push(personal['deckSlot'][slot].img)
     this.page.matchSearch.push(personal['deckSlot'][slot].text)
@@ -551,13 +550,13 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('foePlayHand', it => {
-  let dstField = game.effectTrigger(it.msg)
+  let dst_field = game.effectTrigger(it.msg)
 
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift()
-  opponent[dstField].push(new Card(it.cardName, dstField, false, false))
+  opponent[dst_field].push(new Card(it.cardName, dst_field, false, false))
 	game.fixPos('opponent', 'hand')
-  game.fixPos('opponent', dstField)
+  game.fixPos('opponent', dst_field)
 })
 
 socket.on('foePlayLife', it => {

@@ -17,6 +17,7 @@ apps.use(express.static(path.join(__dirname, 'app')))
 const opt = {
   mongo: JSON.parse(fs.readFileSync('./option.json', 'utf-8')).mongo,
   servPort: 1350
+  //serv_port: 1350
 }
 opt.url = `mongodb://${opt.mongo.account}:${opt.mongo.passwd}@localhost/${opt.mongo.dbname}`
 
@@ -32,9 +33,12 @@ const app = {
 // classes
 
 const Card = function(name, cardType, effectType){
+//const Card = function(name, card_type, effect_type){
   this.cardType = cardType
+  //this.card_type = card_type
   this.cover = true
   this.effectType = effectType
+  //this.effect_type = effect_type)
   this.energy = 1
   this.name = name
   this.trigger = false
@@ -51,6 +55,17 @@ const Game = function(){
     deckMax: 10, // 50
     handMax: 7,
     lifeMax: 6
+    /*
+    all_card: {},
+    artifact_max: 5,
+    spell_max: 3,
+    item_max: 2,
+    vanish_max: 11,
+    ap_max: 1,
+    deck_max: 10,
+    hand_max: 7,
+    life_max: 6
+    */
   }
   this.err = {
     deckNull: 'choose a deck',
@@ -62,12 +77,25 @@ const Game = function(){
     pswdErr : 'wrong password',
     usrErr  : 'no such user',
     usrExist: 'user name already exists'
+    /*
+    deck_null: 'choose a deck',
+    dscnt   : 'opponent disconnect',
+    foe_turn : 'waiting for opponent',
+    hand_full: 'your hand is full',
+    leave   : 'opponent leave',
+    no_ap    : 'not enough action point',
+    pswd_err : 'wrong password',
+    usr_err  : 'no such user',
+    usr_exist: 'user name already exists'
+    */
   }
   this.msg = {
     foeTurn : 'waiting for opponent',
+    //foe_turn: 'waiting for opponent',
     join    : 'joining section...',
     search  : 'searching for match...',
     selfTurn: 'your turn'
+    //self_turn: 'your turn'
   }
   this.pool = {}
   this.queue = []
@@ -75,7 +103,7 @@ const Game = function(){
 }
 
 Game.prototype.buildLife = function(player){
-  for(let i = 0; i < player.lifeMax; i++){
+  for(let i = 0; i < player.lifeMax/*life_max*/; i++){
     player.LIFE.push(player.DECK.pop())
   }
 }
@@ -88,7 +116,14 @@ Game.prototype.buildPlayer = function(player){ // player = client
   player.handMax = this.default.handMax
   player.lifeMax = this.default.lifeMax
   player.ownCard = []
-
+  /*
+  player.action_point = this.default.ap_max
+  player.deck_slot = {}
+  player.deck_max = this.default.deck_max
+  player.hand_max = this.default.hand_max
+  player.life_max = this.default.life_max
+  player.own_card = []
+*/
   // game fields
   player.DECK = []
   player.HAND = []
@@ -100,25 +135,26 @@ Game.prototype.buildPlayer = function(player){ // player = client
 }
 
 Game.prototype.drawCard = function(player){
-  let cardName
+  let card_name
   if(player.DECK.length > 0 ){
     if(player.HAND.length < 7){
       player.actionPoint -= 1
-      cardName = player.DECK[player.DECK.length - 1].name
+      //player.action_point -= 1
+      card_name = player.DECK[player.DECK.length - 1].name
       player.HAND.push(player.DECK.pop())
       player.HAND[player.HAND.length - 1].cover = false
     }
     else
-      cardName = this.err.handFull
+      card_name = this.err.handFull
   }
-  return cardName
+  return card_name
 }
 
 Game.prototype.idGenerate = function(length){
-  var text = ""
-  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+  let text = ""
+  let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-  for( let i = 0; i < length; i++ )
+  for(let i = 0; i < length; i++ )
     text += possible.charAt(Math.floor(Math.random() * possible.length))
 
   return text
@@ -251,9 +287,8 @@ io.on('connection', client => {
 
   // player disconnect
   client.on('disconnect', (it)=>{
-
-    var rid = client._rid
-    var pid = client._pid
+    let rid = client._rid
+    let pid = client._pid
 
     if(game.pool[pid]){   // if client is still in pool
       delete game.pool[pid]
@@ -283,19 +318,19 @@ io.on('connection', client => {
 
   // player draw card
   client.on('drawCard', (cb) => {
-    var rid = client._rid
-    var curr = game.room[rid].counter
+    let rid = client._rid
+    let curr = game.room[rid].counter
     if (game.room[rid]) {
       if (game.room[rid].player[curr]._pid === client._pid) {
         if(client.actionPoint > 0){
-          var cardName = game.drawCard(client)
-          var result
+          let card_name = game.drawCard(client)
+          let result
 
-          if(cardName !== game.err.handFull){
+          if(card_name !== game.err.handFull){
             if(client.DECK.length == 0)
               result = "empty"
 
-            cb({ cardName: cardName, deckStatus: result})
+            cb({ cardName: card_name, deckStatus: result})
                game.room[rid].player[1-curr].emit('foeDrawCard', {deckStatus: result})
           }
           else
@@ -311,8 +346,8 @@ io.on('connection', client => {
 
   // game turn finished
   client.on('finish', (cb) => {
-    var rid = client._rid
-    var curr = game.room[rid].counter
+    let rid = client._rid
+    let curr = game.room[rid].counter
 
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid) {
@@ -337,9 +372,9 @@ io.on('connection', client => {
 
   // opponent leave match
   client.on('leaveMatch', it => {
-    var rid = client._rid
-    var pid = client._pid
-    var fid = client._fid
+    let rid = client._rid
+    let pid = client._pid
+    let fid = client._fid
 
     game.room[rid].player.map(it => {
       if(it._pid === fid)
@@ -355,8 +390,8 @@ io.on('connection', client => {
 
   // player login
   client.on('login', (it, cb) => {
-    var user = app.db.collection('user')
-    var pid = game.idGenerate(16)
+    let user = app.db.collection('user')
+    let pid = game.idGenerate(16)
     client._pid = pid
     game.pool[pid] = client
 
@@ -380,12 +415,12 @@ io.on('connection', client => {
 
   // play card in your hand
   client.on('playHandCard', (it, cb) => {
-    var rid = client._rid
-    var curr = game.room[rid].counter
+    let rid = client._rid
+    let curr = game.room[rid].counter
     // !--
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid){
-        var result = game.playHandCard(client, it.name)
+        let result = game.playHandCard(client, it.name)
 
         if(result.err) return cb({err: result.err})
 
@@ -423,9 +458,9 @@ io.on('connection', client => {
 
   // player waiting for match
   client.on('search', (it,cb) => {
-    var user = app.db.collection('user')
-    var cards = app.db.collection('card')
-    var deck = []
+    let user = app.db.collection('user')
+    let cards = app.db.collection('card')
+    let deck = []
 
     if(!it.currDeck) return cb({err: game.err.deckNull})
 
@@ -439,8 +474,8 @@ io.on('connection', client => {
       game.shuffle(client.DECK)
 
       if(game.queue.length != 0){
-        var rid = game.idGenerate(16)
-        var opponent = game.queue.shift()
+        let rid = game.idGenerate(16)
+        let opponent = game.queue.shift()
         opponent._rid = rid
         opponent._fid = client._pid  // fid = foe id
         client._rid = rid
@@ -465,7 +500,7 @@ io.on('connection', client => {
         game.room[rid].player[1].emit('gameStart', { msg: game.msg.foeTurn })
       }
       else{
-        var pid = client._pid
+        let pid = client._pid
         game.queue.push(client)
         delete game.pool.pid
         cb({msg: game.msg.search})
