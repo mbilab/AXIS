@@ -113,7 +113,6 @@ const Deck = function(type, slot, name, card_list){
   this.card_list = card_list
   this.page = 1
 
-
   if(this.type === "deckList"){
     this.index = name.split("_")[1]
     this.img = app.game.add.sprite((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, 'emptySlot')
@@ -132,10 +131,10 @@ Deck.prototype.buildNewDeck = function(){
   // !--
   socket.emit('buildNewDeck', {slot: this.slot}, it => {
     console.log(it.newDeck)
-      this.card_list = it.newDeck
-      this.img.loadTexture('cardback')
-      this.img.inputEnabled = true
-      this.text.setText(`deck_${this.index}`)
+    this.card_list = it.newDeck
+    this.img.loadTexture('cardback')
+    this.img.inputEnabled = true
+    this.text.setText(`deck_${this.index}`)
     alert('you build a new deck')
   })
 }
@@ -157,8 +156,10 @@ Deck.prototype.changeFunc = function(){
 }
 
 Deck.prototype.chooseDeck = function(){
-  personal['curr_deck'] = this.slot
-
+  if(personal['curr_deck'] !== this.slot){
+    personal['curr_deck'] = this.slot
+    game.text.setText(`${this.name}`)
+  }
 }
 
 Deck.prototype.viewDeck = function(){
@@ -260,6 +261,7 @@ Game.prototype.changePage = function(btn){
 
   //variable reset due to page change
   personal['curr_deck'] = null
+  game.text.setText(' ')
 }
 
 Game.prototype.cleanAllData = function(){
@@ -287,7 +289,6 @@ Game.prototype.deckSlotInit = function(deck_slot){
     this.page.deck_build.push(personal['deck_slot'][slot].text)
     this.page.deck_build.push(personal['deck_slot'][slot].new_btn)
   }
-
 }
 
 Game.prototype.effectTrigger = function(actionType){
@@ -411,13 +412,14 @@ Game.prototype.pageInit = function(){
 
 Game.prototype.search = function(){
   socket.emit('search', {curr_deck: personal['curr_deck']}, it => {
-    if(it.err) return alert(it.err)
+    if(it.err) return game.text.setText(it.err)
 
-    this.text.setText(it.msg)
     if(it.msg !== 'searching for match...')
       this.changePage({next:'game'})
     else
       this.changePage({next:'loading'})
+
+    this.text.setText(it.msg)
   })
 }
 
