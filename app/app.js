@@ -28,7 +28,18 @@ const Card = function (name, field, onClick, cover) {
 }
 
 Card.prototype.activateCard = function(){
-	this.changeInputFunction()
+  /*
+  socket.emit('activateCard', {name: this.face.name}, it => {
+    if(it.err) return game.text.setText(it.err)
+
+    // charge artifact effect (0 ap)
+    // trigger artifact effect (0 ap)
+    // active trigger spell effect (0 ap)
+    // normal item effect (place on artifact) (0 ap)
+    // remove permanent spell from field (1 ap)
+
+  })
+  */
 }
 
 Card.prototype.changeInputFunction = function(){
@@ -90,7 +101,7 @@ Card.prototype.playHandCard = function(){
     //!--
     for(let i in personal['hand']){
       if(personal['hand'][i].face.name === this.face.name){
-        let dst_field = game.effectTrigger(it.msg)
+        let dst_field = game.actionExecute(it.msg)
 
         game.text.setText(`${it.msg.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
         personal[dst_field].push(personal['hand'][i])
@@ -220,6 +231,26 @@ const Game = function (){
   this.view_pos = this.page.deck_view.length // include 2 slider buttons and 1 back button
 }
 
+Game.prototype.actionExecute = function(actionType){
+  let dst_field = ''
+  switch(actionType){
+    case 'equipArtifact':
+      dst_field = 'battle'
+      break
+
+    case 'useNormalItem':
+      dst_field = 'grave'
+      break
+
+    case 'castInstantSpell':
+      dst_field = 'grave'
+      break
+
+    default: break
+  }
+  return dst_field
+}
+
 Game.prototype.changePage = function(btn){
   let old_page = this.page[this.curr_page]
   let new_page = this.page[btn.next]
@@ -289,26 +320,6 @@ Game.prototype.deckSlotInit = function(deck_slot){
     this.page.deck_build.push(personal['deck_slot'][slot].text)
     this.page.deck_build.push(personal['deck_slot'][slot].new_btn)
   }
-}
-
-Game.prototype.effectTrigger = function(actionType){
-  let dst_field = ''
-  switch(actionType){
-    case 'equipArtifact':
-      dst_field = 'battle'
-      break
-
-    case 'useNormalItem':
-      dst_field = 'grave'
-      break
-
-    case 'castInstantSpell':
-      dst_field = 'grave'
-      break
-
-    default: break
-  }
-  return dst_field
 }
 
 Game.prototype.endTurn = function(){
@@ -551,7 +562,7 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('foePlayHand', it => {
-  let dst_field = game.effectTrigger(it.msg)
+  let dst_field = game.actionExecute(it.msg)
 
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift()
