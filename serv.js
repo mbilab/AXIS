@@ -76,6 +76,14 @@ const Game = function(){
   this.room = {}
 }
 
+Game.prototype.activateCard = function(player, card_name){
+  for(let i in player.BATTLE){
+    if(player.BATTLE[i].name === card_name){
+
+    }
+  }
+}
+
 Game.prototype.buildLife = function(player){
   for(let i = 0; i < player.life_max; i++){
     player.LIFE.push(player.DECK.pop())
@@ -126,10 +134,10 @@ Game.prototype.idGenerate = function(length){
   return text
 }
 
-Game.prototype.playHandCard = function(player, cardName){
+Game.prototype.playHandCard = function(player, card_name){
   // !--
   for(let i in player.HAND){
-    if(player.HAND[i].name === cardName){
+    if(player.HAND[i].name === card_name){
 
       switch(player.HAND[i].card_type){
         case 'artifact':
@@ -233,7 +241,20 @@ io.on('connection', client => {
     })
   })
 
-  client.on('buildNewDeck', (it,cb) => {
+  client.on('activateCard', (it, cb) => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+
+    if(game.room[rid]){
+      if(game.room[rid].player[curr]._pid === client._pid){
+        let result = game.activateCard(client, it.name)
+      }
+      else
+        cb({ err: game.err.foe_turn})
+    }
+  })
+
+  client.on('buildNewDeck', (it, cb) => {
     // !--
     console.log(`build new deck_${it.slot}`)
     let newDeck = game.randomDeck()
