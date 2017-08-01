@@ -3,22 +3,22 @@ const socket = io()
 // global variables (default values)
 
 const opt = {
-  // file: {}, //-! if function preload() could be changed, this might be removed
+  //file: {}, //-! if function preload() could be changed, this might be removed
   screen: {
     //-! rename to height
-    h: document.documentElement.clientHeight, // browser height
+    height: document.documentElement.clientHeight, // browser height
     //-! rename to width
-    w: document.documentElement.clientWidth // browser width
+    width: document.documentElement.clientWidth // browser width
   }
 }
 
 //-! if only one key (game) in `app` would be used in the game logics, then the variable `app` could represent the app.game
 
-// const app = {
-//   game: null
-// }
+const app = {
+  game: null
+}
 
-const app = {}
+//const app = {}
 
 //////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +29,7 @@ const Card = function (name, field, onClick, cover) {
 
   this.cover = cover
 
-  //-! need to refine, `app.game` => `app` and put the `game.default` values to `opt` (opt.game_default or others)
+  //-! need to refine, `app` => `app` and put the `game.default` values to `opt` (opt.game_default or others)
   this.face = app.game.add.sprite(game.default.game_width * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
 
   this.face.inputEnabled = onClick
@@ -41,7 +41,7 @@ const Card = function (name, field, onClick, cover) {
     this.face.events.onInputDown.add(this.drawCard, this)
 }
 
-Card.prototype.activateCard = function() {
+Card.prototype.activateCard = function () {
   /*
   socket.emit('activateCard', {name: this.face.name}, it => {
     if(it.err) return game.text.setText(it.err)
@@ -56,7 +56,7 @@ Card.prototype.activateCard = function() {
   */
 }
 
-Card.prototype.changeInputFunction = function() {
+Card.prototype.changeInputFunction = function () {
   //-! what is input function ?
 
   this.face.events.onInputDown.removeAll()
@@ -109,13 +109,13 @@ Card.prototype.drawCard = function() {
 
     //-! change deck_status to boolean or numeric values, if there are only two status , then change `deck_status` to `deck_empty` (true / false) or others
 
-    if ('empty' === it.deck_status)
-      personal.deck.face.kill()
+    if (it.deck_empty == true)
+      personal.deck[0].face.kill()
   })
 }
 
-Card.prototype.playHandCard = function() {
-  socket.emit('playHandCard', { name: this.face.nam e}, it => {
+Card.prototype.playHandCard = function () {
+  socket.emit('playHandCard', { name: this.face.name}, it => {
     if (it.err) return game.text.setText(it.err)
     //!--
     for (let i in personal.hand) {
@@ -136,7 +136,7 @@ Card.prototype.playHandCard = function() {
   })
 }
 
-const Deck = function(type, slot, name, card_list) {
+const Deck = function (type, slot, name, card_list) {
   //-! need to discuss the variable names
 
   this.slot = slot
@@ -146,7 +146,7 @@ const Deck = function(type, slot, name, card_list) {
   this.page = 1
 
   if ('deckList' === this.type) {
-    this.index = name.split("_")[1]
+    this.index = slot.split("_")[1]
     this.img = app.game.add.sprite((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, 'emptySlot')
     this.img.events.onInputDown.add(this.changeFunc, this)
     this.img.kill()
@@ -159,7 +159,7 @@ const Deck = function(type, slot, name, card_list) {
   }
 }
 
-Deck.prototype.buildNewDeck = function() {
+Deck.prototype.buildNewDeck = function () {
   // !--
   socket.emit('buildNewDeck', { slot: this.slot }, it => {
     console.log(it.newDeck)
@@ -171,10 +171,10 @@ Deck.prototype.buildNewDeck = function() {
   })
 }
 
-Deck.prototype.changeFunc = function(){
+Deck.prototype.changeFunc = function (){
   //-! what is change fucntion ?
 
-  switch(game.curr_page){
+  switch (game.curr_page) {
     case 'deck_build':
       this.viewDeck()
       break
@@ -189,14 +189,14 @@ Deck.prototype.changeFunc = function(){
   }
 }
 
-Deck.prototype.chooseDeck = function() {
+Deck.prototype.chooseDeck = function () {
   if (personal.curr_deck !== this.slot) {
     personal.curr_deck = this.slot
     game.text.setText(`${this.name}`)
   }
 }
 
-Deck.prototype.viewDeck = function() {
+Deck.prototype.viewDeck = function () {
   game.changePage({ next: 'deck_view' })
   this.chooseDeck()
   game.shiftTexture({ next: 'in' })
@@ -215,7 +215,7 @@ const Game = function () {
 	  card_width: 64,
 	  game_height: 700,
     game_width: 1366,
-    scale: 768*(opt.screen.w/opt.screen.h)/1366
+    scale: 768*(opt.screen.width/opt.screen.height)/1366
   }
 
   //-! need to discuss the logics below
@@ -260,11 +260,11 @@ const Game = function () {
   this.view_pos = this.page.deck_view.length // include 2 slider buttons and 1 back button
 }
 
-Game.prototype.actionExecute = function(actionType) {
+Game.prototype.actionExecute = function (actionType) {
   //-! what is action exeucte ?
 
   let dst_field = ''
-  switch(actionType){
+  switch (actionType) {
     case 'equipArtifact':
       dst_field = 'battle'
       break
@@ -282,7 +282,7 @@ Game.prototype.actionExecute = function(actionType) {
   return dst_field
 }
 
-Game.prototype.changePage = function(btn) {
+Game.prototype.changePage = function (btn) {
   let old_page = this.page[this.curr_page]
   let new_page = this.page[btn.next]
 
@@ -322,10 +322,10 @@ Game.prototype.changePage = function(btn) {
 
   // variable reset due to page change
   personal.curr_deck = null
-  game.text.setText(' ') //-! change ' ' to '' ?
+  game.text.setText('') //-! change ' ' to '' ?
 }
 
-Game.prototype.cleanAllData = function() {
+Game.prototype.cleanAllData = function () {
   let field = ['hand', 'life', 'grave', 'battle']
   this.text.setText(' ')
   for (let i in field) {
@@ -334,11 +334,11 @@ Game.prototype.cleanAllData = function() {
   }
 }
 
-Game.prototype.deckSlotInit = function(deck_slot) {
+Game.prototype.deckSlotInit = function (deck_slot) {
   for (let slot in deck_slot) {
     let deck_name = deck_slot[slot].name
     personal.deck_slot[slot] = new Deck('deckList', slot, deck_name, [])
-    if(deck_slot[slot].card_list.length){
+    if (deck_slot[slot].card_list.length) {
       personal.deck_slot[slot].text.setText(deck_name)
       personal.deck_slot[slot].img.loadTexture('cardback')
       personal.deck_slot[slot].img.inputEnabled = true
@@ -352,56 +352,56 @@ Game.prototype.deckSlotInit = function(deck_slot) {
   }
 }
 
-// Game.prototype.endTurn = function() {
-//   socket.emit('finish', it => {this.text.setText(it.msg)})
-// }
+Game.prototype.endTurn = function () {
+  socket.emit('finish', it => { this.text.setText(it.msg) })
+}
 
 //-! try this way
 
-Game.prototype.endTurn = () => socket.emit('finish', it => this.text.setText(it.msg))
+//Game.prototype.endTurn = () => socket.emit('finish', it => this.text.setText(it.msg))
 
-Game.prototype.fixPos = function(player, field) {
+Game.prototype.fixPos = function (player, field) {
   // !-- refactor
-  if(player === 'personal'){
-    for(let i in personal[field]){
-      if(field === 'battle'||'hand'||'life')
+  if (player === 'personal') {
+    for (let i in personal[field]) {
+      if (field === 'battle'||'hand'||'life')
         personal[field][i].face.reset((this.default.game_width/2) - this.default.card_width*1.25 - this.default.card_width/2 - (this.default.card_width*3/5)*(personal[field].length - 1) + (this.default.card_width*6/5)*i, personal[`${field}Yloc`])
-      if(field === 'grave')
+      if (field === 'grave')
         personal[field][i].face.reset(this.default.game_width*(1 - 1/13), personal[`${field}Yloc`])
     }
   }
-  else{
-    if(field !== 'deck'){
-      for(let i in opponent[field]){
-        if(field === 'battle'||'hand'||'life')
+  else {
+    if (field !== 'deck') {
+      for (let i in opponent[field]) {
+        if (field === 'battle'||'hand'||'life')
           opponent[field][i].face.reset((this.default.game_width/2) - this.default.card_width*1.25 - this.default.card_width/2 - (this.default.card_width*3/5)*(opponent[field].length - 1) + (this.default.card_width*6/5)*i, opponent[`${field}Yloc`])
-        if(field === 'grave')
+        if (field === 'grave')
           opponent[field][i].face.reset(this.default.game_width*(1 - 1/13), opponent[`${field}Yloc`])
       }
     }
-    else{
+    else {
 		  opponent[field][0].face.reset(this.default.game_width*(1 - 1/13), opponent[`${field}Yloc`])
     }
   }
 }
 
-Game.prototype.htmlSwap = function(elem, place){
+Game.prototype.htmlSwap = function (elem, place) {
   let i = (place === 'front')? 1: -1
-  if(elem.id) $(`#${elem.id}`).css('zIndex', i)
+  if (elem.id) $(`#${elem.id}`).css('zIndex', i)
 }
 
-Game.prototype.leaveMatch = function(){
+Game.prototype.leaveMatch = function () {
   socket.emit('leaveMatch')
-  this.changePage({next:'lobby'})
+  this.changePage({ next:'lobby' })
   this.cleanAllData()
 }
 
-Game.prototype.login = function(){
-  if(!$('#logAcc').val()) return alert('please enter your account')
-  if(!$('#logPswd').val()) return alert('please enter your password')
+Game.prototype.login = function () {
+  if (!$('#logAcc').val()) return alert('please enter your account')
+  if (!$('#logPswd').val()) return alert('please enter your password')
 //!--
-  socket.emit('login',  {acc: $('#logAcc').val(), passwd: $('#logPswd').val()}, it => {
-    if(it.err){
+  socket.emit('login',  { acc: $('#logAcc').val(), passwd: $('#logPswd').val() }, it => {
+    if (it.err) {
       alert(it.err)
       $('#logAcc, #logPswd').val('')
       return
@@ -409,16 +409,16 @@ Game.prototype.login = function(){
 
     game.deckSlotInit(it.deck_slot)
     //console.log(it.deck_slot)
-    this.changePage({next: 'lobby'})
+    this.changePage({ next: 'lobby' })
   })
 }
 
-Game.prototype.pageInit = function(){
+Game.prototype.pageInit = function () {
 
   // add general items
   for (let pageName in this.page) {
     for (let [index, elem] of this.page[pageName].entries()) {
-      if(elem.type!=='html' && this.page[pageName].length){
+      if (elem.type!=='html' && this.page[pageName].length) {
         this.page[pageName].splice(index, 1, app.game.add.button(elem.x, elem.y, elem.img, elem.func, this))
         this.page[pageName][index].next = elem.next
         this.page[pageName][index].kill()
@@ -427,8 +427,8 @@ Game.prototype.pageInit = function(){
   }
 
   // add cards in deck view page
-  for(let i = 0; i < 2; i++){
-    for(let j = 0; j < 5; j++){
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 5; j++) {
       let x = (this.default.game_width - (5*this.default.card_width + 4*84))/2 + (this.default.card_width + 84)*j
       let y = this.default.game_height/2 - 40 - this.default.card_height + (80 + this.default.card_height)*i
       let card = app.game.add.sprite(x, y, 'emptySlot')
@@ -443,10 +443,10 @@ Game.prototype.pageInit = function(){
   }
 
   // add cards in game page
-  for(let i of ['deck', 'hand', 'life', 'grave', 'battle']){
+  for (let i of ['deck', 'hand', 'life', 'grave', 'battle']) {
     this.page.game.push(personal[i])
     this.page.game.push(opponent[i])
-    if(i === 'deck'){
+    if(i === 'deck') {
       personal['deck'][0].face.kill()
       opponent['deck'][0].face.kill()
     }
@@ -455,7 +455,7 @@ Game.prototype.pageInit = function(){
   this.changePage({next: 'start'})
 }
 
-Game.prototype.search = function(){
+Game.prototype.search = function () {
   socket.emit('search', {curr_deck: personal['curr_deck']}, it => {
     if(it.err) return game.text.setText(it.err)
 
@@ -468,7 +468,7 @@ Game.prototype.search = function(){
   })
 }
 
-Game.prototype.shiftTexture = function(btn){
+Game.prototype.shiftTexture = function (btn) {
   let curr_deck = personal['deck_slot'][personal['curr_deck']]
   let next_btn = this.page.deck_view[1]
   let prev_btn = this.page.deck_view[2]
@@ -476,36 +476,36 @@ Game.prototype.shiftTexture = function(btn){
   let card_list = curr_deck.card_list.slice(start_pos, start_pos + 10)
 
   // set current texture page
-  if(btn.next === 'next') curr_deck.page += 1
-  if(btn.next === 'prev') curr_deck.page -= 1
-  if(btn.next === 'in') curr_deck.page = 1
+  if (btn.next === 'next') curr_deck.page += 1
+  if (btn.next === 'prev') curr_deck.page -= 1
+  if (btn.next === 'in') curr_deck.page = 1
 
   // show or hide shift button
-  if(curr_deck.page == 1)
+  if (curr_deck.page == 1)
     prev_btn.kill()
   else
     prev_btn.reset(prev_btn.x, prev_btn.y)
 
-  if(curr_deck.page == curr_deck.card_list.length/10)
+  if (curr_deck.page == curr_deck.card_list.length/10)
     next_btn.kill()
   else
     next_btn.reset(next_btn.x, next_btn.y)
 
   // change card texture
-  for(let i = this.view_pos; i < this.view_pos + 10; i++){
+  for (let i = this.view_pos; i < this.view_pos + 10; i++) {
     this.page.deck_view[i].loadTexture(card_list[i - this.view_pos])
     this.page.deck_view[i].describe.setText(card_list[i - this.view_pos])
   }
 }
 
-Game.prototype.signup = function(){
-  if(!$('#sgnAcc').val()) return alert('please enter your account')
-  if(!$('#sgnPswd').val()) return alert('please enter your password')
-  if(!$('#sgnRepswd').val()) return alert('please enter your password again')
-  if($('#sgnPswd').val() !== $('#sgnRepswd').val()) return alert('passwords are different')
+Game.prototype.signup = function () {
+  if (!$('#sgnAcc').val()) return alert('please enter your account')
+  if (!$('#sgnPswd').val()) return alert('please enter your password')
+  if (!$('#sgnRepswd').val()) return alert('please enter your password again')
+  if ($('#sgnPswd').val() !== $('#sgnRepswd').val()) return alert('passwords are different')
 
   socket.emit('signup',  {acc: $('#sgnAcc').val(), passwd: $('#sgnPswd').val()}, it => {
-    if(it.err) {
+    if (it.err) {
       alert(it.err)
       $('#sgnAcc, #sgnPswd, #sgnRepswd').val('')
       return
@@ -514,7 +514,7 @@ Game.prototype.signup = function(){
   })
 }
 
-const Player = function(obj){
+const Player = function (obj) {
   for (let field of ['deckY', 'handY', 'lifeY', 'battleY', 'graveY'])
     this[`${field}loc`] = game.default.game_height - obj[field] / game.default.scale
 
@@ -532,14 +532,14 @@ const Player = function(obj){
 //////////////////////////////////////////////////////////////////////////////////////
 
 // phaser utility
-
+/*
 function create(){
-  let top = (100*(1 - game.default.game_width/opt.screen.w)/2).toString()+'%'
-  let left = (100*(1 - game.default.game_height/opt.screen.h)/2).toString()+'%'
+  let top = (100*(1 - game.default.game_width/opt.screen.width)/2).toString()+'%'
+  let left = (100*(1 - game.default.game_height/opt.screen.height)/2).toString()+'%'
   $('#game').css({top: top, left: left})
 
   app.game.add.sprite(0, 0, 'background')
-  //app.game.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
+  //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
   game.text_group = app.game.add.group()
   game.text = app.game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
@@ -557,15 +557,16 @@ function create(){
 
 //-! integrate to the bottom socket emit function
 
-// function preload(){
-//   for(let type in opt.file.preload){
-//     for(let elem in opt.file.preload[type])
-//       app.game.load[type](elem, opt.file.preload[type][elem])
-//   }
-// }
+function preload(){
+  for(let type in opt.file.preload){
+    for(let elem in opt.file.preload[type])
+      app.game.load[type](elem, opt.file.preload[type][elem])
+  }
+}
 
-// function render(){}
-// function update(){}
+function render(){}
+function update(){}
+*/
 
 //////////////////////////////////////////////////////////////////////////////////////
 
@@ -574,7 +575,7 @@ function create(){
 socket.on('buildLIFE', it => {
   var life = JSON.parse(it)
 
-  for(let i in life){
+  for (let i in life) {
     personal['life'].push(new Card(life[i].name, 'life', true, true))
     personal['life'][i].changeInputFunction()
   }
@@ -582,7 +583,7 @@ socket.on('buildLIFE', it => {
 })
 
 socket.on('foeBuiltLife', it => {
-  for(let i = 0; i < 6; i++){
+  for (let i = 0; i < 6; i++) {
     opponent['life'].push(new Card('cardback', 'life', false, true))
   }
   game.fixPos('opponent', 'life')
@@ -592,7 +593,7 @@ socket.on('foeDrawCard', it => {
   opponent['hand'].push(new Card('unknown', 'hand', false, true))
   game.fixPos('opponent', 'hand')
 
-  if(it.deck_status === "empty"){
+  if(it.deck_empty == true){
     opponent['deck'][0].face.kill()
   }
 })
@@ -637,20 +638,43 @@ const personal = new Player({deckY:110, handY:220, lifeY:110, battleY:330, grave
 const opponent = new Player({deckY:758, handY:648, lifeY:758, battleY:538, graveY:648})
 
 
-socket.emit('preload', it => {
-  // opt.file.preload = it
-  // app.game = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render: render})
+socket.emit('preload', res => {
+  //opt.file.preload = it
+  //app.game = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render: render})
 
   //-! try this way, and rename the param `it` to `res` or other
 
+
   app.game = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {
-    create: () => {},
+    create: () => {
+      let top = (100*(1 - game.default.game_width/opt.screen.width)/2).toString()+'%'
+      let left = (100*(1 - game.default.game_height/opt.screen.height)/2).toString()+'%'
+      $('#game').css({top: top, left: left})
+
+      app.game.add.sprite(0, 0, 'background')
+      //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
+
+      game.text_group = app.game.add.group()
+      game.text = app.game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+      game.text.fixedToCamera = true
+      game.text.cameraOffset.setTo(21, game.default.game_height/2 - 44/game.default.scale)
+      game.text_group.add(game.text)
+
+      socket.emit('init', it => {
+	      personal['deck'].push(new Card('cardback', 'deck', true, true))
+        opponent['deck'].push(new Card('cardback', 'deck', false, true))
+        game.fixPos('opponent', 'deck')
+        game.pageInit()
+      })
+
+    },
     preload: () => {
-      for (let type in it)
-        for (let elem in it[type])
-          app.game.load[type](elem, it[type][elem])
+      for (let type in res)
+        for (let elem in res[type])
+          app.game.load[type](elem, res[type][elem])
     },
     render: () => {},
     update: () => {}
   })
+
 })

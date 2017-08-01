@@ -35,7 +35,7 @@ const Card = function(name, card_type, effect_type){
   this.card_type = card_type
   this.cover = true
   this.effect_type = effect_type
-  this.energy = 1
+  this.energy = (card_type === 'artifact')? 2: 1
   this.name = name
   this.trigger = false
 }
@@ -78,8 +78,28 @@ const Game = function(){
 
 Game.prototype.activateCard = function(player, card_name){
   for(let i in player.BATTLE){
-    if(player.BATTLE[i].name === card_name){
+    let card = player.BATTLE[i]
+    if(card.name === card_name){
+      switch(card.effect_type){
+        case 'charge':
+          break
 
+        case 'trigger':
+          if(card.card_type === 'artifact')
+
+          if(card.card_type === 'spell')
+
+          break
+
+        case 'normal':
+          break
+
+        case 'permanent':
+          break
+
+        default:
+          break
+      }
     }
   }
 }
@@ -311,14 +331,14 @@ io.on('connection', client => {
       if (game.room[rid].player[curr]._pid === client._pid) {
         if(client.action_point > 0){
           let card_name = game.drawCard(client)
-          let result
+          let deck_empty
 
           if(card_name !== game.err.hand_full){
             if(client.DECK.length == 0)
-              result = "empty"
+              deck_empty = true
 
-            cb({card_name: card_name, deck_status: result})
-            game.room[rid].player[1-curr].emit('foeDrawCard', {deck_status: result})
+            cb({card_name: card_name, deck_empty: deck_empty})
+            game.room[rid].player[1-curr].emit('foeDrawCard', {deck_empty: deck_empty})
           }
           else
             cb({err: game.err.hand_full})
