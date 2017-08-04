@@ -37,6 +37,8 @@ const Card = function(name, card_type, effect_type){
   this.effect_type = effect_type
   this.energy = (card_type === 'artifact')? 2: 1
   this.name = name
+  this.overheat = false
+  this.owner = null
   this.trigger = false
 }
 
@@ -82,6 +84,8 @@ Game.prototype.activateCard = function(player, card_name){
     if(card.name === card_name){
       switch(card.effect_type){
         case 'charge':
+          if(card.energy == 0) return 'not enough energy'
+          card.energy -= 1
           break
 
         case 'trigger':
@@ -102,6 +106,33 @@ Game.prototype.activateCard = function(player, card_name){
       }
     }
   }
+}
+
+Game.prototype.battleFieldArrange = function (personal, opponent) {
+  // personal >> target client running this function
+  let player = {
+    personal: personal,
+    opponent: opponent
+  }
+  let card_arrange = {
+    personal: {},
+    opponent: {}
+  }
+
+  for(let name in player){
+    for(let i in player[name].BATTLE){
+      let card = player[name].BATTLE[i]
+      if(card.type === 'artifact'){
+        card.overheat = false
+        if(card.energy == 0){
+          card_arrange[name][card.name] = (card.owner === personal._pid)?'peronsal':'opponent'
+          player[name].GRAVE.push(player[name].BATTLE.splice(i, 1))
+        }
+      }
+    }
+  }
+
+  return card_arrange
 }
 
 Game.prototype.buildLife = function(player){
@@ -133,7 +164,6 @@ Game.prototype.drawCard = function(player){
   if(player.DECK.length > 0 ){
     if(player.HAND.length < 7){
       player.action_point -= 1
-      //player.action_point -= 1
       card_name = player.DECK[player.DECK.length - 1].name
       player.HAND.push(player.DECK.pop())
       player.HAND[player.HAND.length - 1].cover = false
@@ -142,6 +172,10 @@ Game.prototype.drawCard = function(player){
       card_name = this.err.hand_full
   }
   return card_name
+}
+
+Game.prototype.effectTrigger = function () {
+
 }
 
 Game.prototype.idGenerate = function(length){
@@ -154,17 +188,19 @@ Game.prototype.idGenerate = function(length){
   return text
 }
 
-Game.prototype.playHandCard = function(player, card_name){
+Game.prototype.playHandCard = function(player, opponent, card_name){
   // !--
   for(let i in player.HAND){
     if(player.HAND[i].name === card_name){
+      let target = (player.HAND[i].owner === player._pid)? (player): (opponent)
+      let owner = (target == player)?('personal'):('opponent')
 
       switch(player.HAND[i].card_type){
         case 'artifact':
           if(player.action_point > 0){
             player.action_point -= 1
             player.BATTLE.push(player.HAND.splice(i,1))
-            return 'equipArtifact'
+            return {action: 'equipArtifact', owner: 'personal'}
           }
           else
             return {err: this.err.no_ap}
@@ -173,8 +209,8 @@ Game.prototype.playHandCard = function(player, card_name){
 
         case 'item':
           if(player.HAND[i].effect_type === 'normal'){
-            player.GRAVE.push(player.HAND.splice(i,1))
-            return 'useNormalItem'
+            target.GRAVE.push(player.HAND.splice(i,1))
+            return {action: 'useNormalItem', owner: owner}
           }
           break
 
@@ -182,8 +218,8 @@ Game.prototype.playHandCard = function(player, card_name){
           if(player.action_point > 0){
             player.action_point -= 1
             if(player.HAND[i].effect_type === 'instant'){
-              player.GRAVE.push(player.HAND.splice(i,1))
-              return 'castInstantSpell'
+              target.GRAVE.push(player.HAND.splice(i,1))
+              return {action: 'castInstantSpell', owner: owner}
             }
           }
           else
@@ -258,6 +294,8 @@ io.on('connection', client => {
     app.db.collection('card').find({}).toArray((err, rlt) => {
       for(let i in rlt)
         game.default.all_card[rlt[i].name] = rlt[i]
+
+      //console.log(game.default.all_card)
     })
   })
 
@@ -358,13 +396,15 @@ io.on('connection', client => {
 
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid) {
+        let card_arrange = game.battleFieldArrange(client, game.room[rid].player[1-curr])
+
         client.action_point = 1
 
-        game.room[rid].counter = 1-curr
+        game.room[rid].counter = 1 - curr
         curr = game.room[rid].counter
 
-        cb({ msg: game.msg.foe_turn })
-        game.room[rid].player[curr].emit('turnStart', {msg: game.msg.self_turn})
+        cb({ msg: game.msg.foe_turn, card_list: card_arrange })
+        game.room[rid].player[curr].emit('turnStart', { msg: game.msg.self_turn, card_list: card_arrange })
       }
       else
         cb({msg: game.msg.foe_turn})
@@ -424,18 +464,20 @@ io.on('connection', client => {
   client.on('playHandCard', (it, cb) => {
     let rid = client._rid
     let curr = game.room[rid].counter
+
     // !--
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid){
-        let result = game.playHandCard(client, it.name)
+        let result = game.playHandCard(client, game.room[rid].player[1-curr], it.name)
 
         if(result.err) return cb({err: result.err})
 
-        cb({msg: result})
-        game.room[rid].player[1-curr].emit('foePlayHand', {msg: result, card_name: it.name})
+        cb(result)
+        result.card_name = it.name
+        game.room[rid].player[1-curr].emit('foePlayHand', result)
       }
       else
-        cb({ err: game.err.foe_turn})
+        cb({err: game.err.foe_turn})
     }
   })
 
@@ -461,6 +503,7 @@ io.on('connection', client => {
       for(let card_name in deck){
         let curr_card = game.default.all_card[deck[card_name]]
         client.DECK.push(new Card(curr_card.name, curr_card.type.base, curr_card.type.effect))
+        client.DECK[client.DECK.length - 1].owner = client._pid
       }
 
       game.shuffle(client.DECK)

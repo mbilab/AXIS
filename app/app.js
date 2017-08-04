@@ -42,7 +42,6 @@ const Card = function (name, field, onClick, cover) {
 }
 
 Card.prototype.activateCard = function () {
-  /*
   socket.emit('activateCard', {name: this.face.name}, it => {
     if(it.err) return game.text.setText(it.err)
 
@@ -53,7 +52,6 @@ Card.prototype.activateCard = function () {
     // remove permanent spell from field (1 ap)
 
   })
-  */
 }
 
 Card.prototype.changeInputFunction = function () {
@@ -120,15 +118,17 @@ Card.prototype.playHandCard = function () {
     //!--
     for (let i in personal.hand) {
       if (personal.hand[i].face.name === this.face.name){
-        let dst_field = game.actionExecute(it.msg)
+        let dst_field = game.actionExecute(it.action)
+        let target = (it.owner === 'opponent')?(opponent):(personal)
+        game.text.setText(`${it.action.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
 
-        game.text.setText(`${it.msg.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
-        personal[dst_field].push(personal.hand[i])
+        personal.hand[i].inputEnabled = (target == opponent)?(false):(true)
+        target[dst_field].push(personal.hand[i])
         personal.hand.splice(i,1)
-	      personal[dst_field][personal[dst_field].length -1].field = dst_field
-        personal[dst_field][personal[dst_field].length -1].changeInputFunction()
+	      target[dst_field][target[dst_field].length -1].field = dst_field
+        target[dst_field][target[dst_field].length -1].changeInputFunction()
         game.fixPos('personal', 'hand')
-        game.fixPos('personal', dst_field)
+        game.fixPos(it.owner, dst_field)
 
         break
       }
@@ -282,6 +282,27 @@ Game.prototype.actionExecute = function (actionType) {
   return dst_field
 }
 
+Game.prototype.battleFieldArrange = function (card_list, turn_end) { // turn_end >> you end this turn or you're gonna start a new turn
+  let player = { personal: personal, opponent: opponent}
+  for(let target in player){
+    for(let [index, card] of player[target].battle.entries()){
+      let owner = card_list[target][card.face.name]
+
+      if(owner === 'personal')
+        card.inputEnabled = (turn_end == true)? true: false
+      else
+        card.inputEnabled = (turn_end == true)? false: true
+
+      // destroy face?
+
+      player[owner].grave.push(card)
+      player[target].battle.splice(index, 1)
+      this.fixPos(target, 'hand')
+      this.fixPos(owner, 'grave')
+    }
+  }
+}
+
 Game.prototype.changePage = function (btn) {
   let old_page = this.page[this.curr_page]
   let new_page = this.page[btn.next]
@@ -352,8 +373,15 @@ Game.prototype.deckSlotInit = function (deck_slot) {
   }
 }
 
+Game.prototype.effectTrigger = function () {
+
+}
+
 Game.prototype.endTurn = function () {
-  socket.emit('finish', it => { this.text.setText(it.msg) })
+  socket.emit('finish', it => {
+    //this.battleFieldArrange(it.card_list, true)
+    this.text.setText(it.msg)
+  })
 }
 
 //-! try this way
@@ -599,13 +627,15 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('foePlayHand', it => {
-  let dst_field = game.actionExecute(it.msg)
+  let dst_field = game.actionExecute(it.action)
+  let target = (it.owner === 'opponent')?(personal):(opponent)
+  let owner = (it.owner === 'opponent')?('personal'):('opponent')
 
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift()
-  opponent[dst_field].push(new Card(it.card_name, dst_field, false, false))
-	game.fixPos('opponent', 'hand')
-  game.fixPos('opponent', dst_field)
+  target[dst_field].push(new Card(it.card_name, dst_field, (target == opponent)?(true):(false), false))
+  game.fixPos('opponent', 'hand')
+  game.fixPos(owner, dst_field)
 })
 
 socket.on('foePlayLife', it => {
@@ -627,6 +657,7 @@ socket.on('joinGame', it => {//
 })
 
 socket.on('turnStart', it => {
+  //game.battleFieldArrange(it.card_list, true)
   game.text.setText(it.msg)
 })
 
