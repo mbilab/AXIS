@@ -288,17 +288,19 @@ Game.prototype.battleFieldArrange = function (card_list, turn_end) { // turn_end
     for(let [index, card] of player[target].battle.entries()){
       let owner = card_list[target][card.face.name]
 
-      if(owner === 'personal')
-        card.inputEnabled = (turn_end == true)? true: false
-      else
-        card.inputEnabled = (turn_end == true)? false: true
+      if(owner != null){
+        if(owner === 'personal')
+          card.inputEnabled = (turn_end == true)? true: false
+        else
+          card.inputEnabled = (turn_end == true)? false: true
 
-      // destroy face?
+        // destroy face?
 
-      player[owner].grave.push(card)
-      player[target].battle.splice(index, 1)
-      this.fixPos(target, 'hand')
-      this.fixPos(owner, 'grave')
+        player[owner].grave.push(card)
+        player[target].battle.splice(index, 1)
+        this.fixPos(target, 'hand')
+        this.fixPos(owner, 'grave')
+      }
     }
   }
 }
@@ -379,7 +381,7 @@ Game.prototype.effectTrigger = function () {
 
 Game.prototype.endTurn = function () {
   socket.emit('finish', it => {
-    //this.battleFieldArrange(it.card_list, true)
+    this.battleFieldArrange(it.card_list, true)
     this.text.setText(it.msg)
   })
 }
@@ -657,7 +659,7 @@ socket.on('joinGame', it => {//
 })
 
 socket.on('turnStart', it => {
-  //game.battleFieldArrange(it.card_list, true)
+  game.battleFieldArrange(it.card_list, true)
   game.text.setText(it.msg)
 })
 
