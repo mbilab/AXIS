@@ -37,12 +37,12 @@ const Card = function(name, card_type, effect_type){
   this.effect_type = effect_type
   this.energy = (card_type === 'artifact')? 2: 1
   this.name = name
-  this.overheat = false
+  (this.card_type === 'artifact')?(this.overheat = false):
   this.owner = null
-  this.trigger = false
 }
 
 const Game = function(){
+  this.attack_phase = false
   this.default = {
     all_card    : {},
     // card type
@@ -51,17 +51,18 @@ const Game = function(){
     item_max    : 2,//12,
     vanish_max  : 11,
     // player attribute
-    ap_max       : 1,
-    deck_max     : 10, // 50
-    hand_max     : 7,
-    life_max     : 6
+    ap_max      : 1,
+    deck_max    : 10, // 50
+    hand_max    : 7,
+    life_max    : 6
   }
   this.err = {
+    atk_phase: 'not allow in attack phase'
     deck_null: 'choose a deck',
-    dscnt   : 'opponent disconnect',
+    dscnt    : 'opponent disconnect',
     foe_turn : 'waiting for opponent',
     hand_full: 'your hand is full',
-    leave   : 'opponent leave',
+    leave    : 'opponent leave',
     no_ap    : 'not enough action point',
     pswd_err : 'wrong password',
     usr_err  : 'no such user',
@@ -69,8 +70,8 @@ const Game = function(){
   }
   this.msg = {
     foe_turn : 'waiting for opponent',
-    join    : 'joining section...',
-    search  : 'searching for match...',
+    join     : 'joining section...',
+    search   : 'searching for match...',
     self_turn: 'your turn'
   }
   this.pool = {}
@@ -78,27 +79,31 @@ const Game = function(){
   this.room = {}
 }
 
-Game.prototype.activateCard = function(player, card_name){
-  for(let i in player.BATTLE){
+Game.prototype.activateCard = function (player, card_name) {
+  for (let i in player.BATTLE) {
     let card = player.BATTLE[i]
-    if(card.name === card_name){
-      switch(card.effect_type){
-        case 'charge':
-          if(card.energy == 0) return 'not enough energy'
+    if (card.name === card_name) {
+      switch (card.card_type) {
+        case 'artifact':
+          if (card.effect_type !== 'charge' && 'trigger') return 'unable trigger effect'
+          if (card.energy == 0) return 'not enough energy'
+          if (card.overheat == true) return 'artifact overheat'
+
           card.energy -= 1
-          break
-
-        case 'trigger':
-          if(card.card_type === 'artifact')
-
-          if(card.card_type === 'spell')
+          card.overheat = true
+          this.effectTrigger(card.name)
 
           break
 
-        case 'normal':
+        case 'spell':
+          if (card.effect_type !== 'trigger' && 'permanent') return 'unable trigger effect'
+          this.effectTrigger(card.name)
+
           break
 
-        case 'permanent':
+        case 'item':
+          if (card.effect_type !== 'normal') return 'unable trigger effect'
+          this.effectTrigger(card.name)
           break
 
         default:
@@ -106,6 +111,10 @@ Game.prototype.activateCard = function(player, card_name){
       }
     }
   }
+}
+
+Game.prototype.attack = function () {
+
 }
 
 Game.prototype.battleFieldArrange = function (personal, opponent) {
@@ -144,17 +153,23 @@ Game.prototype.buildLife = function(player){
 Game.prototype.buildPlayer = function(player){ // player = client
   // attribute
   player.action_point = this.default.ap_max
+  player.atk_enchant = []
+  player.buff_action = []
+  player.role = {attacker: false, defender: false}
+
   player.deck_slot = {}
   player.deck_max = this.default.deck_max
   player.hand_max = this.default.hand_max
   player.life_max = this.default.life_max
   player.own_card = []
+
   // game fields
+  player.ALTAR = []
+  player.BATTLE = []
   player.DECK = []
+  player.GRAVE = []
   player.HAND = []
   player.LIFE = []
-  player.GRAVE = []
-  player.BATTLE = []
 
   console.log('player built')
 }
@@ -174,7 +189,8 @@ Game.prototype.drawCard = function(player){
   return card_name
 }
 
-Game.prototype.effectTrigger = function () {
+Game.prototype.effectTrigger = function (card_name) {
+  let card = this.default.all_card[card_name]
 
 }
 
@@ -300,6 +316,8 @@ io.on('connection', client => {
   })
 
   client.on('activateCard', (it, cb) => {
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+
     let rid = client._rid
     let curr = game.room[rid].counter
 
@@ -309,6 +327,21 @@ io.on('connection', client => {
       }
       else
         cb({ err: game.err.foe_turn})
+    }
+  })
+
+  client.on('attack', (it, cb) => {
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    if (game.room[rid]) {
+      if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: game.err.foe_turn })
+      if (client.action_point <= 0) return cb({err: game.err.no_ap})
+      if (!client.battle.length) return cb({err: 'no artifact to attack'})
+
+      cb({})
+      game.room[rid].player[1-curr].emit('', {})
     }
   })
 
@@ -363,6 +396,8 @@ io.on('connection', client => {
 
   // player draw card
   client.on('drawCard', (cb) => {
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+
     let rid = client._rid
     let curr = game.room[rid].counter
     if (game.room[rid]) {
@@ -391,6 +426,8 @@ io.on('connection', client => {
 
   // game turn finished
   client.on('finish', (cb) => {
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+
     let rid = client._rid
     let curr = game.room[rid].counter
 
@@ -462,9 +499,10 @@ io.on('connection', client => {
 
   // play card in your hand
   client.on('playHandCard', (it, cb) => {
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+
     let rid = client._rid
     let curr = game.room[rid].counter
-
     // !--
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid){
@@ -483,7 +521,7 @@ io.on('connection', client => {
 
   // play uncoverred card in life field
   client.on('playLifeCard', (msg, cb) => {
-
+    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
   })
 
   client.on('preload', (cb) => {
