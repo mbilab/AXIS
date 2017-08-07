@@ -117,6 +117,28 @@ Game.prototype.attack = function () {
 
 }
 
+Game.prototype.tracking = function (attacker, defender) {
+  attacker.emit('foeConceal', it => {
+    if(it.tracking){
+      this.conceal(attacker, defender)
+    }
+    else{
+
+    }
+  })
+}
+
+Game.prototype.conceal = function (attacker, defender) {
+  defender.emit('foeTracking', it => {
+    if(it.conceal){
+      this.tracking(attacker, defender)
+    }
+    else{
+
+    }
+  })
+}
+
 Game.prototype.battleFieldArrange = function (personal, opponent) {
   // personal >> target client running this function
   let player = {
@@ -330,7 +352,7 @@ io.on('connection', client => {
     }
   })
 
-  client.on('attack', (it, cb) => {
+  client.on('attack', (it) => {
     if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
 
     let rid = client._rid
@@ -340,9 +362,13 @@ io.on('connection', client => {
       if (client.action_point <= 0) return cb({err: game.err.no_ap})
       if (!client.battle.length) return cb({err: 'no artifact to attack'})
 
-      cb({})
-      game.room[rid].player[1-curr].emit('', {})
+      client.action_point -= 1
+      game.room[rid].player[1-curr].emit('foeAttack', it => {
+        if(it.conceal == true)
+          tracking = game.tracking(client, game.room[rid].player[1-curr])
+      })
     }
+
   })
 
   client.on('buildNewDeck', (it, cb) => {
