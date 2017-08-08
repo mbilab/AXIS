@@ -282,6 +282,30 @@ Game.prototype.actionExecute = function (actionType) {
   return dst_field
 }
 
+// !--
+// start an attack, get into attack phase
+Game.prototype.attack = function () {
+  socket.emit('attack', it => {
+    if(it.err) return (alert(it.err))
+  })
+}
+
+// conceal use for counter tracking
+Game.prototype.conceal = function () {
+  let card_pos = []
+  socket.emit('conceal', {card_pos: card_pos}, it => {
+    if(it.err) alert it.err
+  })
+}
+
+// tracking use for counter conceal and dodge
+Game.prototype.tracking = function () {
+  let card_pos = []
+  socket.emit('tracking', {card_pos: card_pos}, it => {
+    if(it.err) alert it.err
+  })
+}
+
 Game.prototype.battleFieldArrange = function (card_list, turn_end) { // turn_end >> you end this turn or you're gonna start a new turn
   let player = { personal: personal, opponent: opponent}
   for(let target in player){
@@ -548,15 +572,19 @@ const Player = function (obj) {
   for (let field of ['deckY', 'handY', 'lifeY', 'battleY', 'graveY'])
     this[`${field}loc`] = game.default.game_height - obj[field] / game.default.scale
 
-  this.deck = []
+  // attribute
   this.curr_deck = ''
   this.deck_slot = {}
   this.deck_slot.size = 3
   this.own_list = {}
+
+  // game field
+  this.altar = []
+  this.battle = []
+  this.deck = []
+  this.grave = []
   this.hand = []
   this.life = []
-  this.battle = []
-  this.grave = []
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -611,6 +639,25 @@ socket.on('buildLIFE', it => {
   }
   game.fixPos('personal', 'life')
 })
+
+// !--
+socket.on('foeAttack', cb => {
+  let dodge = null
+  cb({dodge: dodge})
+})
+
+socket.on('foeDodge', it => {
+  // change card & battle status after dodge
+})
+
+socket.on('foeConceal', it => {
+  // ..
+})
+
+socket.on('foeTracking', it => {
+  // ..
+})
+
 
 socket.on('foeBuiltLife', it => {
   for (let i = 0; i < 6; i++) {

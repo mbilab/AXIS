@@ -51,6 +51,7 @@ const Game = function(){
     item_max    : 2,//12,
     vanish_max  : 11,
     // player attribute
+    ad_base     : 1,
     ap_max      : 1,
     deck_max    : 10, // 50
     hand_max    : 7,
@@ -113,29 +114,15 @@ Game.prototype.activateCard = function (player, card_name) {
   }
 }
 
-Game.prototype.attack = function () {
+Game.prototype.attack = function (attacker, defender, outcome) {
+  // this.effectTrigger
+  //
+  if(outcome == false) return this.attack_phase = false
 
-}
+  defender.emit('beAttack', {damage: attacker.attack_damage}, it => {
+    for()
 
-Game.prototype.tracking = function (attacker, defender) {
-  attacker.emit('foeConceal', it => {
-    if(it.tracking){
-      this.conceal(attacker, defender)
-    }
-    else{
-
-    }
-  })
-}
-
-Game.prototype.conceal = function (attacker, defender) {
-  defender.emit('foeTracking', it => {
-    if(it.conceal){
-      this.tracking(attacker, defender)
-    }
-    else{
-
-    }
+    attacker.emit('attack', {foe_flip_card: it.card_list})
   })
 }
 
@@ -174,6 +161,7 @@ Game.prototype.buildLife = function(player){
 
 Game.prototype.buildPlayer = function(player){ // player = client
   // attribute
+  player.attack_damage = this.default.ad_base
   player.action_point = this.default.ap_max
   player.atk_enchant = []
   player.buff_action = []
@@ -352,7 +340,7 @@ io.on('connection', client => {
     }
   })
 
-  client.on('attack', (it) => {
+  client.on('attack', (it, cb) => {
     if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
 
     let rid = client._rid
@@ -364,12 +352,45 @@ io.on('connection', client => {
 
       client.action_point -= 1
       game.room[rid].player[1-curr].emit('foeAttack', it => {
-        if(it.conceal == true)
-          tracking = game.tracking(client, game.room[rid].player[1-curr])
+        if(it.dodge == true)
+          client.emit('foeDodge')
+        else
+          game.attack(client, game.room[rid].player[1-curr], true)
       })
     }
-
   })
+
+  client.on('tracking', (it, cb) => {
+    // it = cards' position we choose
+    // cb = reply success or not
+
+    let rid = client._rid
+    let curr = game.room[rid].counter
+
+    if (it.card_pos.length != 2) return cb({err: 'choose exact 2 cards'})
+    if ('vanish' !== client.hand[ it.card_pos[(0||1)] ]) return cb({err: 'please choose vanish'})
+
+    for(let i in it.card_pos)
+      client.grave.push(client.hand.splice(i, 1))
+
+    cb({msg: 'success'})
+    game.room[rid].player[1-curr].emit('foeTracking')
+  })
+
+  client.on('conceal', (it, cb) => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+
+    if (it.card_pos.length != 2) return cb({err: 'choose exact 2 cards'})
+    if ('vanish' !== client.hand[ it.card_pos[(0||1)] ]) return cb({err: 'please choose vanish'})
+
+    for(let i in it.card_pos)
+      client.grave.push(client.hand.splice(i, 1))
+
+    cb({msg: 'success'})
+    game.room[rid].player[curr].emit('foeConceal')
+  })
+
 
   client.on('buildNewDeck', (it, cb) => {
     // !--
