@@ -58,7 +58,7 @@ const Game = function(){
     life_max    : 6
   }
   this.err = {
-    atk_phase: 'not allow in attack phase'
+    atk_phase: 'atk phase'
     deck_null: 'choose a deck',
     dscnt    : 'opponent disconnect',
     foe_turn : 'waiting for opponent',
@@ -352,7 +352,7 @@ io.on('connection', client => {
 
       client.action_point -= 1
       game.room[rid].player[1-curr].emit('foeAttack', it => {
-        if(it.dodge == true)
+        if (it.dodge == true)
           client.emit('foeDodge')
         else
           game.attack(client, game.room[rid].player[1-curr], true)
@@ -367,10 +367,10 @@ io.on('connection', client => {
     let rid = client._rid
     let curr = game.room[rid].counter
 
-    if (it.card_pos.length != 2) return cb({err: 'choose exact 2 cards'})
-    if ('vanish' !== client.hand[ it.card_pos[(0||1)] ]) return cb({err: 'please choose vanish'})
+    if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
+    if ('vanish' !== client.hand[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
 
-    for(let i in it.card_pos)
+    for (let i in it.card_pick)
       client.grave.push(client.hand.splice(i, 1))
 
     cb({msg: 'success'})
@@ -381,10 +381,10 @@ io.on('connection', client => {
     let rid = client._rid
     let curr = game.room[rid].counter
 
-    if (it.card_pos.length != 2) return cb({err: 'choose exact 2 cards'})
-    if ('vanish' !== client.hand[ it.card_pos[(0||1)] ]) return cb({err: 'please choose vanish'})
+    if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
+    if ('vanish' !== client.hand[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
 
-    for(let i in it.card_pos)
+    for (let i in it.card_pick)
       client.grave.push(client.hand.splice(i, 1))
 
     cb({msg: 'success'})

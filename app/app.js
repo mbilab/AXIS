@@ -36,6 +36,8 @@ const Card = function (name, field, onClick, cover) {
   this.face.name = name
   this.field = field
 
+  this.stamp = false
+
   //-! comment needed
   if ('deck' === this.field)
     this.face.events.onInputDown.add(this.drawCard, this)
@@ -43,7 +45,7 @@ const Card = function (name, field, onClick, cover) {
 
 Card.prototype.activateCard = function () {
   socket.emit('activateCard', {name: this.face.name}, it => {
-    if(it.err) return game.text.setText(it.err)
+    if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
 
     // charge artifact effect (0 ap)
     // trigger artifact effect (0 ap)
@@ -98,7 +100,7 @@ Card.prototype.checkCard = function() {
 
 Card.prototype.drawCard = function() {
 	socket.emit('drawCard', it => {
-    if (it.err) return game.text.setText(it.err)
+    if (it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
 
     game.text.setText(`draw ${it.card_name}`)
     personal.hand.push(new Card(it.card_name, 'hand', true, false))
@@ -113,22 +115,25 @@ Card.prototype.drawCard = function() {
 }
 
 Card.prototype.playHandCard = function () {
+  this.stamp = true
   socket.emit('playHandCard', { name: this.face.name}, it => {
-    if (it.err) return game.text.setText(it.err)
+    if (it.err) return (it.err !== 'atk phase')? game.text.setText(it.err):(this.stamp = (this.stamp == false)? true: false)
+
     //!--
-    for (let i in personal.hand) {
-      if (personal.hand[i].face.name === this.face.name){
+    for (let [i, card] of personal.hand.entries()) {
+      if (card.face.name === this.face.name && card.stamp == true){
         let dst_field = game.actionExecute(it.action)
         let target = (it.owner === 'opponent')?(opponent):(personal)
         game.text.setText(`${it.action.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
 
-        personal.hand[i].inputEnabled = (target == opponent)?(false):(true)
-        target[dst_field].push(personal.hand[i])
+        card.inputEnabled = (target == opponent)?(false):(true)
+        target[dst_field].push(card)
         personal.hand.splice(i,1)
 	      target[dst_field][target[dst_field].length -1].field = dst_field
         target[dst_field][target[dst_field].length -1].changeInputFunction()
         game.fixPos('personal', 'hand')
         game.fixPos(it.owner, dst_field)
+        this.stamp = false
 
         break
       }
@@ -286,24 +291,30 @@ Game.prototype.actionExecute = function (actionType) {
 // start an attack, get into attack phase
 Game.prototype.attack = function () {
   socket.emit('attack', it => {
-    if(it.err) return (alert(it.err))
+    if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
+    // show conceal or tracking button
   })
 }
 
-// conceal use for counter tracking
-Game.prototype.conceal = function () {
-  let card_pos = []
-  socket.emit('conceal', {card_pos: card_pos}, it => {
-    if(it.err) alert it.err
+Game.prototype.concealOrTracking = function (action) {
+  // action >> conceal / tracking
+  // conceal use for counter tracking
+  // tracking use for counter conceal and dodge
+
+  this.cardChoose()
+  socket.emit(action, {card_pick: personal.card_pick}, it => {
+    if(it.err) return personal.card_pick = []
+
   })
 }
 
-// tracking use for counter conceal and dodge
-Game.prototype.tracking = function () {
-  let card_pos = []
-  socket.emit('tracking', {card_pos: card_pos}, it => {
-    if(it.err) alert it.err
-  })
+Game.prototype.cardChoose = function () {
+  for(let [i, card] of personal.hand.entries()){
+    if(card.stamp == true){
+      personal.card_pick.push(i)
+      card.stamp = false
+    }
+  }
 }
 
 Game.prototype.battleFieldArrange = function (card_list, turn_end) { // turn_end >> you end this turn or you're gonna start a new turn
@@ -411,7 +422,6 @@ Game.prototype.endTurn = function () {
 }
 
 //-! try this way
-
 //Game.prototype.endTurn = () => socket.emit('finish', it => this.text.setText(it.msg))
 
 Game.prototype.fixPos = function (player, field) {
@@ -468,7 +478,6 @@ Game.prototype.login = function () {
 }
 
 Game.prototype.pageInit = function () {
-
   // add general items
   for (let pageName in this.page) {
     for (let [index, elem] of this.page[pageName].entries()) {
@@ -573,6 +582,7 @@ const Player = function (obj) {
     this[`${field}loc`] = game.default.game_height - obj[field] / game.default.scale
 
   // attribute
+  this.card_pick = []
   this.curr_deck = ''
   this.deck_slot = {}
   this.deck_slot.size = 3
@@ -644,6 +654,7 @@ socket.on('buildLIFE', it => {
 socket.on('foeAttack', cb => {
   let dodge = null
   cb({dodge: dodge})
+  // show conceal or tracking button
 })
 
 socket.on('foeDodge', it => {
@@ -657,7 +668,6 @@ socket.on('foeConceal', it => {
 socket.on('foeTracking', it => {
   // ..
 })
-
 
 socket.on('foeBuiltLife', it => {
   for (let i = 0; i < 6; i++) {
