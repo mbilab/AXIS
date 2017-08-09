@@ -57,24 +57,6 @@ const Game = function(){
     hand_max    : 7,
     life_max    : 6
   }
-  this.err = {
-    atk_phase: 'atk phase',
-    deck_null: 'choose a deck',
-    dscnt    : 'opponent disconnect',
-    foe_turn : 'waiting for opponent',
-    hand_full: 'your hand is full',
-    leave    : 'opponent leave',
-    no_ap    : 'not enough action point',
-    pswd_err : 'wrong password',
-    usr_err  : 'no such user',
-    usr_exist: 'user name already exists'
-  }
-  this.msg = {
-    foe_turn : 'waiting for opponent',
-    join     : 'joining section...',
-    search   : 'searching for match...',
-    self_turn: 'your turn'
-  }
   this.pool = {}
   this.queue = []
   this.room = {}
@@ -194,7 +176,7 @@ Game.prototype.drawCard = function(player){
       player.HAND[player.HAND.length - 1].cover = false
     }
     else
-      card_name = this.err.hand_full
+      card_name = 'hand_full'
   }
   return card_name
 }
@@ -229,7 +211,7 @@ Game.prototype.playHandCard = function(player, opponent, card_name){
             return {action: 'equipArtifact', owner: 'personal'}
           }
           else
-            return {err: this.err.no_ap}
+            return {err: 'not enough action point'}
 
           break
 
@@ -249,12 +231,12 @@ Game.prototype.playHandCard = function(player, opponent, card_name){
             }
           }
           else
-            return {err: this.err.no_ap}
+            return {err: 'not enough action point'}
 
           break
 
         case 'vanish':
-          return {err: this.err.no_ap}
+          return {err: 'unable to use'}
           break
 
         default: break
@@ -326,7 +308,7 @@ io.on('connection', client => {
   })
 
   client.on('activateCard', (it, cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -336,18 +318,18 @@ io.on('connection', client => {
         let result = game.activateCard(client, it.name)
       }
       else
-        cb({ err: game.err.foe_turn})
+        cb({ err: 'waiting for opponent'})
     }
   })
 
   client.on('attack', (it, cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
     if (game.room[rid]) {
-      if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: game.err.foe_turn })
-      if (client.action_point <= 0) return cb({err: game.err.no_ap})
+      if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
+      if (client.action_point <= 0) return cb({err: 'not enough action point'})
       if (!client.battle.length) return cb({err: 'no artifact to attack'})
 
       client.action_point -= 1
@@ -412,7 +394,7 @@ io.on('connection', client => {
         game.buildPlayer(it)
         game.pool[client._fid] = it
         delete it._rid
-        it.emit('interrupt', {err: game.err.dscnt})
+        it.emit('interrupt', {err: 'opponent disconnect'})
       })
 
       delete game.room[rid]
@@ -422,7 +404,7 @@ io.on('connection', client => {
 
   // player draw card
   client.on('drawCard', (cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -432,7 +414,7 @@ io.on('connection', client => {
           let card_name = game.drawCard(client)
           let deck_empty
 
-          if(card_name !== game.err.hand_full){
+          if(card_name !== 'hand_full'){
             if(client.DECK.length == 0)
               deck_empty = true
 
@@ -440,19 +422,19 @@ io.on('connection', client => {
             game.room[rid].player[1-curr].emit('foeDrawCard', {deck_empty: deck_empty})
           }
           else
-            cb({err: game.err.hand_full})
+            cb({err: 'your handcard is full'})
         }
         else
-          cb({err: game.err.no_ap})
+          cb({err: 'not enough action point'})
       }
       else
-        cb({err: game.err.foe_turn })
+        cb({err: 'waiting for opponent' })
     }
   })
 
   // game turn finished
   client.on('finish', (cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -466,11 +448,11 @@ io.on('connection', client => {
         game.room[rid].counter = 1 - curr
         curr = game.room[rid].counter
 
-        cb({ msg: game.msg.foe_turn, card_list: card_arrange })
-        game.room[rid].player[curr].emit('turnStart', { msg: game.msg.self_turn, card_list: card_arrange })
+        cb({ msg: 'waiting for opponent', card_list: card_arrange })
+        game.room[rid].player[curr].emit('turnStart', { msg: 'your turn', card_list: card_arrange })
       }
       else
-        cb({msg: game.msg.foe_turn})
+        cb({msg: 'waiting for opponent'})
     }
   })
 
@@ -488,7 +470,7 @@ io.on('connection', client => {
 
     game.room[rid].player.map(it => {
       if(it._pid === fid)
-        it.emit('interrupt', {err: game.err.leave})
+        it.emit('interrupt', {err: 'opponent leave'})
 
       game.buildPlayer(it)
       game.pool[it._pid] = it
@@ -514,10 +496,10 @@ io.on('connection', client => {
           cb({deck_slot: client.deck_slot})
         }
         else
-          cb({err: game.err.pswd_err})
+          cb({err: 'wrong password'})
       }
       else{
-        cb({err: game.err.usr_err})
+        cb({err: 'no such user exists'})
 
       }
     })
@@ -525,7 +507,7 @@ io.on('connection', client => {
 
   // play card in your hand
   client.on('playHandCard', (it, cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -541,13 +523,13 @@ io.on('connection', client => {
         game.room[rid].player[1-curr].emit('foePlayHand', result)
       }
       else
-        cb({err: game.err.foe_turn})
+        cb({err: 'waiting for opponent'})
     }
   })
 
   // play uncoverred card in life field
   client.on('playLifeCard', (msg, cb) => {
-    if (this.attack_phase == true) return cb({ err: game.err.atk_phase})
+    if (this.attack_phase == true) return cb({ err: 'atk phase'})
   })
 
   client.on('preload', (cb) => {
@@ -560,7 +542,7 @@ io.on('connection', client => {
     let cards = app.db.collection('card')
     let deck = []
 
-    if(!it.curr_deck) return cb({err: game.err.deck_null})
+    if(!it.curr_deck) return cb({err: 'please choose a deck'})
 
     user.find({account: client._account}).toArray((err, rlt) => {
       deck = rlt[0].deck_slot[it.curr_deck].card_list
@@ -581,8 +563,8 @@ io.on('connection', client => {
         client._fid = opponent._pid
 
         game.room[rid] = {counter: 0, player: [opponent, client]}
-        game.room[rid].player[0].emit('joinGame', {msg: game.msg.join})
-        cb({msg: game.msg.join})
+        game.room[rid].player[0].emit('joinGame', {msg: 'joining match...'})
+        cb({msg: 'joining match...'})
 
         // game start
 
@@ -595,14 +577,14 @@ io.on('connection', client => {
         game.room[rid].player[1].emit('buildLIFE', JSON.stringify(game.room[rid].player[1].LIFE))
         game.room[rid].player[0].emit('foeBuiltLife', null)
 
-        game.room[rid].player[0].emit('gameStart', { msg: game.msg.self_turn })
-        game.room[rid].player[1].emit('gameStart', { msg: game.msg.foe_turn })
+        game.room[rid].player[0].emit('gameStart', { msg: 'your turn' })
+        game.room[rid].player[1].emit('gameStart', { msg: 'waiting for opponent' })
       }
       else{
         let pid = client._pid
         game.queue.push(client)
         delete game.pool.pid
-        cb({msg: game.msg.search})
+        cb({msg: 'searching for match...'})
       }
     })
   })
@@ -611,7 +593,7 @@ io.on('connection', client => {
     // !--
     let user = app.db.collection('user')
     user.find({account: it.acc}).toArray((err, rlt) => {
-      if(rlt.length) return cb({err: game.err.usr_exist})
+      if(rlt.length) return cb({err: 'user name exists'})
       let signup = {
         account: it.acc,
         passwd: it.passwd,
