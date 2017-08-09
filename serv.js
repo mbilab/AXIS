@@ -322,7 +322,7 @@ io.on('connection', client => {
     }
   })
 
-  client.on('attack', (it, cb) => {
+  client.on('attack', cb => {
     if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
@@ -330,10 +330,10 @@ io.on('connection', client => {
     if (game.room[rid]) {
       if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
       if (client.action_point <= 0) return cb({err: 'not enough action point'})
-      if (!client.battle.length) return cb({err: 'no artifact to attack'})
+      if (!client.BATTLE.length) return cb({err: 'no artifact to attack'})
 
       client.action_point -= 1
-      cb({msg: 'attack ... waiting opponent choice'})
+      cb({msg: 'attack'})
       game.room[rid].player[1-curr].emit('foeAttack')
     }
   })
