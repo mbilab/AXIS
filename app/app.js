@@ -292,7 +292,7 @@ Game.prototype.actionExecute = function (actionType) {
 Game.prototype.attack = function () {
   socket.emit('attack', it => {
     if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
-    // show conceal or tracking button
+    game.text.setText(it.msg)
   })
 }
 
@@ -302,7 +302,7 @@ Game.prototype.concealOrTracking = function (action) {
   // tracking use for counter conceal and dodge
 
   this.cardChoose()
-  socket.emit(action, {card_pick: personal.card_pick}, it => {
+  socket.emit('concealOrTracking', {action: action, card_pick: personal.card_pick}, it => {
     if(it.err) return personal.card_pick = []
 
   })
@@ -652,13 +652,7 @@ socket.on('buildLIFE', it => {
 
 // !--
 socket.on('foeAttack', cb => {
-  let dodge = null
-  cb({dodge: dodge})
-  // show conceal or tracking button
-})
-
-socket.on('foeDodge', it => {
-  // change card & battle status after dodge
+  // show conceal/give up button
 })
 
 socket.on('foeConceal', it => {
@@ -679,6 +673,7 @@ socket.on('foeBuiltLife', it => {
 socket.on('foeDrawCard', it => {
   opponent['hand'].push(new Card('unknown', 'hand', false, true))
   game.fixPos('opponent', 'hand')
+  game.text.setText('foe drawcard')
 
   if(it.deck_empty == true){
     opponent['deck'][0].face.kill()
@@ -693,6 +688,7 @@ socket.on('foePlayHand', it => {
   opponent['hand'][0].face.destroy()
   opponent['hand'].shift()
   target[dst_field].push(new Card(it.card_name, dst_field, (target == opponent)?(true):(false), false))
+  game.text.setText(`foe ${it.action.split(/(?=[A-Z])/)[0]} ${it.card_name}`)
   game.fixPos('opponent', 'hand')
   game.fixPos(owner, dst_field)
 })
