@@ -224,7 +224,7 @@ const Game = function () {
   }
 
   //-! need to discuss the logics below
-
+  /*
   this.page = {
     start: [
       {type: 'btn', x: this.default.game_width/2 - 100, y: this.default.game_height*0.75, img: 'login', func: this.changePage, next: 'login'},
@@ -259,6 +259,42 @@ const Game = function () {
       {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
       {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
     ]
+  }
+  */
+  this.page = {
+    start: {
+      login: {type: 'btn', x: this.default.game_width/2 - 100, y: this.default.game_height*0.75, img: 'login', func: this.changePage, next: 'login'},
+      sign_up: {type: 'btn', x: this.default.game_width/2 + 12, y: this.default.game_height*0.75, img: 'signup', func: this.changePage, next: 'sign_up'}
+    },
+    login: {
+      login: {type: 'html', id: 'login'},
+      back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'start'}
+    },
+    sign_up:{
+      sign_up: {type: 'html', id: 'signup'},
+      back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'start'}
+    },
+    lobby: {
+      deck_build: {type: 'btn', x: 0, y: 0, img: 'decks', func: this.changePage, next: 'deck_build'},
+      match_search: {type: 'btn', x: 0, y: 43, img: 'battle', func: this.changePage, next: 'match_search'}
+    },
+    deck_build: {
+      back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'lobby'}
+    },
+    deck_view: {
+      back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'deck_build'},
+      next: {type: 'btn', x: this.default.game_width - 50, y: this.default.game_height/2, img: 'nextBtn', func: this.shiftTexture, next: 'next'},
+      prev: {type: 'btn', x: 5, y: this.default.game_height/2, img: 'prevBtn', func: this.shiftTexture, next: 'prev'}
+    },
+    match_search: {
+      search: {type: 'btn', x: this.default.game_width - 88, y: this.default.game_height - 43, img: 'search', func: this.search, next: 'loading'},
+      back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'lobby'}
+    },
+    loading: {},
+    game: {
+      end_turn: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 - 44/this.default.scale, img: 'endTurn', func: this.endTurn, next: null},
+      leave: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'}
+    }
   }
   this.text = null
   this.text_group = null
@@ -341,11 +377,51 @@ Game.prototype.battleFieldArrange = function (card_list, turn_end) { // turn_end
 }
 
 Game.prototype.changePage = function (btn) {
+  /*
   let old_page = this.page[this.curr_page]
   let new_page = this.page[btn.next]
 
   if (old_page) {
     for (let i in old_page) {
+      if (Array.isArray(old_page[i])) {
+        if (old_page[i] === personal.deck || old_page[i] === opponent.deck)
+          old_page[i][0].face.kill()
+        else
+          for (let j in old_page[i])
+            old_page[i][j].face.destroy()
+      }
+      else {
+        if ('html' === old_page[i].type)
+          this.htmlSwap(old_page[i], 'bottom')
+        else
+          old_page[i].kill()
+      }
+    }
+  }
+
+  this.curr_page = btn.next
+
+  if (new_page) {
+    for (let i in new_page) {
+      if (!Array.isArray(new_page[i])) {
+        if ('html' === new_page[i].type)
+          this.htmlSwap(new_page[i], 'front')
+        else
+          new_page[i].reset(new_page[i].x, new_page[i].y)
+      }
+      else
+        if (new_page[i] === personal.deck || new_page[i] === opponent.deck)
+          new_page[i][0].face.reset(new_page[i][0].face.x, new_page[i][0].face.y)
+    }
+  }
+  */
+  let old_page = this.page[this.curr_page]
+  let new_page = this.page[btn.next]
+
+  if (old_page) {
+    console.log(old_page)
+    for (let i in old_page) {
+      console.log(i)
       if (Array.isArray(old_page[i])) {
         if (old_page[i] === personal.deck || old_page[i] === opponent.deck)
           old_page[i][0].face.kill()
@@ -402,11 +478,18 @@ Game.prototype.deckSlotInit = function (deck_slot) {
       personal.deck_slot[slot].img.inputEnabled = true
       personal.deck_slot[slot].card_list = deck_slot[slot].card_list
     }
+    /*
     this.page.match_search.push(personal.deck_slot[slot].img)
     this.page.match_search.push(personal.deck_slot[slot].text)
     this.page.deck_build.push(personal.deck_slot[slot].img)
     this.page.deck_build.push(personal.deck_slot[slot].text)
     this.page.deck_build.push(personal.deck_slot[slot].new_btn)
+    */
+    this.page.match_search[`${slot}_img`] = personal.deck_slot[slot].img
+    this.page.match_search[`${slot}_text`] = personal.deck_slot[slot].text
+    this.page.deck_build[`${slot}_img`] = personal.deck_slot[slot].img
+    this.page.deck_build[`${slot}_text`] = personal.deck_slot[slot].text
+    this.page.deck_build[`${slot}_btn`] = personal.deck_slot[slot].new_btn
   }
 }
 
@@ -478,6 +561,7 @@ Game.prototype.login = function () {
 }
 
 Game.prototype.pageInit = function () {
+  /*
   // add general items
   for (let pageName in this.page) {
     for (let [index, elem] of this.page[pageName].entries()) {
@@ -516,6 +600,51 @@ Game.prototype.pageInit = function () {
   }
 
   this.changePage({next: 'start'})
+  */
+  // add general items
+  for (let page_name in this.page) {
+    for (let elem_name in this.page[page_name]) {
+      let elem = this.page[page_name][elem_name]
+      if(elem != null){
+        let next = elem.next
+        if (elem.type!=='html') {
+          this.page[page_name][elem_name] = app.game.add.button(elem.x, elem.y, elem.img, elem.func, this)
+          this.page[page_name][elem_name].next = elem.next
+          this.page[page_name][elem_name].kill()
+        }
+      }
+    }
+  }
+
+  // add cards in deck view page
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 5; j++) {
+      let x = (this.default.game_width - (5*this.default.card_width + 4*84))/2 + (this.default.card_width + 84)*j
+      let y = this.default.game_height/2 - 40 - this.default.card_height + (80 + this.default.card_height)*i
+      let card = app.game.add.sprite(x, y, 'emptySlot')
+      card.describe = app.game.add.text(x, y + this.default.card_height, "aaa",  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
+      card.inputEnabled = true
+      card.events.onInputOver.add(function(){card.describe.reset(card.describe.x, card.describe.y)}, this)
+      card.events.onInputOut.add(function(){card.describe.kill()}, this)
+      card.kill()
+      card.describe.kill()
+      this.page.deck_view[`card${j+1+(i*5)}`] = card
+    }
+  }
+
+  // add cards in game page
+  for (let i of ['deck', 'hand', 'life', 'grave', 'battle']) {
+    this.page.game[`personal_${i}`] = personal[i]
+    this.page.game[`opponent_${i}`] = opponent[i]
+    if(i === 'deck') {
+      personal['deck'][0].face.kill()
+      opponent['deck'][0].face.kill()
+    }
+  }
+
+  console.log(this.page)
+
+  this.changePage({next: 'start'})
 }
 
 Game.prototype.search = function () {
@@ -533,8 +662,10 @@ Game.prototype.search = function () {
 
 Game.prototype.shiftTexture = function (btn) {
   let curr_deck = personal['deck_slot'][personal['curr_deck']]
-  let next_btn = this.page.deck_view[1]
-  let prev_btn = this.page.deck_view[2]
+  //let next_btn = this.page.deck_view[1]
+  //let prev_btn = this.page.deck_view[2]
+  let next_btn = this.page.deck_view.next
+  let prev_btn = this.page.deck_view.prev
   let start_pos = (curr_deck.page - 1)*10
   let card_list = curr_deck.card_list.slice(start_pos, start_pos + 10)
 
@@ -555,9 +686,19 @@ Game.prototype.shiftTexture = function (btn) {
     next_btn.reset(next_btn.x, next_btn.y)
 
   // change card texture
+  /*
   for (let i = this.view_pos; i < this.view_pos + 10; i++) {
     this.page.deck_view[i].loadTexture(card_list[i - this.view_pos])
     this.page.deck_view[i].describe.setText(card_list[i - this.view_pos])
+  }
+  */
+  let i = 1
+  for (let elem_name in this.page.deck_view){
+    if(elem_name === `card${i}`){
+      this.page.deck_view[elem_name].loadTexture(card_list[i - 1])
+      this.page.deck_view[elem_name].describe.setText(card_list[i - 1])
+      i++
+    }
   }
 }
 
@@ -599,45 +740,6 @@ const Player = function (obj) {
 
 //////////////////////////////////////////////////////////////////////////////////////
 
-// phaser utility
-/*
-function create(){
-  let top = (100*(1 - game.default.game_width/opt.screen.width)/2).toString()+'%'
-  let left = (100*(1 - game.default.game_height/opt.screen.height)/2).toString()+'%'
-  $('#game').css({top: top, left: left})
-
-  app.game.add.sprite(0, 0, 'background')
-  //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
-
-  game.text_group = app.game.add.group()
-  game.text = app.game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
-  game.text.fixedToCamera = true
-  game.text.cameraOffset.setTo(21, game.default.game_height/2 - 44/game.default.scale)
-  game.text_group.add(game.text)
-
-  socket.emit('init', it => {
-	  personal['deck'].push(new Card('cardback', 'deck', true, true))
-    opponent['deck'].push(new Card('cardback', 'deck', false, true))
-    game.fixPos('opponent', 'deck')
-    game.pageInit()
-  })
-}
-
-//-! integrate to the bottom socket emit function
-
-function preload(){
-  for(let type in opt.file.preload){
-    for(let elem in opt.file.preload[type])
-      app.game.load[type](elem, opt.file.preload[type][elem])
-  }
-}
-
-function render(){}
-function update(){}
-*/
-
-//////////////////////////////////////////////////////////////////////////////////////
-
 // socket server
 
 socket.on('buildLIFE', it => {
@@ -653,6 +755,7 @@ socket.on('buildLIFE', it => {
 // !--
 socket.on('foeAttack', cb => {
   // show conceal/give up button
+
 })
 
 socket.on('foeConceal', it => {
