@@ -37,7 +37,7 @@ const Card = function(name, card_type, effect_type){
   this.effect_type = effect_type
   this.energy = (card_type === 'artifact')? 2: 1
   this.name = name
-  (this.card_type === 'artifact')?(this.overheat = false):
+  if(this.card_type === 'artifact')this.overheat = false
   this.owner = null
 }
 
@@ -58,7 +58,7 @@ const Game = function(){
     life_max    : 6
   }
   this.err = {
-    atk_phase: 'atk phase'
+    atk_phase: 'atk phase',
     deck_null: 'choose a deck',
     dscnt    : 'opponent disconnect',
     foe_turn : 'waiting for opponent',
@@ -120,7 +120,7 @@ Game.prototype.attack = function (attacker, defender, outcome) {
   if(outcome == false) return this.attack_phase = false
 
   defender.emit('beAttack', {damage: attacker.attack_damage}, it => {
-    for()
+    //for()
 
     attacker.emit('attack', {foe_flip_card: it.card_list})
   })
@@ -351,46 +351,25 @@ io.on('connection', client => {
       if (!client.battle.length) return cb({err: 'no artifact to attack'})
 
       client.action_point -= 1
-      game.room[rid].player[1-curr].emit('foeAttack', it => {
-        if (it.dodge == true)
-          client.emit('foeDodge')
-        else
-          game.attack(client, game.room[rid].player[1-curr], true)
-      })
+      cb({msg: 'attack ... waiting opponent choice'})
+      game.room[rid].player[1-curr].emit('foeAttack')
     }
   })
 
-  client.on('tracking', (it, cb) => {
-    // it = cards' position we choose
-    // cb = reply success or not
-
+  client.on('concealOrTracking', (it, cb) => {
     let rid = client._rid
     let curr = game.room[rid].counter
+    let target = (it.action === 'conceal')?(1-curr):curr
 
     if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
-    if ('vanish' !== client.hand[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
+    if ('vanish' !== client.HAND[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
 
     for (let i in it.card_pick)
-      client.grave.push(client.hand.splice(i, 1))
+      client.GRAVE.push(client.HAND.splice(i, 1))
 
     cb({msg: 'success'})
-    game.room[rid].player[1-curr].emit('foeTracking')
+    game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`)
   })
-
-  client.on('conceal', (it, cb) => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-
-    if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
-    if ('vanish' !== client.hand[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
-
-    for (let i in it.card_pick)
-      client.grave.push(client.hand.splice(i, 1))
-
-    cb({msg: 'success'})
-    game.room[rid].player[curr].emit('foeConceal')
-  })
-
 
   client.on('buildNewDeck', (it, cb) => {
     // !--
