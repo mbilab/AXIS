@@ -259,12 +259,12 @@ const Game = function () {
       leave: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'leave', func: this.leaveMatch, next: 'lobby'},
       attack: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'attack', func: this.attack},
       conceal: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'conceal', func: this.concealOrTracking, next: 'conceal', req: true},
-      tracking: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'tracking', func: this.concealOrTracking, next: 'tracking', req: true}
+      tracking: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'tracking', func: this.concealOrTracking, next: 'tracking', req: true},
+      give_up: {type: 'btn', x: this.default.game_width - 132, y: this.default.game_height/2 + 11/this.default.scale, img: 'giveup', func: null, req: true}
     }
   }
   this.text = null
   this.text_group = null
-  this.view_pos = this.page.deck_view.length // include 2 slider buttons and 1 back button
 }
 
 Game.prototype.actionExecute = function (actionType) {
@@ -296,6 +296,21 @@ Game.prototype.attack = function () {
     if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
     game.text.setText(it.msg)
   })
+}
+
+Game.prototype.atkPhaseBtnArrange = function (action, status) { // action = conceal/tracking
+  let atk_btn = game.page.game.attack
+  let give_up = game.page.game.give_up
+  if(status == true){
+    atk_btn.kill()
+    game.page.game[action].reset(atk_btn.x, atk_btn.y)
+    give_up.reset(give_up.x, give_up.y)
+  }
+  else{
+    atk_btn.reset(atk_btn.x, atk_btn.y)
+    game.page.game[action].kill()
+    give_up.kill()
+  }
 }
 
 Game.prototype.concealOrTracking = function (btn) {
@@ -629,6 +644,9 @@ socket.on('buildLIFE', it => {
 socket.on('foeAttack', cb => {
   game.text.setText('foe attack')
   // show conceal/give up button
+  /*
+
+  */
 })
 
 socket.on('foeConceal', it => {
