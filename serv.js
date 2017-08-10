@@ -42,7 +42,6 @@ const Card = function(name, card_type, effect_type){
 }
 
 const Game = function(){
-  this.attack_phase = false
   this.default = {
     all_card    : {},
     // card type
@@ -147,7 +146,6 @@ Game.prototype.buildPlayer = function(player){ // player = client
   player.action_point = this.default.ap_max
   player.atk_enchant = []
   player.buff_action = []
-  player.role = {attacker: false, defender: false}
 
   player.deck_slot = {}
   player.deck_max = this.default.deck_max
@@ -308,12 +306,11 @@ io.on('connection', client => {
   })
 
   client.on('activateCard', (it, cb) => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
-
     let rid = client._rid
     let curr = game.room[rid].counter
 
-    if(game.room[rid]){
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
+    if (game.room[rid]) {
       if(game.room[rid].player[curr]._pid === client._pid){
         let result = game.activateCard(client, it.name)
       }
@@ -323,32 +320,44 @@ io.on('connection', client => {
   })
 
   client.on('attack', cb => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
-
     let rid = client._rid
     let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
     if (game.room[rid]) {
       if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
       if (client.action_point <= 0) return cb({err: 'not enough action point'})
       if (!client.BATTLE.length) return cb({err: 'no artifact to attack'})
 
+      game.room[rid].atk_phase = true
       client.action_point -= 1
       cb({msg: 'attack'})
       game.room[rid].player[1-curr].emit('foeAttack')
     }
   })
 
+  client.on('giveUp', cb => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let action = (client._pid === game.room[rid].player[curr]._pid)?'tracking':'conceal'
+    let target = game.room[rid].player[(action === 'tracking')?(1-curr):curr]
+    if (game.room[rid]) {
+      game.room[rid].atk_phase = false
+      cb({action: `${action}`})
+      target.emit('foeGiveUp', {action: action})
+    }
+  })
+
   client.on('concealOrTracking', (it, cb) => {
     let rid = client._rid
     let curr = game.room[rid].counter
-    let target = (it.action === 'conceal')?(1-curr):curr
-
+    let target = (it.action === 'conceal')?(curr):(1-curr)
+    /*
     if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
     if ('vanish' !== client.HAND[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
 
     for (let i in it.card_pick)
       client.GRAVE.push(client.HAND.splice(i, 1))
-
+    */
     cb({msg: 'success'})
     game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`)
   })
@@ -404,10 +413,9 @@ io.on('connection', client => {
 
   // player draw card
   client.on('drawCard', (cb) => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
-
     let rid = client._rid
     let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
     if (game.room[rid]) {
       if (game.room[rid].player[curr]._pid === client._pid) {
         if(client.action_point > 0){
@@ -434,12 +442,11 @@ io.on('connection', client => {
 
   // game turn finished
   client.on('finish', (cb) => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
 
     let rid = client._rid
     let curr = game.room[rid].counter
-
-    if(game.room[rid]){
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
+    if (game.room[rid]) {
       if(game.room[rid].player[curr]._pid === client._pid) {
         let card_arrange = game.battleFieldArrange(client, game.room[rid].player[1-curr])
 
@@ -452,7 +459,7 @@ io.on('connection', client => {
         game.room[rid].player[curr].emit('turnStart', { msg: 'your turn', card_list: card_arrange })
       }
       else
-        cb({msg: 'waiting for opponent'})
+        cb({err: 'waiting for opponent'})
     }
   })
 
@@ -507,10 +514,9 @@ io.on('connection', client => {
 
   // play card in your hand
   client.on('playHandCard', (it, cb) => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
-
     let rid = client._rid
     let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
     // !--
     if(game.room[rid]){
       if(game.room[rid].player[curr]._pid === client._pid){
@@ -529,7 +535,7 @@ io.on('connection', client => {
 
   // play uncoverred card in life field
   client.on('playLifeCard', (msg, cb) => {
-    if (this.attack_phase == true) return cb({ err: 'atk phase'})
+    if (this.attack_phase == true) return cb({ err: 'not allowed in atk phase'})
   })
 
   client.on('preload', (cb) => {
@@ -562,7 +568,7 @@ io.on('connection', client => {
         client._rid = rid
         client._fid = opponent._pid
 
-        game.room[rid] = {counter: 0, player: [opponent, client]}
+        game.room[rid] = {atk_phase: false, counter: 0, player: [opponent, client]}
         game.room[rid].player[0].emit('joinGame', {msg: 'joining match...'})
         cb({msg: 'joining match...'})
 

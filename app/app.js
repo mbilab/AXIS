@@ -3,12 +3,9 @@ const socket = io()
 // global variables (default values)
 
 const opt = {
-  //file: {}, //-! if function preload() could be changed, this might be removed
   screen: {
-    //-! rename to height
     height: document.documentElement.clientHeight, // browser height
-    //-! rename to width
-    width: document.documentElement.clientWidth // browser width
+    width : document.documentElement.clientWidth   // browser width
   }
 }
 
@@ -17,8 +14,6 @@ const opt = {
 const app = {
   game: null
 }
-
-//const app = {}
 
 //////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,7 +40,7 @@ const Card = function (name, field, onClick, cover) {
 
 Card.prototype.activateCard = function () {
   socket.emit('activateCard', {name: this.face.name}, it => {
-    if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
+    if(it.err) return game.text.setText(it.err)
 
     // charge artifact effect (0 ap)
     // trigger artifact effect (0 ap)
@@ -100,7 +95,7 @@ Card.prototype.checkCard = function() {
 
 Card.prototype.drawCard = function() {
 	socket.emit('drawCard', it => {
-    if (it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
+    if (it.err) return game.text.setText(it.err)
 
     game.text.setText(`draw ${it.card_name}`)
     personal.hand.push(new Card(it.card_name, 'hand', true, false))
@@ -117,8 +112,14 @@ Card.prototype.drawCard = function() {
 Card.prototype.playHandCard = function () {
   this.stamp = true
   socket.emit('playHandCard', { name: this.face.name}, it => {
-    if (it.err) return (it.err !== 'atk phase')? game.text.setText(it.err):(this.stamp = (this.stamp == false)? true: false)
+    if (it.err){
+      if(it.err == 'not allowed in atk phase')
+        this.stamp = (this.stamp == false)? true: false
+      else
+        game.text.setText(it.err)
 
+      return
+    }
     //!--
     for (let [i, card] of personal.hand.entries()) {
       if (card.face.name === this.face.name && card.stamp == true){
@@ -260,7 +261,7 @@ const Game = function () {
       attack: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'attack', func: this.attack},
       conceal: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'conceal', func: this.concealOrTracking, next: 'conceal', req: true},
       tracking: {type: 'btn', x: this.default.game_width - 121, y: this.default.game_height/2 + 11/this.default.scale, img: 'tracking', func: this.concealOrTracking, next: 'tracking', req: true},
-      give_up: {type: 'btn', x: this.default.game_width - 132, y: this.default.game_height/2 + 11/this.default.scale, img: 'giveup', func: null, req: true}
+      give_up: {type: 'btn', x: this.default.game_width - 220, y: this.default.game_height/2 + 11/this.default.scale, img: 'giveup', func: this.giveUp, req: true}
     }
   }
   this.text = null
@@ -295,22 +296,49 @@ Game.prototype.attack = function () {
   socket.emit('attack', it => {
     if(it.err) return (it.err !== 'atk phase')?game.text.setText(it.err):(null)
     game.text.setText(it.msg)
+    this.atkPhaseBtnArrange('self_attack_waiting')
   })
 }
 
-Game.prototype.atkPhaseBtnArrange = function (action, status) { // action = conceal/tracking
-  let atk_btn = game.page.game.attack
-  let give_up = game.page.game.give_up
-  if(status == true){
-    atk_btn.kill()
-    game.page.game[action].reset(atk_btn.x, atk_btn.y)
-    give_up.reset(give_up.x, give_up.y)
+// player_action_status
+Game.prototype.atkPhaseBtnArrange = function (str) { // action = conceal/tracking/waiting_${action}/giveup_${action}
+  let atk_btn = this.page.game.attack
+  let give_up = this.page.game.give_up
+  let action = str.split('_')
+
+  switch(action[2]){
+    case 'waiting':
+      this.text.setText(`${action[1]}... waiting opponent`)
+      this.page.game[action[1]].kill()
+      give_up.kill()
+      break
+
+    case 'giveup':
+      let elem1 = ((action[0] === 'self' && action[1] === 'conceal') || (action[0] === 'foe' && action[1] === 'tracking'))?'conceal':'tracking'
+      atk_btn.reset(atk_btn.x, atk_btn.y)
+      this.page.game[elem1].kill()
+      give_up.kill()
+      if(action[0] === 'self'){
+        this.text.setText((action[1] === 'conceal')?'be hit... waiting for opponent':'attack miss... your turn')
+      }
+      else{
+        this.text.setText((action[1] === 'conceal')?'attack hits... your turn':'dodge attack... waiting for opponent')
+      }
+      break
+
+    default:
+      let elem2 = (action[1] === 'conceal')?'tracking':'conceal'
+      atk_btn.kill()
+      this.page.game[elem2].reset(atk_btn.x, atk_btn.y)
+      give_up.reset(give_up.x, give_up.y)
+      break
   }
-  else{
-    atk_btn.reset(atk_btn.x, atk_btn.y)
-    game.page.game[action].kill()
-    give_up.kill()
-  }
+}
+
+Game.prototype.giveUp = function () {
+  socket.emit('giveUp', it => {
+    this.atkPhaseBtnArrange(`self_${it.action}_giveup`)
+  })
 }
 
 Game.prototype.concealOrTracking = function (btn) {
@@ -321,7 +349,7 @@ Game.prototype.concealOrTracking = function (btn) {
   this.cardChoose()
   socket.emit('concealOrTracking', {action: btn.next, card_pick: personal.card_pick}, it => {
     if(it.err) return personal.card_pick = []
-
+    this.atkPhaseBtnArrange(`self_${btn.next}_waiting`)
   })
 }
 
@@ -436,6 +464,7 @@ Game.prototype.effectTrigger = function () {
 
 Game.prototype.endTurn = function () {
   socket.emit('finish', it => {
+    if(it.err) return game.text.setText(it.err)
     this.battleFieldArrange(it.card_list, true)
     this.text.setText(it.msg)
   })
@@ -641,21 +670,25 @@ socket.on('buildLIFE', it => {
 })
 
 // !--
-socket.on('foeAttack', cb => {
+socket.on('foeAttack', it => {
   game.text.setText('foe attack')
-  // show conceal/give up button
-  /*
+  game.atkPhaseBtnArrange('foe_attack')
+})
 
-  */
+socket.on('foeGiveUp', it => {
+  game.atkPhaseBtnArrange(`foe_${it.action}_giveup`)
 })
 
 socket.on('foeConceal', it => {
-  // ..
+  game.text.setText('foe conceal')
+  game.atkPhaseBtnArrange('foe_conceal')
 })
 
 socket.on('foeTracking', it => {
-  // ..
+  game.text.setText('foe tracking')
+  game.atkPhaseBtnArrange('foe_tracking')
 })
+
 
 socket.on('foeBuiltLife', it => {
   for (let i = 0; i < 6; i++) {
