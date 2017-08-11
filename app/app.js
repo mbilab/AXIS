@@ -9,12 +9,6 @@ const opt = {
   }
 }
 
-//-! if only one key (game) in `app` would be used in the game logics, then the variable `app` could represent the app.game
-
-const app = {
-  game: null
-}
-
 //////////////////////////////////////////////////////////////////////////////////////
 
 // classes
@@ -25,121 +19,83 @@ const Card = function (name, field, onClick, cover) {
   this.cover = cover
 
   //-! need to refine, `app` => `app` and put the `game.default` values to `opt` (opt.game_default or others)
-  this.face = app.game.add.sprite(game.default.game_width * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
+  this.face = game.phaser.add.sprite(game.default.game_width * (1 - 1/13), personal['deckYloc'], this.cover ? 'cardback' : name)
 
   this.face.inputEnabled = onClick
   this.face.name = name
   this.field = field
 
   this.stamp = false
-
-  //-! comment needed
-  if ('deck' === this.field)
-    this.face.events.onInputDown.add(this.drawCard, this)
+  this.face.events.onInputDown.add(this.inputFunc, this)
 }
 
-Card.prototype.activateCard = function () {
-  socket.emit('activateCard', {name: this.face.name}, it => {
-    if(it.err) return game.text.setText(it.err)
-
-    // charge artifact effect (0 ap)
-    // trigger artifact effect (0 ap)
-    // active trigger spell effect (0 ap)
-    // normal item effect (place on artifact) (0 ap)
-    // remove permanent spell from field (1 ap)
-
-  })
-}
-
-Card.prototype.changeInputFunction = function () {
-  //-! what is input function ?
-
-  this.face.events.onInputDown.removeAll()
-
+Card.prototype.inputFunct = function () {
   switch (this.field) {
+    case 'altar' :
     case 'battle':
-      if ('artifact' === this.card_type)
-        this.face.events.onInputDown.add(this.activateCard, this)
+      socket.emit('activateCard', {name: this.face.name}, it => {
+        if(it.err) return game.text.setText(it.err)
+
+        // charge artifact effect (0 ap)
+        // trigger artifact effect (0 ap)
+        // active trigger spell effect (0 ap)
+        // normal item effect (place on artifact) (0 ap)
+        // remove permanent spell from field (1 ap)
+      })
       break
 
-    case 'deck':
-      this.face.events.onInputDown.add(this.drawCard, this)
-      break
+    case 'deck'  :
+	    socket.emit('drawCard', it => {
+        if (it.err) return game.text.setText(it.err)
 
-    case 'hand':
-      if ('vanish' !== this.face.name)
-        this.face.events.onInputDown.add(this.playHandCard, this)
-      break
-
-    case 'life':
-      if (this.cover) {
-        this.face.events.onInputDown.add(this.checkCard, this)
-        this.face.loadTexture('cardback')
-      }
-      else {
-        this.face.loadTexture(this.face.name)
-        if ('vanish' !== this.face.name)
-          this.face.events.onInputDown.add(this.playLifeCard, this)
-      }
-      break
-
-    default: break
-  }
-}
-
-Card.prototype.checkCard = function() {
-  //-! what is check card ?
-  game.text.setText(`This is ${this.face.name}`);
-  // change to => hover card for couple secs, and show the card's face sprite beside
-}
-
-Card.prototype.drawCard = function() {
-	socket.emit('drawCard', it => {
-    if (it.err) return game.text.setText(it.err)
-
-    game.text.setText(`draw ${it.card_name}`)
-    personal.hand.push(new Card(it.card_name, 'hand', true, false))
-    personal.hand[personal.hand.length - 1].changeInputFunction()
-    game.fixPos('personal', 'hand')
-
-    //-! change deck_status to boolean or numeric values, if there are only two status , then change `deck_status` to `deck_empty` (true / false) or others
-
-    if (it.deck_empty == true)
-      personal.deck[0].face.kill()
-  })
-}
-
-Card.prototype.playHandCard = function () {
-  this.stamp = true
-  socket.emit('playHandCard', { name: this.face.name}, it => {
-    if (it.err){
-      if(it.err == 'not allowed in atk phase')
-        this.stamp = (this.stamp == false)? true: false
-      else
-        game.text.setText(it.err)
-
-      return
-    }
-    //!--
-    for (let [i, card] of personal.hand.entries()) {
-      if (card.face.name === this.face.name && card.stamp == true){
-        let dst_field = game.actionExecute(it.action)
-        let target = (it.owner === 'opponent')?(opponent):(personal)
-        game.text.setText(`${it.action.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
-
-        card.inputEnabled = (target == opponent)?(false):(true)
-        target[dst_field].push(card)
-        personal.hand.splice(i,1)
-	      target[dst_field][target[dst_field].length -1].field = dst_field
-        target[dst_field][target[dst_field].length -1].changeInputFunction()
+        game.text.setText(`draw ${it.card_name}`)
+        personal.hand.push(new Card(it.card_name, 'hand', true, false))
         game.fixPos('personal', 'hand')
-        game.fixPos(it.owner, dst_field)
-        this.stamp = false
 
-        break
-      }
-    }
-  })
+        if (it.deck_empty == true)
+          personal.deck[0].face.kill()
+      })
+      break
+
+    case 'grave' :
+    case 'hand'  :
+      this.stamp = true
+      socket.emit('playHandCard', { name: this.face.name}, it => {
+        if (it.err){
+          if(it.err == 'not allowed in atk phase')
+            this.stamp = (this.stamp == false)? true: false
+          else
+            game.text.setText(it.err)
+          return
+        }
+        //!--
+        for (let [i, card] of personal.hand.entries()) {
+          if (card.face.name === this.face.name && card.stamp == true){
+            let dst_field = game.actionExecute(it.action)
+            let target = (it.owner === 'opponent')?(opponent):(personal)
+            game.text.setText(`${it.action.split(/(?=[A-Z])/)[0]} ${this.face.name}`)
+
+            card.inputEnabled = (target == opponent)?(false):(true)
+            target[dst_field].push(card)
+            personal.hand.splice(i,1)
+	          target[dst_field][target[dst_field].length -1].field = dst_field
+            game.fixPos('personal', 'hand')
+            game.fixPos(it.owner, dst_field)
+            this.stamp = false
+
+            break
+          }
+        }
+      })
+      break
+
+    case 'life'  :
+      if(this.cover == true)
+        game.text.setText(`This is ${this.face.name}`);
+      break
+
+    default      : break
+  }
 }
 
 const Deck = function (type, slot, name, card_list) {
@@ -153,21 +109,21 @@ const Deck = function (type, slot, name, card_list) {
 
   if ('deckList' === this.type) {
     this.index = slot.split("_")[1]
-    this.img = app.game.add.sprite((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, 'emptySlot')
-    this.img.events.onInputDown.add(this.changeFunc, this)
+    this.img = game.phaser.add.sprite((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, 'emptySlot')
+    this.img.events.onInputDown.add(this.inputFunc, this)
     this.img.kill()
 
-    this.text = app.game.add.text((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, ' ', {font: '20px Arial', fill:'#ffffff', align: 'left', stroke: '#000000', strokeThickness: 4})
+    this.text = game.phaser.add.text((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2, ' ', {font: '20px Arial', fill:'#ffffff', align: 'left', stroke: '#000000', strokeThickness: 4})
     this.text.kill()
 
-    this.new_btn = app.game.add.button((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2 + 110, 'new', this.buildNewDeck, this)
+    this.new_btn = game.phaser.add.button((game.default.game_width-232)/2 + 84*(this.index-1), game.default.game_height/2 + 110, 'new', this.randomDeck, this)
     this.new_btn.kill()
   }
 }
 
-Deck.prototype.buildNewDeck = function () {
+Deck.prototype.randomDeck = function () {
   // !--
-  socket.emit('buildNewDeck', { slot: this.slot }, it => {
+  socket.emit('randomDeck', { slot: this.slot }, it => {
     console.log(it.newDeck)
     this.card_list = it.newDeck
     this.img.loadTexture('cardback')
@@ -177,35 +133,28 @@ Deck.prototype.buildNewDeck = function () {
   })
 }
 
-Deck.prototype.changeFunc = function (){
-  //-! what is change fucntion ?
-
+Deck.prototype.inputFunc = function (){
   switch (game.curr_page) {
     case 'deck_build':
-      this.viewDeck()
+      game.changePage({ next: 'deck_view' })
+      if (personal.curr_deck !== this.slot) {
+        personal.curr_deck = this.slot
+        game.text.setText(`${this.name}`)
+      }
+      game.shiftTexture({ next: 'in' })
       break
 
     case 'match_search':
-      this.chooseDeck()
+      if (personal.curr_deck !== this.slot) {
+        personal.curr_deck = this.slot
+        game.text.setText(`${this.name}`)
+      }
       break
 
     default:
       alert(game.curr_page)
       break
   }
-}
-
-Deck.prototype.chooseDeck = function () {
-  if (personal.curr_deck !== this.slot) {
-    personal.curr_deck = this.slot
-    game.text.setText(`${this.name}`)
-  }
-}
-
-Deck.prototype.viewDeck = function () {
-  game.changePage({ next: 'deck_view' })
-  this.chooseDeck()
-  game.shiftTexture({ next: 'in' })
 }
 
 const Game = function () {
@@ -534,7 +483,7 @@ Game.prototype.pageInit = function () {
       if(elem != null){
         let next = elem.next
         if (elem.type!=='html') {
-          this.page[page_name][elem_name] = app.game.add.button(elem.x, elem.y, elem.img, elem.func, this)
+          this.page[page_name][elem_name] = game.phaser.add.button(elem.x, elem.y, elem.img, elem.func, this)
           if(elem.next) this.page[page_name][elem_name].next = elem.next
           if(elem.req) this.page[page_name][elem_name].req = elem.req
           this.page[page_name][elem_name].kill()
@@ -548,8 +497,8 @@ Game.prototype.pageInit = function () {
     for (let j = 0; j < 5; j++) {
       let x = (this.default.game_width - (5*this.default.card_width + 4*84))/2 + (this.default.card_width + 84)*j
       let y = this.default.game_height/2 - 40 - this.default.card_height + (80 + this.default.card_height)*i
-      let card = app.game.add.sprite(x, y, 'emptySlot')
-      card.describe = app.game.add.text(x, y + this.default.card_height, "",  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
+      let card = game.phaser.add.sprite(x, y, 'emptySlot')
+      card.describe = game.phaser.add.text(x, y + this.default.card_height, "",  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
       card.inputEnabled = true
       card.events.onInputOver.add(function(){card.describe.reset(card.describe.x, card.describe.y)}, this)
       card.events.onInputOut.add(function(){card.describe.kill()}, this)
@@ -661,11 +610,9 @@ const Player = function (obj) {
 
 socket.on('buildLIFE', it => {
   var life = JSON.parse(it)
-
-  for (let i in life) {
+  for (let i in life)
     personal['life'].push(new Card(life[i].name, 'life', true, true))
-    personal['life'][i].changeInputFunction()
-  }
+
   game.fixPos('personal', 'life')
 })
 
@@ -753,22 +700,22 @@ const opponent = new Player({deckY:758, handY:648, lifeY:758, battleY:538, grave
 
 socket.emit('preload', res => {
   //opt.file.preload = it
-  //app.game = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render: render})
+  //game.phaser = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {preload: preload, create: create, update: update, render: render})
 
   //-! try this way, and rename the param `it` to `res` or other
 
 
-  app.game = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {
+  game.phaser = new Phaser.Game(game.default.game_width, game.default.game_height, Phaser.Canvas, 'game', {
     create: () => {
       let top = (100*(1 - game.default.game_width/opt.screen.width)/2).toString()+'%'
       let left = (100*(1 - game.default.game_height/opt.screen.height)/2).toString()+'%'
       $('#game').css({top: top, left: left})
 
-      app.game.add.sprite(0, 0, 'background')
+      game.phaser.add.sprite(0, 0, 'background')
       //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
-      game.text_group = app.game.add.group()
-      game.text = app.game.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+      game.text_group = game.phaser.add.group()
+      game.text = game.phaser.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
       game.text.fixedToCamera = true
       game.text.cameraOffset.setTo(21, game.default.game_height/2 - 44/game.default.scale)
       game.text_group.add(game.text)
@@ -784,7 +731,7 @@ socket.emit('preload', res => {
     preload: () => {
       for (let type in res)
         for (let elem in res[type])
-          app.game.load[type](elem, res[type][elem])
+          game.phaser.load[type](elem, res[type][elem])
     },
     render: () => {},
     update: () => {}
