@@ -48,7 +48,7 @@ const Game = function(){
     artifact_max: 5,//13,
     spell_max   : 3,//14,
     item_max    : 2,//12,
-    vanish_max  : 11,
+    vanish_max  : 4,//11
     // player attribute
     ad_base     : 1,
     ap_max      : 1,
@@ -181,7 +181,6 @@ Game.prototype.drawCard = function(player){
 
 Game.prototype.effectTrigger = function (card_name) {
   let card = this.default.all_card[card_name]
-
 }
 
 Game.prototype.idGenerate = function(length){
@@ -234,7 +233,7 @@ Game.prototype.playHandCard = function(player, opponent, card_name){
           break
 
         case 'vanish':
-          return {err: 'unable to use'}
+          return {err: 'only allow in atk phase'}
           break
 
         default: break
@@ -249,8 +248,8 @@ Game.prototype.randomDeck = function(){
   let card = {
     artifact: [],
     spell: [],
-    item: []//,
-    //vanish: []
+    item: [],
+    vanish: []
   }
   let deck = []
 
@@ -263,13 +262,13 @@ Game.prototype.randomDeck = function(){
   }
 
   for(let type in card){
-    //if(type !== 'vanish'){
+    if(type !== 'vanish'){
       let random = (this.shuffle(card[type])).slice(0, game.default[`${type}_max`])
       deck = deck.concat(random)
-    //}
-    //else
-      //for(let i = 0; i < game.default[`${type}Max`]; i++)
-        //deck.push(card.vanish[0])
+    }
+    else
+      for(let i = 0; i < game.default[`${type}_max`]; i++)
+        deck.push(card.vanish[0])
   }
 
   return deck
@@ -362,7 +361,7 @@ io.on('connection', client => {
     game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`)
   })
 
-  client.on('buildNewDeck', (it, cb) => {
+  client.on('randomDeck', (it, cb) => {
     // !--
     console.log(`build new deck_${it.slot}`)
     let newDeck = game.randomDeck()

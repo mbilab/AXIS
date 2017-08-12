@@ -294,11 +294,19 @@ Game.prototype.giveUp = function () {
 Game.prototype.concealOrTracking = function (btn) {
   // action >> conceal / tracking
   // conceal use for counter tracking
-  // tracking use for counter conceal and dodge
+  // tracking use for counter conceal
 
   this.cardChoose()
   socket.emit('concealOrTracking', {action: btn.next, card_pick: personal.card_pick}, it => {
+    /*
     if(it.err) return personal.card_pick = []
+    for(let i of personal.card_pick){
+      personal.grave.push(personal.hand[i])
+      personal.hand.splice(i, 1)
+    }
+    */
+    this.fixPos('personal', 'hand')
+    this.fixPos('personal', 'grave')
     this.atkPhaseBtnArrange(`self_${btn.next}_waiting`)
   })
 }
@@ -564,8 +572,8 @@ Game.prototype.shiftTexture = function (btn) {
   let index = 1
   for (let elem_name in this.page.deck_view){
     if(elem_name === `card_${index}`){
-      this.page.deck_view[elem_name].loadTexture( (card_list[index - 1])?card_list[index - 1]:'emptySlot' )
-      this.page.deck_view[elem_name].describe.setText( (card_list[index - 1])?card_list[index - 1]:' ' )
+      this.page.deck_view[elem_name].loadTexture( (card_list[index - 1])?card_list[index - 1]:(null)/*'emptySlot'*/ )
+      this.page.deck_view[elem_name].describe.setText( (card_list[index - 1])?card_list[index - 1]:'' )
       index++
     }
   }
