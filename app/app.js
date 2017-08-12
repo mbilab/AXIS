@@ -29,7 +29,7 @@ const Card = function (name, field, onClick, cover) {
   this.face.events.onInputDown.add(this.inputFunc, this)
 }
 
-Card.prototype.inputFunct = function () {
+Card.prototype.inputFunc =  function () {
   switch (this.field) {
     case 'altar' :
     case 'battle':
@@ -196,8 +196,8 @@ const Game = function () {
     },
     deck_view: {
       back: {type: 'btn', x: 0, y: this.default.game_height - 43, img: 'back', func: this.changePage, next: 'deck_build'},
-      next: {type: 'btn', x: this.default.game_width - 50, y: this.default.game_height/2, img: 'nextBtn', func: this.shiftTexture, next: 'next'},
-      prev: {type: 'btn', x: 5, y: this.default.game_height/2, img: 'prevBtn', func: this.shiftTexture, next: 'prev'}
+      next: {type: 'btn', x: this.default.game_width - 200, y: this.default.game_height/2 + 70, img: 'nextBtn', func: this.shiftTexture, next: 'next'},
+      prev: {type: 'btn', x: 155, y: this.default.game_height/2 + 70, img: 'prevBtn', func: this.shiftTexture, next: 'prev'}
     },
     match_search: {
       search: {type: 'btn', x: this.default.game_width - 88, y: this.default.game_height - 43, img: 'search', func: this.search, next: 'loading'},
@@ -213,6 +213,7 @@ const Game = function () {
       give_up: {type: 'btn', x: this.default.game_width - 220, y: this.default.game_height/2 + 11/this.default.scale, img: 'giveup', func: this.giveUp, req: true}
     }
   }
+  this.phaser = null
   this.text = null
   this.text_group = null
 }
@@ -538,13 +539,15 @@ Game.prototype.shiftTexture = function (btn) {
   let curr_deck = personal['deck_slot'][personal['curr_deck']]
   let next_btn = this.page.deck_view.next
   let prev_btn = this.page.deck_view.prev
-  let start_pos = (curr_deck.page - 1)*10
-  let card_list = curr_deck.card_list.slice(start_pos, start_pos + 10)
 
   // set current texture page
   if (btn.next === 'next') curr_deck.page += 1
   if (btn.next === 'prev') curr_deck.page -= 1
   if (btn.next === 'in') curr_deck.page = 1
+
+
+  let start_pos = (curr_deck.page - 1)*10
+  let card_list = curr_deck.card_list.slice(start_pos, start_pos + 10)
 
   // show or hide shift button
   if (curr_deck.page == 1)
@@ -552,7 +555,7 @@ Game.prototype.shiftTexture = function (btn) {
   else
     prev_btn.reset(prev_btn.x, prev_btn.y)
 
-  if (curr_deck.page == curr_deck.card_list.length/10)
+  if (curr_deck.card_list.length - start_pos <= 10)
     next_btn.kill()
   else
     next_btn.reset(next_btn.x, next_btn.y)
@@ -561,8 +564,8 @@ Game.prototype.shiftTexture = function (btn) {
   let index = 1
   for (let elem_name in this.page.deck_view){
     if(elem_name === `card_${index}`){
-      this.page.deck_view[elem_name].loadTexture(card_list[index - 1])
-      this.page.deck_view[elem_name].describe.setText(card_list[index - 1])
+      this.page.deck_view[elem_name].loadTexture( (card_list[index - 1])?card_list[index - 1]:'emptySlot' )
+      this.page.deck_view[elem_name].describe.setText( (card_list[index - 1])?card_list[index - 1]:' ' )
       index++
     }
   }
