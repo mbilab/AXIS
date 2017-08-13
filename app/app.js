@@ -59,12 +59,10 @@ Card.prototype.inputFunc =  function () {
 
     case 'grave' :
     case 'hand'  :
-      this.stamp = true
+      this.stamp = (this.stamp == false)?(true):(false)
       socket.emit('playHandCard', { name: this.face.name}, it => {
         if (it.err){
-          if(it.err == 'not allowed in atk phase')
-            this.stamp = (this.stamp == false)? true: false
-          else
+          if(it.err !== 'not allowed in atk phase')
             game.text.setText(it.err)
           return
         }
@@ -298,15 +296,22 @@ Game.prototype.concealOrTracking = function (btn) {
 
   this.cardChoose()
   socket.emit('concealOrTracking', {action: btn.next, card_pick: personal.card_pick}, it => {
-    /*
-    if(it.err) return personal.card_pick = []
-    for(let i of personal.card_pick){
-      personal.grave.push(personal.hand[i])
-      personal.hand.splice(i, 1)
+
+    if(it.err) {
+      this.text.setText(it.err)
+      personal.card_pick = []
+      return
     }
-    */
+
+    for(let [i, loc] of personal.card_pick.entries()){
+      if(personal.card_pick[i-1] && (loc > personal.card_pick[i-1]) ){loc = loc - 1}
+      personal.grave.push(personal.hand[loc])
+      personal.hand[loc].face.kill()
+      personal.hand.splice(loc, 1)
+    }
     this.fixPos('personal', 'hand')
     this.fixPos('personal', 'grave')
+
     this.atkPhaseBtnArrange(`self_${btn.next}_waiting`)
   })
 }
@@ -639,11 +644,29 @@ socket.on('foeGiveUp', it => {
 
 socket.on('foeConceal', it => {
   game.text.setText('foe conceal')
+
+  for(let i = 0; i < it.length; i ++){
+    opponent.grave.push(new Card('vanish', 'grave', false, false))
+    opponent.hand[0].face.kill()
+    opponent.hand.shift()
+  }
+  game.fixPos('opponent', 'hand')
+  game.fixPos('opponent', 'grave')
+
   game.atkPhaseBtnArrange('foe_conceal')
 })
 
 socket.on('foeTracking', it => {
   game.text.setText('foe tracking')
+
+  for(let i = 0; i < it.length; i ++){
+    opponent.grave.push(new Card('vanish', 'grave', false, false))
+    opponent.hand[0].face.kill()
+    opponent.hand.shift()
+  }
+  game.fixPos('opponent', 'hand')
+  game.fixPos('opponent', 'grave')
+
   game.atkPhaseBtnArrange('foe_tracking')
 })
 

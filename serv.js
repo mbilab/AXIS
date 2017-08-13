@@ -61,6 +61,14 @@ const Game = function(){
   this.room = {}
 }
 
+Game.prototype.fieldTracker = function (player, field) {
+  let list = []
+  for(let card of player[field]){
+    list.push(card.name)
+  }
+  console.log(`${player._account} ${list}`)
+}
+
 Game.prototype.activateCard = function (player, card_name) {
   for (let i in player.BATTLE) {
     let card = player.BATTLE[i]
@@ -146,6 +154,7 @@ Game.prototype.buildPlayer = function(player){ // player = client
   player.action_point = this.default.ap_max
   player.atk_enchant = []
   player.buff_action = []
+  player.first_conceal = false
 
   player.deck_slot = {}
   player.deck_max = this.default.deck_max
@@ -330,6 +339,7 @@ io.on('connection', client => {
       game.room[rid].atk_phase = true
       client.action_point -= 1
       cb({msg: 'attack'})
+      game.room[rid].player[1-curr].first_conceal = true
       game.room[rid].player[1-curr].emit('foeAttack')
     }
   })
@@ -350,15 +360,22 @@ io.on('connection', client => {
     let rid = client._rid
     let curr = game.room[rid].counter
     let target = (it.action === 'conceal')?(curr):(1-curr)
-    /*
-    if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
-    if ('vanish' !== client.HAND[ it.card_pick[(0||1)] ]) return cb({err: 'please choose vanish'})
+
+    if(client.first_conceal){
+      if (it.card_pick.length != 1) return cb({err: 'choose exact 1 card'})
+      if ('vanish' !== client.HAND[it.card_pick[0]].name) return cb({err: 'please choose vanish'})
+      client.first_conceal = false
+    }
+    else{
+      if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
+      if ('vanish' !== client.HAND[it.card_pick[(0||1)]].name) return cb({err: 'please choose vanish'})
+    }
 
     for (let i in it.card_pick)
       client.GRAVE.push(client.HAND.splice(i, 1))
-    */
+
     cb({msg: 'success'})
-    game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`)
+    game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`, {length: it.card_pick.length})
   })
 
   client.on('randomDeck', (it, cb) => {
@@ -437,6 +454,7 @@ io.on('connection', client => {
       else
         cb({err: 'waiting for opponent' })
     }
+    //game.fieldTracker(client,'HAND')
   })
 
   // game turn finished
@@ -530,6 +548,7 @@ io.on('connection', client => {
       else
         cb({err: 'waiting for opponent'})
     }
+    //game.fieldTracker(client,'HAND')
   })
 
   // play uncoverred card in life field
