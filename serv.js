@@ -1,6 +1,7 @@
-//global variables (default values)
+//////////////////////////////////////////////////////////////////////////////////
 
-const async = require('async')
+// global variable
+
 const express = require('express')
 const fs = require('fs')
 const http = require('http')
@@ -27,18 +28,18 @@ const app = {
   }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
 
 // classes
 
-const Card = function(name, card_type, effect_type){
-  this.card_type = card_type
-  this.cover = true
-  this.effect_type = effect_type
-  this.energy = (card_type === 'artifact')? 2: 1
-  this.name = name
-  if(this.card_type === 'artifact')this.overheat = false
-  this.owner = null
+const Card = function(init){
+  this.card_type = init.card_type
+  this.energy = (this.card_type === 'artifact')? 2: 1
+  this.field = init.field
+  this.name = init.name
+  if(this.card_type === 'artifact') this.overheat = false
+  this.owner = init.owner
+  this.curr_own = init.owner
 }
 
 const Game = function(){
@@ -52,7 +53,7 @@ const Game = function(){
     // player attribute
     ad_base     : 1,
     ap_max      : 1,
-    deck_max    : 10, // 50
+    deck_max    : 14, // 50
     hand_max    : 7,
     life_max    : 6
   }
@@ -61,358 +62,128 @@ const Game = function(){
   this.room = {}
 }
 
-Game.prototype.fieldTracker = function (player, field) {
-  let list = []
-  for(let card of player[field]){
-    list.push(card.name)
-  }
-  console.log(`${player._account} ${list}`)
-}
-
-Game.prototype.activateCard = function (player, card_name) {
-  for (let i in player.BATTLE) {
-    let card = player.BATTLE[i]
-    if (card.name === card_name) {
-      switch (card.card_type) {
-        case 'artifact':
-          if (card.effect_type !== 'charge' && 'trigger') return 'unable trigger effect'
-          if (card.energy == 0) return 'not enough energy'
-          if (card.overheat == true) return 'artifact overheat'
-
-          card.energy -= 1
-          card.overheat = true
-          this.effectTrigger(card.name)
-
-          break
-
-        case 'spell':
-          if (card.effect_type !== 'trigger' && 'permanent') return 'unable trigger effect'
-          this.effectTrigger(card.name)
-
-          break
-
-        case 'item':
-          if (card.effect_type !== 'normal') return 'unable trigger effect'
-          this.effectTrigger(card.name)
-          break
-
-        default:
-          break
-      }
-    }
-  }
-}
-
-Game.prototype.attack = function (attacker, defender, outcome) {
-  // this.effectTrigger
-  //
-  if(outcome == false) return this.attack_phase = false
-
-  defender.emit('beAttack', {damage: attacker.attack_damage}, it => {
-    //for()
-
-    attacker.emit('attack', {foe_flip_card: it.card_list})
-  })
-}
-
-Game.prototype.battleFieldArrange = function (personal, opponent) {
-  // personal >> target client running this function
-  let player = {
-    personal: personal,
-    opponent: opponent
-  }
-  let card_arrange = {
-    personal: {},
-    opponent: {}
-  }
-
-  for(let name in player){
-    for(let i in player[name].BATTLE){
-      let card = player[name].BATTLE[i]
-      if(card.type === 'artifact'){
-        card.overheat = false
-        if(card.energy == 0){
-          card_arrange[name][card.name] = (card.owner === personal._pid)?'peronsal':'opponent'
-          player[name].GRAVE.push(player[name].BATTLE.splice(i, 1))
-        }
-      }
-    }
-  }
-
-  return card_arrange
-}
-
-Game.prototype.buildLife = function(player){
-  for(let i = 0; i < player.life_max; i++){
-    player.LIFE.push(player.DECK.pop())
-  }
-}
-
-Game.prototype.buildPlayer = function(player){ // player = client
+Game.prototype.buildPlayer = function (client) {
   // attribute
-  player.attack_damage = this.default.ad_base
-  player.action_point = this.default.ap_max
-  player.atk_enchant = []
-  player.buff_action = []
-  player.first_conceal = false
+  client.attack_damage = game.default.ad_base
+  client.action_point = game.default.ap_max
+  client.atk_enchant = []
+  client.buff_action = []
+  client.first_conceal = false
 
-  player.deck_slot = {}
-  player.deck_max = this.default.deck_max
-  player.hand_max = this.default.hand_max
-  player.life_max = this.default.life_max
-  player.own_card = []
+  client.deck_slot = {}
+  client.deck_max = game.default.deck_max
+  client.hand_max = game.default.hand_max
+  client.life_max = game.default.life_max
 
-  // game fields
-  player.ALTAR = []
-  player.BATTLE = []
-  player.DECK = []
-  player.GRAVE = []
-  player.HAND = []
-  player.LIFE = []
-
-  console.log('player built')
+  client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
+  client.curr_deck = []
 }
 
-Game.prototype.drawCard = function(player){
-  let card_name
-  if(player.DECK.length > 0 ){
-    if(player.HAND.length < 7){
-      player.action_point -= 1
-      card_name = player.DECK[player.DECK.length - 1].name
-      player.HAND.push(player.DECK.pop())
-      player.HAND[player.HAND.length - 1].cover = false
-    }
-    else
-      card_name = 'hand_full'
+/*
+param = {
+  personal: {
+    id:
   }
-  return card_name
 }
 
-Game.prototype.effectTrigger = function (card_name) {
-  let card = this.default.all_card[card_name]
+rlt = {
+  id: {
+
+  },
+
+}
+*/
+// personal >> who own this card currently
+Game.prototype.cardMove = function (personal, opponent, rlt) {
+  let player = {personal: personal, opponent: opponent}
+  let param = {personal: {}, opponent: {}}
+
+  console.log(personal._pid, ' ', opponent._pid)
+
+  for (let id in rlt) {
+    let card = game.room[personal._rid].cards[id]
+
+    // owner and attribute adjust, rlt[id].new_own set here when the card will be into grave
+    rlt[id].curr_own = 'personal'
+    if(!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
+    if(!rlt[id].to) rlt[id].to = 'grave'
+    rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
+
+    // move card
+    rlt[id].from = card.field
+    personal.card_ammount[rlt[id].from] -= 1
+    card.field = rlt.to
+    player[rlt[id].new_own].card_ammount[rlt[id].to] += 1
+    card.curr_own = player[rlt[id].new_own]._pid
+
+    // build return object
+    param.personal[id] = {}
+    Object.assign(param.personal[id], rlt[id])
+
+    param.opponent[id] = {}
+    rlt[id].curr_own = (rlt[id].curr_own === 'personal')? 'opponent' : 'personal'
+    rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
+    Object.assign(param.opponent[id], rlt[id])
+  }
+  return param
 }
 
-Game.prototype.idGenerate = function(length){
-  let text = ""
+Game.prototype.checkCardEnergy = function () {
+
+}
+
+Game.prototype.idGenerate = function (length) {
+  let id = ""
   let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-
   for(let i = 0; i < length; i++ )
-    text += possible.charAt(Math.floor(Math.random() * possible.length))
-
-  return text
+    id += possible.charAt(Math.floor(Math.random() * possible.length))
+  return id
 }
 
-Game.prototype.playHandCard = function(player, opponent, card_name){
-  // !--
-  for(let i in player.HAND){
-    if(player.HAND[i].name === card_name){
-      let target = (player.HAND[i].owner === player._pid)? (player): (opponent)
-      let owner = (target == player)?('personal'):('opponent')
-
-      switch(player.HAND[i].card_type){
-        case 'artifact':
-          if(player.action_point > 0){
-            player.action_point -= 1
-            player.BATTLE.push(player.HAND.splice(i,1))
-            return {action: 'equipArtifact', owner: 'personal'}
-          }
-          else
-            return {err: 'not enough action point'}
-
-          break
-
-        case 'item':
-          if(player.HAND[i].effect_type === 'normal'){
-            target.GRAVE.push(player.HAND.splice(i,1))
-            return {action: 'useNormalItem', owner: owner}
-          }
-          break
-
-        case 'spell':
-          if(player.action_point > 0){
-            player.action_point -= 1
-            if(player.HAND[i].effect_type === 'instant'){
-              target.GRAVE.push(player.HAND.splice(i,1))
-              return {action: 'castInstantSpell', owner: owner}
-            }
-          }
-          else
-            return {err: 'not enough action point'}
-
-          break
-
-        case 'vanish':
-          return {err: 'only allow in atk phase'}
-          break
-
-        default: break
-      }
-    }
-  }
-}
-
-Game.prototype.randomDeck = function(){
-  // !--
-
-  let card = {
-    artifact: [],
-    spell: [],
-    item: [],
-    vanish: []
-  }
-  let deck = []
-
-  for(let card_name in game.default.all_card){
-    for(let type in card)
-      if(game.default.all_card[card_name].type.base === type){
-        card[type].push(card_name)
-        break
-      }
-  }
-
-  for(let type in card){
-    if(type !== 'vanish'){
-      let random = (this.shuffle(card[type])).slice(0, game.default[`${type}_max`])
-      deck = deck.concat(random)
-    }
-    else
-      for(let i = 0; i < game.default[`${type}_max`]; i++)
-        deck.push(card.vanish[0])
-  }
-
-  return deck
-}
-
-Game.prototype.shuffle = function(array){
+Game.prototype.shuffle = function (card_list) {
   let i = 0, j = 0, temp = null
-
-  for(i = array.length-1; i > 0; i -= 1){
+  for(i = card_list.length-1; i > 0; i -= 1){
     j = Math.floor(Math.random()*(i + 1))
-    temp = array[i]
-    array[i] = array[j]
-    array[j] = temp
+    temp = card_list[i]
+    card_list[i] = card_list[j]
+    card_list[j] = temp
   }
-
-  return array
+  return card_list
 }
 
-//////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
 
 // socket server
 
 io.on('connection', client => {
+
   // init settings
   MongoClient.connect(opt.url, (err, _db) => {
     if(err) throw err
     app.db = _db
-    app.db.collection('card').find({}).toArray((err, rlt) => {
-      for(let i in rlt)
-        game.default.all_card[rlt[i].name] = rlt[i]
-
-      //console.log(game.default.all_card)
+    app.db.collection('card').find({}).toArray((err, cards) => {
+      for(let name in cards)
+        game.default.all_card[cards[name].name] = cards[name]
     })
   })
 
-  client.on('activateCard', (it, cb) => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-
-    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
-    if (game.room[rid]) {
-      if(game.room[rid].player[curr]._pid === client._pid){
-        let result = game.activateCard(client, it.name)
-      }
-      else
-        cb({ err: 'waiting for opponent'})
-    }
+  client.on('preload', (cb) => {
+    cb(app.file.preload)
   })
 
-  client.on('attack', cb => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
-    if (game.room[rid]) {
-      if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
-      if (client.action_point <= 0) return cb({err: 'not enough action point'})
-      if (!client.BATTLE.length) return cb({err: 'no artifact to attack'})
-
-      game.room[rid].atk_phase = true
-      client.action_point -= 1
-      cb({msg: 'attack'})
-      game.room[rid].player[1-curr].first_conceal = true
-      game.room[rid].player[1-curr].emit('foeAttack')
-    }
-  })
-
-  client.on('giveUp', cb => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    let action = (client._pid === game.room[rid].player[curr]._pid)?'tracking':'conceal'
-    let target = game.room[rid].player[(action === 'tracking')?(1-curr):curr]
-    if (game.room[rid]) {
-      game.room[rid].atk_phase = false
-      cb({action: `${action}`})
-      target.emit('foeGiveUp', {action: action})
-    }
-  })
-
-  client.on('concealOrTracking', (it, cb) => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    let target = (it.action === 'conceal')?(curr):(1-curr)
-
-    if(client.first_conceal){
-      if (it.card_pick.length != 1) return cb({err: 'choose exact 1 card'})
-      if ('vanish' !== client.HAND[it.card_pick[0]].name) return cb({err: 'please choose vanish'})
-      client.first_conceal = false
-    }
-    else{
-      if (it.card_pick.length != 2) return cb({err: 'choose exact 2 cards'})
-      if ('vanish' !== client.HAND[it.card_pick[(0||1)]].name) return cb({err: 'please choose vanish'})
-    }
-
-    for (let i in it.card_pick)
-      client.GRAVE.push(client.HAND.splice(i, 1))
-
-    cb({msg: 'success'})
-    game.room[rid].player[target].emit(`foe${it.action.replace(/\b\w/g, l => l.toUpperCase())}`, {length: it.card_pick.length})
-  })
-
-  client.on('randomDeck', (it, cb) => {
-    // !--
-    console.log(`build new deck_${it.slot}`)
-    let newDeck = game.randomDeck()
-
-    // mongodb update
-    let user = app.db.collection('user')
-    user.find({account: client._account}).toArray((err, rlt) => {
-       let deck = rlt[0].deck_slot
-       deck[it.slot].card_list = newDeck
-       let change = {$set: {deck_slot: deck}}
-      user.update({account: client._account}, change, (err, res) => {
-        if(err) throw err
-        cb({newDeck: newDeck})
-      })
-    })
-  })
-
-  // player disconnect
-  client.on('disconnect', (it)=>{
+  client.on('disconnect', () => {
     let rid = client._rid
     let pid = client._pid
 
-    if(game.pool[pid]){   // if client is still in pool
-      delete game.pool[pid]
-    }
+    // if client is still in pool
+    if(game.pool[pid]) return delete game.pool[pid]
 
-    for(let i in game.queue){ // if client already waiting for match
-      if(game.queue[i]._pid === pid){
-        game.queue.splice(i,1)
-        break
-      }
-    }
+    // if client already waiting for match
+    for(let i in game.queue)
+      if(game.queue[i]._pid === pid) return game.queue.splice(i,1)
 
-    if(client._rid){  // if client is in a match
+    // if client is in a match
+    if(client._rid){
       game.room[rid].player.map(it => {
         if (it._pid !== client._fid) return
 
@@ -423,71 +194,18 @@ io.on('connection', client => {
       })
 
       delete game.room[rid]
-    }
-
-  })
-
-  // player draw card
-  client.on('drawCard', (cb) => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
-    if (game.room[rid]) {
-      if (game.room[rid].player[curr]._pid === client._pid) {
-        if(client.action_point > 0){
-          let card_name = game.drawCard(client)
-          let deck_empty
-
-          if(card_name !== 'hand_full'){
-            if(client.DECK.length == 0)
-              deck_empty = true
-
-            cb({card_name: card_name, deck_empty: deck_empty})
-            game.room[rid].player[1-curr].emit('foeDrawCard', {deck_empty: deck_empty})
-          }
-          else
-            cb({err: 'your handcard is full'})
-        }
-        else
-          cb({err: 'not enough action point'})
-      }
-      else
-        cb({err: 'waiting for opponent' })
-    }
-    //game.fieldTracker(client,'HAND')
-  })
-
-  // game turn finished
-  client.on('finish', (cb) => {
-
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
-    if (game.room[rid]) {
-      if(game.room[rid].player[curr]._pid === client._pid) {
-        let card_arrange = game.battleFieldArrange(client, game.room[rid].player[1-curr])
-
-        client.action_point = 1
-
-        game.room[rid].counter = 1 - curr
-        curr = game.room[rid].counter
-
-        cb({ msg: 'waiting for opponent', card_list: card_arrange })
-        game.room[rid].player[curr].emit('turnStart', { msg: 'your turn', card_list: card_arrange })
-      }
-      else
-        cb({err: 'waiting for opponent'})
+      return
     }
   })
 
-  // player open this website
-  client.on('init', (cb) => {
+  // once open web page
+  client.on('init', cb => {
     game.buildPlayer(client)
+    console.log('player built')
     cb({})
   })
 
-  // opponent leave match
-  client.on('leaveMatch', it => {
+  client.on('leaveMatch', cb => {
     let rid = client._rid
     let pid = client._pid
     let fid = client._fid
@@ -504,64 +222,40 @@ io.on('connection', client => {
     delete game.room[rid]
   })
 
-  // player login
+  // personal interface
   client.on('login', (it, cb) => {
     let user = app.db.collection('user')
     let pid = game.idGenerate(16)
     client._pid = pid
     game.pool[pid] = client
 
-    //!--
     user.find({account: it.acc}).toArray((err, rlt) => {
-      if(rlt.length){
-        if(rlt[0].passwd === it.passwd){
-          client._account = it.acc
-          client.deck_slot = rlt[0].deck_slot
-          cb({deck_slot: client.deck_slot})
-        }
-        else
-          cb({err: 'wrong password'})
-      }
-      else{
-        cb({err: 'no such user exists'})
+      if(!rlt.length) return cb({err: 'no such user exists'})
+      if(!rlt[0].passwd === it.passwd) return cb({err: 'wrong password'})
 
-      }
+      client._account = it.acc
+      client.deck_slot = rlt[0].deck_slot
+      //console.log(client.deck_slot)
+      cb({deck_slot: client.deck_slot})
     })
   })
 
-  // play card in your hand
-  client.on('playHandCard', (it, cb) => {
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
-    // !--
-    if(game.room[rid]){
-      if(game.room[rid].player[curr]._pid === client._pid){
-        let result = game.playHandCard(client, game.room[rid].player[1-curr], it.name)
-
-        if(result.err) return cb({err: result.err})
-
-        cb(result)
-        result.card_name = it.name
-        game.room[rid].player[1-curr].emit('foePlayHand', result)
-      }
-      else
-        cb({err: 'waiting for opponent'})
-    }
-    //game.fieldTracker(client,'HAND')
+  client.on('randomDeck', (it, cb) => {
+    console.log(`${client._account} build new deck_${it.slot}`)
+    let newDeck = game.randomDeck()
+    let user = app.db.collection('user')
+    user.find({account: client._account}).toArray((err, rlt) => {
+      let deck = rlt[0].deck_slot
+      deck[it.slot].card_list = newDeck
+      let change = {$set: {deck_slot: deck}}
+      user.update({account: client._account}, change, (err, res) => {
+        if(err) throw err
+        cb({newDeck: newDeck})
+      })
+    })
   })
 
-  // play uncoverred card in life field
-  client.on('playLifeCard', (msg, cb) => {
-    if (this.attack_phase == true) return cb({ err: 'not allowed in atk phase'})
-  })
-
-  client.on('preload', (cb) => {
-    cb(app.file.preload)
-  })
-
-  // player waiting for match
-  client.on('search', (it,cb) => {
+  client.on('searchMatch', (it, cb) => {
     let user = app.db.collection('user')
     let cards = app.db.collection('card')
     let deck = []
@@ -569,15 +263,23 @@ io.on('connection', client => {
     if(!it.curr_deck) return cb({err: 'please choose a deck'})
 
     user.find({account: client._account}).toArray((err, rlt) => {
-      deck = rlt[0].deck_slot[it.curr_deck].card_list
-      for(let card_name in deck){
-        let curr_card = game.default.all_card[deck[card_name]]
-        client.DECK.push(new Card(curr_card.name, curr_card.type.base, curr_card.type.effect))
-        client.DECK[client.DECK.length - 1].owner = client._pid
+
+      // build deck
+      deck = game.shuffle(rlt[0].deck_slot[it.curr_deck].card_list)
+      for(let card_name of deck){
+        let curr_card = game.default.all_card[card_name]
+        let init = {
+          name: curr_card.name,
+          card_type: curr_card.type.base,
+          field: 'deck',
+          owner: client._pid
+        }
+        client.curr_deck.push(new Card(init))
+        client.card_ammount.deck += 1
       }
 
-      game.shuffle(client.DECK)
 
+      // find opponent
       if(game.queue.length != 0){
         let rid = game.idGenerate(16)
         let opponent = game.queue.shift()
@@ -586,35 +288,47 @@ io.on('connection', client => {
         client._rid = rid
         client._fid = opponent._pid
 
-        game.room[rid] = {atk_phase: false, counter: 0, player: [opponent, client]}
+        game.room[rid] = {atk_phase: false, counter: 0, player: [opponent, client], cards: {}, card_id: 1}
         game.room[rid].player[0].emit('joinGame', {msg: 'joining match...'})
         cb({msg: 'joining match...'})
 
+        // build all cards, life and deck
+        let life = {}
+        let player = game.room[rid].player
+        life[opponent._pid] = {personal: [], opponent: []}
+        life[client._pid] = {personal: [], opponent: []}
+
+        for (let curr in player) {
+          for (let [index, card] of player[curr].curr_deck.entries()) {
+            let id = `card_${game.room[rid].card_id}`
+            game.room[rid].cards[id] = card
+            if(index < player[curr].life_max){
+              card.field = 'life'
+              life[player[curr]._pid].personal.push({id: id, name: card.name})
+              life[player[1 - curr]._pid].opponent.push({id: id})
+              player[curr].card_ammount.deck -= 1
+              player[curr].card_ammount.life += 1
+            }
+            game.room[rid].card_id ++
+          }
+        }
+
+        opponent.emit('buildLife', life[opponent._pid])
+        client.emit('buildLife', life[client._pid])
+
         // game start
-
-        // build life field
-        game.buildLife(game.room[rid].player[0])
-        game.room[rid].player[0].emit('buildLIFE', JSON.stringify(game.room[rid].player[0].LIFE))
-        game.room[rid].player[1].emit('foeBuiltLife', null)
-
-        game.buildLife(game.room[rid].player[1])
-        game.room[rid].player[1].emit('buildLIFE', JSON.stringify(game.room[rid].player[1].LIFE))
-        game.room[rid].player[0].emit('foeBuiltLife', null)
-
         game.room[rid].player[0].emit('gameStart', { msg: 'your turn' })
         game.room[rid].player[1].emit('gameStart', { msg: 'waiting for opponent' })
       }
       else{
-        let pid = client._pid
         game.queue.push(client)
-        delete game.pool.pid
+        delete game.pool[client._pid]
         cb({msg: 'searching for match...'})
       }
     })
   })
 
-  client.on('signup',(it,cb) => { //it.acc .pswd
-    // !--
+  client.on('signUp', (it, cb) => {
     let user = app.db.collection('user')
     user.find({account: it.acc}).toArray((err, rlt) => {
       if(rlt.length) return cb({err: 'user name exists'})
@@ -628,24 +342,170 @@ io.on('connection', client => {
         }
       }
       user.insert(signup, (err, result) => {
-        if(!err){
-          console.log('player ' + signup.account + ' added')
-          client._account = signup.account
-          cb({})
-        }
+        if(err) throw err
+        console.log('player ' + signup.account + ' added')
+        client._account = signup.account
+        cb({})
       })
     })
   })
 
+  // in game
+
+  // battle
+  client.on('attack', cb => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb( { err: 'not allowed in atk phase'} )
+    if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent'} )
+    if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
+    if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
+
+    game.room[rid].atk_phase = true
+    client.action_point -= 1
+    cb({})
+    game.room[rid].player[1-curr].first_conceal = true
+    game.room[rid].player[1-curr].emit('foeAttack')
+  })
+
+  client.on('conceal', (it, cb) => {
+    console.log(it)
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let card_pick = Object.keys(it.card_pick)
+
+    if(client.first_conceal){
+      if (card_pick.length != 1) return cb( {err: 'choose exact 1 card'} )
+      if ('vanish' !== game.room[rid].cards[card_pick[0]].name) return cb( {err: 'please choose vanish'} )
+      client.first_conceal = false
+    }
+    else{
+      if (card_pick.length != 2) return cb( {err: 'choose exact 2 cards'} )
+      if ('vanish' !== client.cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
+    }
+
+    let rlt = game.cardMove(client, game.room[rid].player[curr], it.card_pick)
+    cb(rlt.personal)
+    game.room[rid].player[curr].emit(`foeConceal`, rlt.opponent)
+  })
+
+  client.on('tracking', (it, cb) => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let card_pick = Object.keys(it.card_pick)
+    if (card_pick.length != 2) return cb( {err: 'choose exact 2 cards'} )
+    if ('vanish' !== game.room[rid].cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
+
+    let rlt = game.cardMove(client, game.room[rid].player[1 - curr], it.card_pick)
+    cb(rlt.personal)
+    game.room[rid].player[1 - curr].emit(`foeTracking`, rlt.opponent)
+  })
+
+  client.on('giveUp', cb => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let action = (client._pid === game.room[rid].player[curr]._pid)?'tracking':'conceal'
+    let target = game.room[rid].player[(action === 'tracking')?(1-curr):curr]
+    if (game.room[rid]) {
+      game.room[rid].atk_phase = false
+      cb({action: `${action}`})
+      target.emit('foeGiveUp', {action: action})
+    }
+  })
+
+  // neutral
+  client.on('drawCard', cb => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb( { err: 'not allowed in atk phase'} )
+    if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
+    if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
+    if (client.card_ammount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
+
+    client.action_point -= 1
+
+    for(let id in game.room[rid].cards){
+      let card = game.room[rid].cards[id]
+      if (card.field !== 'deck' || card.curr_own !== client._pid) continue
+
+      let param = { id: id, name: card.name }
+      card.field = 'hand'
+      client.card_ammount.hand += 1
+      client.card_ammount.deck -= 1
+      if (client.card_ammount.deck == 0) param.deck_empty = true
+
+      cb(param)
+      delete param.name
+      game.room[rid].player[1 - curr].emit('foeDrawCard', param)
+
+      return
+    }
+  })
+
+  client.on('endTurn', cb => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    if (game.room[rid].atk_phase == true) return cb({ err: 'not allowed in atk phase'})
+    if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
+
+    //checkCardEnergy
+
+    game.room[rid].counter = 1 - curr
+    curr = game.room[rid].counter
+    client.action_point = 1
+    cb({ msg: 'waiting for opponent' })
+    game.room[rid].player[curr].emit('turnStart', { msg: 'your turn' })
+  })
+
+  client.on('playHandCard', (it, cb) => {
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let card = game.room[rid].cards[it.id]
+
+    if (game.room[rid].atk_phase == true) return cb( { err: 'atk phase'} )
+    if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
+    if (card.card_type === 'vanish') return cb( {err: 'only available in atk phase'} )
+    if (client.action_point <= 0 && card.card_type !== 'item') return cb( {err: 'not enough action point'} )
+
+    let param = {}
+    param[it.id] = {}
+
+    // field adjust
+    switch (game.default.all_card[card.name].type.base) {
+      case 'artifact':
+        client.action_point -= 1
+        param[it.id].to = 'battle'
+        param[it.id].action = 'equip'
+        break
+
+      case 'item'		 :
+        param[it.id].to = 'grave'
+        param[it.id].action = 'use'
+        break
+
+      case 'spell'   :
+        client.action_point -= 1
+        param[it.id].to = 'grave'
+        param[it.id].action = 'cast'
+        break
+
+      default        : break
+    }
+
+    let rlt = game.cardMove(client, game.room[rid].player[1 - curr], param)
+    cb(rlt.personal)
+    game.room[rid].player[1 - curr].emit('foePlayHand', rlt.opponent)
+  })
 
 })
+/////////////////////////////////////////////////////////////////////////////////
 
-//////////////////////////////////////////////////////////////////////////////////////
-
-// server initialization
+// server init
 
 const game = new Game()
 
 server.listen(opt.serv_port, function(){
-	console.log('listen on port '+ opt.serv_port)
+  console.log(`listen on port ${opt.serv_port}`)
 })
+
+
