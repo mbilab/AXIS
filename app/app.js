@@ -169,12 +169,11 @@ Game.prototype.cardMove = function (rlt) {
 //         }
 //       }
 
-  let player = {personal: personal, opponent: opponent}
   let fix_field = {personal: {}, opponent: {}}
   for (let id in rlt) {
     rlt[id].id = id
     let pos = this.findCard(rlt[id])
-    let card = player[rlt[id].curr_own][rlt[id].from][pos]
+    let card = game.player[rlt[id].curr_own][rlt[id].from][pos]
 
     // adjust card attribute
     card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
@@ -189,9 +188,9 @@ Game.prototype.cardMove = function (rlt) {
     if(rlt[id].action) this.text.setText(`${target}${rlt[id].action} ${card.name}`)
 
     // move
-    player[rlt[id].new_own][rlt[id].to].push(card)
+    game.player[rlt[id].new_own][rlt[id].to].push(card)
     //card.img.destroy()
-    player[rlt[id].curr_own][rlt[id].from].splice(pos, 1)
+    game.player[rlt[id].curr_own][rlt[id].from].splice(pos, 1)
 
     // field to fix
     fix_field[rlt[id].curr_own][rlt[id].from] = true
@@ -205,8 +204,7 @@ Game.prototype.checkCardEnergy = function (rlt) {
 }
 
 Game.prototype.findCard = function (rlt) {
-  let player = {personal: personal, opponent: opponent}
-  for (let [index, elem] of player[rlt.curr_own][rlt.from].entries()) {
+  for (let [index, elem] of game.player[rlt.curr_own][rlt.from].entries()) {
     if(elem.id !== rlt.id) continue
     return index
   }
@@ -214,12 +212,11 @@ Game.prototype.findCard = function (rlt) {
 
 // rlt = {personal: {hand: true}, opponent: {}}
 Game.prototype.fixCardPos = function (rlt) {
-  let player = {personal: personal, opponent: opponent}
   for (let target in rlt){
     for (let field in rlt[target]) {
-      for (let i = 0; i < player[target][field].length; i++) {
-        let x = (field === 'grave')? this.default.game.width*(1 - 1/13): (this.default.game.width/2) - this.default.card.width*1.25 - this.default.card.width/2 - (this.default.card.width*3/5)*(player[target][field].length - 1) + (this.default.card.width*6/5)*i
-        player[target][field][i].img.reset(x, player[target][`${field}_yloc`])
+      for (let i = 0; i < game.player[target][field].length; i++) {
+        let x = (field === 'grave')? this.default.game.width*(1 - 1/13): (this.default.game.width/2) - this.default.card.width*1.25 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
+        game.player[target][field][i].img.reset(x, game.player[target][`${field}_yloc`])
       }
     }
   }
@@ -560,12 +557,11 @@ Card.prototype.click = function () {
 
 socket.on('buildLife', it => {
   console.log(it)
-  let player = {personal: personal, opponent: opponent}
   for (let target in it){
     for(let card of it[target]){
       let name = (card.name)? card.name : 'cardback'
       let input = (target === 'personal')? true : false
-      player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
+      game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
     }
   }
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})

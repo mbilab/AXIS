@@ -33,6 +33,8 @@ const app = {
 // classes
 
 const Card = function(init){
+  //-! this = JSON.parse(JSON.stringify(init))
+
   this.card_type = init.card_type
   this.energy = (this.card_type === 'artifact')? 2: 1
   this.field = init.field
@@ -51,8 +53,9 @@ const Game = function(){
     item_max    : 2,//12,
     vanish_max  : 4,//11
     // player attribute
-    ad_base     : 1,
-    ap_max      : 1,
+    atk_damage  : 1,
+    atk_phase   : 1,
+    action_point: 1,
     deck_max    : 14, // 50
     hand_max    : 7,
     life_max    : 6
@@ -64,8 +67,10 @@ const Game = function(){
 
 Game.prototype.buildPlayer = function (client) {
   // attribute
-  client.attack_damage = game.default.ad_base
-  client.action_point = game.default.ap_max
+  client.hp = this.default.life_max
+  client.atk_damage = game.default.atk_damage
+  client.atk_phase = game.default.atk_phase
+  client.action_point = game.default.action_point
   client.atk_enchant = []
   client.buff_action = []
   client.first_conceal = false
@@ -105,9 +110,17 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
 
     // owner and attribute adjust, rlt[id].new_own set here when the card will be into grave
     rlt[id].curr_own = 'personal'
-    if(!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
-    if(!rlt[id].to) rlt[id].to = 'grave'
     rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
+    if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
+    if (!rlt[id].to) rlt[id].to = 'grave'
+    if (rlt[id].to === ('grave' || 'hand')) {
+      if(card.card_type === 'artifact') {
+        card.overheat = false
+        card.energy = 2
+      }
+      else
+        card.energy = 1
+    }
 
     // move card
     rlt[id].from = card.field
@@ -128,9 +141,40 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
   return param
 }
 
-Game.prototype.checkCardEnergy = function () {
+Game.prototype.checkCardEnergy = function (rid) {
 
 }
+
+// personal >> who announce this attack
+Game.prototype.enchantAttack = function (personal, opponent) {
+  for (let card in personal.atk_enchant) {
+    let avail_effect = this.judge(personal, opponent, this.default.all_card[card].judge)
+    this.effectTrigger(personal, opponent, avail_effect)
+  }
+}
+
+Game.prototype.effectTrigger = function (personal, opponent, avail_effect) {
+  for(let effect in avail_effect){
+    if (effect === 'draw') drawCard(personal, opponent)
+    // ...
+  }
+}
+
+Game.prototype.judge = function (personal, opponent, judge) {
+  let avail_effect = {}
+  for(let effect in judge){
+    switch (effect) {
+      case 'draw':
+        // if () ...
+        avail_effect[effect] = true
+        break
+
+      default: break
+    }
+  }
+  return avail_effect
+}
+
 
 Game.prototype.idGenerate = function (length) {
   let id = ""
@@ -150,6 +194,17 @@ Game.prototype.shuffle = function (card_list) {
   }
   return card_list
 }
+
+/////////////////////////////////////////////////////////////////////////////////
+
+// utility
+
+// effect = game.default.all_card[card_name].effect
+function drawCard (personal, opponent, effect) {
+
+}
+
+
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -358,11 +413,13 @@ io.on('connection', client => {
     let curr = game.room[rid].counter
     if (game.room[rid].atk_phase == true) return cb( { err: 'not allowed in atk phase'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent'} )
-    if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
+    if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
+    if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
 
     game.room[rid].atk_phase = true
     client.action_point -= 1
+    client.atk_phase -= 1
     cb({})
     game.room[rid].player[1-curr].first_conceal = true
     game.room[rid].player[1-curr].emit('foeAttack')
@@ -406,11 +463,21 @@ io.on('connection', client => {
     let curr = game.room[rid].counter
     let action = (client._pid === game.room[rid].player[curr]._pid)?'tracking':'conceal'
     let target = game.room[rid].player[(action === 'tracking')?(1-curr):curr]
-    if (game.room[rid]) {
-      game.room[rid].atk_phase = false
-      cb({action: `${action}`})
-      target.emit('foeGiveUp', {action: action})
-    }
+    game.room[rid].atk_phase = false
+    cb({action: action})
+    target.emit('foeGiveUp', {action: action})
+
+    /*
+    // effect phase
+    let result =
+    game.effectTrigger(client, game.room[rid].player[1-curr],)
+
+    // damage phase
+
+    // end phase
+    game.room[rid].atk_phase = false
+
+    */
   })
 
   // neutral
@@ -452,7 +519,11 @@ io.on('connection', client => {
 
     game.room[rid].counter = 1 - curr
     curr = game.room[rid].counter
-    client.action_point = 1
+
+    client.action_point = game.default.action_point
+    client.atk_damage = game.default.atk_damage
+    client.atk_phase = game.default.atk_phase
+
     cb({ msg: 'waiting for opponent' })
     game.room[rid].player[curr].emit('turnStart', { msg: 'your turn' })
   })
