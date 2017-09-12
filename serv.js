@@ -71,8 +71,8 @@ Game.prototype.buildPlayer = function (client) {
   client.atk_damage = game.default.atk_damage
   client.atk_phase = game.default.atk_phase
   client.action_point = game.default.action_point
-  client.atk_enchant = []
-  client.buff_action = []
+  client.atk_enchant = [] // card_ids
+  client.buff_action = [] // card_ids
   client.first_conceal = false
 
   client.deck_slot = {}
@@ -147,34 +147,61 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
-  for (let card in personal.atk_enchant) {
-    let avail_effect = this.judge(personal, opponent, this.default.all_card[card].judge)
-    this.effectTrigger(personal, opponent, avail_effect)
-  }
-}
-
-Game.prototype.effectTrigger = function (personal, opponent, avail_effect) {
-  for(let effect in avail_effect){
-    if (effect === 'draw') drawCard(personal, opponent)
-    // ...
-  }
-}
-
-Game.prototype.judge = function (personal, opponent, judge) {
   let avail_effect = {}
-  for(let effect in judge){
-    switch (effect) {
-      case 'draw':
-        // if () ...
-        avail_effect[effect] = true
-        break
+  for (let id in personal.atk_enchant)
+    Object.assign(avail_effect, this.judge(personal, opponent, id))
 
-      default: break
+  this.effectTrigger(personal, opponent, avail_effect)
+}
+
+Game.prototype.effectTrigger = function (personal, opponent, card_list) {
+  // effect: { effect: { target: { field: { type: value } } } }
+  //         { effect: { target: { attribute: value } } }
+
+  for (let id in card_list) {
+    let card_name = this.room[personal._rid].cards[id].name
+    for (let avail_effect of card_list[id]) {
+      switch (avail_effect.split['_'][0]) {
+        case 'draw':
+          drawCard(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
+          break
+
+        default: break
+      }
     }
   }
-  return avail_effect
+
 }
 
+Game.prototype.judge = function (personal, opponent, card_id) {
+  let player = {self: personal, foe: opponent}
+  let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
+  let avail_effect = {}
+  avail_effect[card_id] = []
+  // judge: { effect: { target: { condition: { compare: value } } } }
+
+  for (let effect in judge) {
+    if (judge.effect.hit)
+      if (this.room[personal._rid].atk_hit) avail_effect[card_id].push(effect)
+    else
+      for (let target in judge.effect) {
+        for (let condition in judge.effect.target) {
+          let curr_val = null
+          switch (condition) {
+            case 'hp':
+              curr_val = player[target].hp
+              break
+            case 'handcard': break
+            default: break
+          }
+
+          if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
+        }
+      }
+  }
+
+  return avail_effect
+}
 
 Game.prototype.idGenerate = function (length) {
   let id = ""
@@ -204,7 +231,15 @@ function drawCard (personal, opponent, effect) {
 
 }
 
+function operation (curr_val, condition) {
+  let operator = Object.keys(condition)[0]
+  switch (operation) {
+    case 'goe':
+      return (curr_val > condition.operator)? true : false
 
+    default: break
+  }
+}
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -343,7 +378,7 @@ io.on('connection', client => {
         client._rid = rid
         client._fid = opponent._pid
 
-        game.room[rid] = {atk_phase: false, counter: 0, player: [opponent, client], cards: {}, card_id: 1}
+        game.room[rid] = {atk_hit: false, atk_phase: false, counter: 0, player: [opponent, client], cards: {}, card_id: 1}
         game.room[rid].player[0].emit('joinGame', {msg: 'joining match...'})
         cb({msg: 'joining match...'})
 
@@ -468,9 +503,10 @@ io.on('connection', client => {
     target.emit('foeGiveUp', {action: action})
 
     /*
+    game.room[rid].atk_hit = (action === 'tracking')? false : true
+
     // effect phase
-    let result =
-    game.effectTrigger(client, game.room[rid].player[1-curr],)
+    game.enchantAttack(client, game.room[rid].player[1-curr])
 
     // damage phase
 
