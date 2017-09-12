@@ -35,11 +35,11 @@ const app = {
 const Card = function(init){
   //-! this = JSON.parse(JSON.stringify(init))
 
-  this.card_type = init.card_type
-  this.energy = (this.card_type === 'artifact')? 2: 1
+  this.type = init.type
+  this.energy = (this.type.base === 'artifact')? 2: 1
   this.field = init.field
   this.name = init.name
-  if(this.card_type === 'artifact') this.overheat = false
+  if(this.type.base === 'artifact') this.overheat = false
   this.owner = init.owner
   this.curr_own = init.owner
 }
@@ -114,7 +114,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
     if (rlt[id].to === ('grave' || 'hand')) {
-      if(card.card_type === 'artifact') {
+      if(card.type.base === 'artifact') {
         card.overheat = false
         card.energy = 2
       }
@@ -360,7 +360,7 @@ io.on('connection', client => {
         let curr_card = game.default.all_card[card_name]
         let init = {
           name: curr_card.name,
-          card_type: curr_card.type.base,
+          type: curr_card.type,
           field: 'deck',
           owner: client._pid
         }
@@ -545,6 +545,26 @@ io.on('connection', client => {
     }
   })
 
+  client.on('effectTrigger', (it, cb) => {
+    // action varies based on its type
+    let rid = client._rid
+    let curr = game.room[rid].counter
+    let card = game.room[rid].cards[it.id]
+
+    if (card.type.base === 'artifact' && card.type.effect === 'enchant') {
+      if (card.overheat) return cb({err: 'artifact overheat'})
+      if (card.energy == 0) return cb({err: 'energy lacking'})
+      card.overheat = true
+      card.energy -= 1
+      cb({msg: `attack enchanted by ${card.name}`})
+    }
+    else {
+      let avail_effect = game.judge(client, game.room[rid].player[1-curr], id)
+      let result = game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
+      cb(result)
+    }
+  })
+
   client.on('endTurn', cb => {
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -571,8 +591,8 @@ io.on('connection', client => {
 
     if (game.room[rid].atk_phase == true) return cb( { err: 'atk phase'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
-    if (card.card_type === 'vanish') return cb( {err: 'only available in atk phase'} )
-    if (client.action_point <= 0 && card.card_type !== 'item') return cb( {err: 'not enough action point'} )
+    if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
+    if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
 
     let param = {}
     param[it.id] = {}

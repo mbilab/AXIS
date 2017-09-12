@@ -385,6 +385,13 @@ Player.prototype.drawCard = function () {
   })
 }
 
+Player.prototype.effectTrigger = function (card) {
+  socket.emit('effectTrigger', {id: card.id}, it => {
+    if (it.err) return game.text.setText(it.err)
+    game.text.setText(it.msg)
+  })
+}
+
 Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
     if(it.err) return game.text.setText(it.err)
@@ -534,6 +541,7 @@ Card.prototype.click = function () {
       break
 
     case 'battle':
+      personal.effectTrigger(this)
       break
 
     case 'grave' :
