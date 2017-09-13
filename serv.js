@@ -65,6 +65,7 @@ const Game = function(){
   this.room = {}
 }
 
+// main
 Game.prototype.buildPlayer = function (client) {
   // attribute
   client.hp = this.default.life_max
@@ -145,6 +146,31 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
+// card effects
+// effect = game.default.all_card[card_name].effect
+
+Game.prototype.control = function() {}
+
+Game.prototype.destroy = function() {}
+
+Game.prototype.drain = function() {}
+
+Game.prototype.draw = function(personal, opponent, effect) {
+
+}
+
+Game.prototype.equip = function() {}
+
+Game.prototype.gain = function() {}
+
+Game.prototype.loss = function() {}
+
+Game.prototype.retrieve = function() {}
+
+Game.prototype.set = function() {}
+
+Game.prototype.steal = function() {}
+
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
   let avail_effect = {}
@@ -155,19 +181,18 @@ Game.prototype.enchantAttack = function (personal, opponent) {
 }
 
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
-  // effect: { effect: { target: { field: { type: value } } } }
-  //         { effect: { target: { attribute: value } } }
+  // card_list = {
+  //   card_id_1: [effect1, effect2 ...],
+  //   card_id_2 ...
+  // }
+  //
+  // effect = { effect: { target: { field: { type: value } } } }
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
     for (let avail_effect of card_list[id]) {
-      switch (avail_effect.split['_'][0]) {
-        case 'draw':
-          drawCard(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
-          break
-
-        default: break
-      }
+      let effect_name = avail_effect.split['_'][0]
+      this[effect_name](personal, opponent, this.default.all_card[card_name].effect[avail_effect])
     }
   }
 
@@ -181,28 +206,39 @@ Game.prototype.judge = function (personal, opponent, card_id) {
   // judge: { effect: { target: { condition: { compare: value } } } }
 
   for (let effect in judge) {
-    if (judge.effect.hit)
-      if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
-    else
-      for (let target in judge.effect) {
-        for (let condition in judge.effect.target) {
-          let curr_val = null
-          switch (condition) {
-            case 'hp':
-              curr_val = player[target].hp
-              break
-            case 'handcard': break
-            default: break
-          }
-
-          if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
-        }
+    for (let target in judge.effect) {
+      // for effects don't need to judge
+      if(!judge.effect.target){
+        avail_effect[card_id].push(effect)
+        continue
       }
+
+      // for effects with judges
+      for (let condition in judge.effect.target) {
+        let curr_val = null
+        switch (condition) {
+          case 'hit':
+            if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
+            break
+
+          case 'hp':
+            curr_val = player[target].hp
+            break
+
+          case 'handcard': break
+
+          default:break
+        }
+
+        if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
+      }
+    }
   }
 
   return avail_effect
 }
 
+// tools
 Game.prototype.idGenerate = function (length) {
   let id = ""
   let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -225,12 +261,6 @@ Game.prototype.shuffle = function (card_list) {
 /////////////////////////////////////////////////////////////////////////////////
 
 // utility
-
-// effect = game.default.all_card[card_name].effect
-function drawCard (personal, opponent, effect) {
-
-}
-
 function operation (curr_val, condition) {
   let operator = Object.keys(condition)[0]
   switch (operation) {
@@ -508,6 +538,7 @@ io.on('connection', client => {
     let action = (client == game.room[rid].atk_status.attacker)? 'tracking' : 'conceal'
     let opponent = game.room[rid].player[(action === 'tracking')? (1-curr) : curr]
     game.room[rid].game_phase = 'normal'
+
     cb({action: action})
     opponent.emit('foeGiveUp', {action: action})
 
@@ -525,6 +556,9 @@ io.on('connection', client => {
 
     // end phase
     game.room[rid].game_phase = 'normal'
+    game.room[rid].atk_status.hit = false
+    game.room[rid].atk_status.attacker = null
+    game.room[rid].atk_status.defender = null
 
     */
   })
@@ -632,12 +666,18 @@ io.on('connection', client => {
       default        : break
     }
 
+    // card move between fields
     let rlt = game.cardMove(client, game.room[rid].player[1 - curr], param)
     cb(rlt.personal)
     game.room[rid].player[1 - curr].emit('foePlayHand', rlt.opponent)
+
+    // card effect triggers
+    /*
+    */
   })
 
 })
+
 /////////////////////////////////////////////////////////////////////////////////
 
 // server init
