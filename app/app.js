@@ -385,11 +385,13 @@ Player.prototype.drawCard = function () {
   })
 }
 
-Player.prototype.effectTrigger = function (card) {
-  socket.emit('effectTrigger', {id: card.id}, it => {
+// for player trigger a card on field/ enchant an attack
+Player.prototype.triggerEffect = function (card) {
+  socket.emit('triggerEffect', {id: card.id}, it => {
     if (it.err) return game.text.setText(it.err)
     game.text.setText(it.msg)
-    // flip card or rotate card
+    // flip card or rotate card when enchant attack
+    // ..
   })
 }
 
@@ -629,6 +631,10 @@ socket.on('turnStart', it => {
   //game.checkCardEnergy(it.card_list)
   game.text.setText(it.msg)
 })
+
+// card effects
+socket.on('effectTrigger', it => {})
+socket.on('damagePhase', it => {})
 
 //////////////////////////////////////////////////////////////////////////////////////
 

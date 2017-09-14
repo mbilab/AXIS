@@ -146,30 +146,8 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
+
 // card effects
-// effect = game.default.all_card[card_name].effect
-
-Game.prototype.control = function() {}
-
-Game.prototype.destroy = function() {}
-
-Game.prototype.drain = function() {}
-
-Game.prototype.draw = function(personal, opponent, effect) {
-
-}
-
-Game.prototype.equip = function() {}
-
-Game.prototype.gain = function() {}
-
-Game.prototype.loss = function() {}
-
-Game.prototype.retrieve = function() {}
-
-Game.prototype.set = function() {}
-
-Game.prototype.steal = function() {}
 
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
@@ -178,24 +156,6 @@ Game.prototype.enchantAttack = function (personal, opponent) {
     Object.assign(avail_effect, this.judge(personal, opponent, id))
 
   this.effectTrigger(personal, opponent, avail_effect)
-}
-
-Game.prototype.effectTrigger = function (personal, opponent, card_list) {
-  // card_list = {
-  //   card_id_1: [effect1, effect2 ...],
-  //   card_id_2 ...
-  // }
-  //
-  // effect = { effect: { target: { field: { type: value } } } }
-
-  for (let id in card_list) {
-    let card_name = this.room[personal._rid].cards[id].name
-    for (let avail_effect of card_list[id]) {
-      let effect_name = avail_effect.split['_'][0]
-      this[effect_name](personal, opponent, this.default.all_card[card_name].effect[avail_effect])
-    }
-  }
-
 }
 
 Game.prototype.judge = function (personal, opponent, card_id) {
@@ -237,6 +197,52 @@ Game.prototype.judge = function (personal, opponent, card_id) {
 
   return avail_effect
 }
+
+Game.prototype.effectTrigger = function (personal, opponent, card_list) {
+  // card_list = {
+  //   card_id_1: [effect1, effect2 ...],
+  //   card_id_2 ...
+  // }
+  //
+  // effect = { effect: { target: { field: { type: value } } } }
+
+  for (let id in card_list) {
+    let card_name = this.room[personal._rid].cards[id].name
+    for (let avail_effect of card_list[id]) {
+      let effect_name = avail_effect.split['_'][0]
+      let result = this.effectExecute(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
+      personal.emit('effectTrigger', result.personal)
+      opponent.emit('effectTrigger', result.opponent)
+    }
+  }
+}
+
+// effect = game.default.all_card[card_name].effect
+// return {personal: data, opponent: data}
+Game.prototype.effectExecute = function (personal, opponent, effect) {
+
+  let player = {self: personal, foe: opponent}
+  for (let target in effect) {
+    for (let object in effect[target]) {
+
+      // attribute change
+      if (player[target][object]){
+        player[target][object] += effect[target][object]
+        return
+      }
+
+      // field change
+      if (player[target].card_ammount[object]) {
+        for (let type in effect[target][object]) {
+
+        }
+      }
+
+    }
+  }
+
+}
+
 
 // tools
 Game.prototype.idGenerate = function (length) {
@@ -553,6 +559,7 @@ io.on('connection', client => {
     this.effectTrigger(player.attacker, player.defender, avail_effect)
 
     // damage phase
+    socket.emit('damagePhase', {})
 
     // end phase
     game.room[rid].game_phase = 'normal'
@@ -592,7 +599,7 @@ io.on('connection', client => {
     }
   })
 
-  client.on('effectTrigger', (it, cb) => {
+  client.on('triggerEffect', (it, cb) => {
     // action varies based on its type
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -607,8 +614,8 @@ io.on('connection', client => {
     }
     else {
       let avail_effect = game.judge(client, game.room[rid].player[1-curr], id)
-      let result = game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
-      cb(result)
+      game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
+      cb({})
     }
   })
 
@@ -673,6 +680,8 @@ io.on('connection', client => {
 
     // card effect triggers
     /*
+    let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
+    game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
     */
   })
 
