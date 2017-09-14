@@ -34,12 +34,12 @@ const app = {
 
 const Card = function(init){
   //-! this = JSON.parse(JSON.stringify(init))
-
+  this.name = init.name
   this.type = init.type
   this.energy = (this.type.base === 'artifact')? 2: 1
-  this.field = init.field
-  this.name = init.name
   if(this.type.base === 'artifact') this.overheat = false
+  this.field = init.field
+  this.cover = true
   this.owner = init.owner
   this.curr_own = init.owner
 }
@@ -208,12 +208,15 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
+    let result = {personal: {}, opponent: {}}
     for (let avail_effect of card_list[id]) {
       let effect_name = avail_effect.split['_'][0]
-      let result = this.effectExecute(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
-      personal.emit('effectTrigger', result.personal)
-      opponent.emit('effectTrigger', result.opponent)
+      let rlt = this.effectExecute(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
+      Object.assign(result.personal, rlt.personal)
+      Object.assign(result.opponent, rlt.opponent)
     }
+    personal.emit('effectExecute', result.personal)
+    opponent.emit('effectExecute', result.opponent)
   }
 }
 
@@ -587,6 +590,7 @@ io.on('connection', client => {
 
       let param = { id: id, name: card.name }
       card.field = 'hand'
+      card.cover = false
       client.card_ammount.hand += 1
       client.card_ammount.deck -= 1
       if (client.card_ammount.deck == 0) param.deck_empty = true

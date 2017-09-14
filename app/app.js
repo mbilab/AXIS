@@ -633,7 +633,7 @@ socket.on('turnStart', it => {
 })
 
 // card effects
-socket.on('effectTrigger', it => {})
+socket.on('effectExecute', it => {})
 socket.on('damagePhase', it => {})
 
 //////////////////////////////////////////////////////////////////////////////////////
