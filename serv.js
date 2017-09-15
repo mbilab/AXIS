@@ -146,9 +146,6 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
-
-// card effects
-
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
   let avail_effect = {}
@@ -157,6 +154,36 @@ Game.prototype.enchantAttack = function (personal, opponent) {
 
   this.effectTrigger(personal, opponent, avail_effect)
 }
+
+
+// card effects
+Game.prototype.control = function() {}
+
+Game.prototype.destroy = function() {}
+
+Game.prototype.drain = function() {}
+
+Game.prototype.draw = function(personal, opponent, effect) {
+
+}
+
+Game.prototype.equip = function() {}
+
+Game.prototype.modify = function(personal, opponent, effect) {
+  let player = {self: personal, foe: opponent}
+  for (let target in effect) {
+    for (let object in effect[target]) {
+      player[target][object] += effect[target][object]
+
+    }
+  }
+}
+
+Game.prototype.retrieve = function() {}
+
+Game.prototype.set = function() {}
+
+Game.prototype.steal = function() {}
 
 Game.prototype.judge = function (personal, opponent, card_id) {
   let player = {self: personal, foe: opponent}
@@ -205,47 +232,23 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // }
   //
   // effect = { effect: { target: { field: { type: value } } } }
+  let player = {self: personal, foe: opponent}
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
     let result = {personal: {}, opponent: {}}
     for (let avail_effect of card_list[id]) {
       let effect_name = avail_effect.split['_'][0]
-      let rlt = this.effectExecute(personal, opponent, this.default.all_card[card_name].effect[avail_effect])
+      let effect = this.default.all_card[card_name].effect[avail_effect]
+      let rlt = this[effect_name](personal, opponent, effect)
+
       Object.assign(result.personal, rlt.personal)
       Object.assign(result.opponent, rlt.opponent)
     }
-    personal.emit('effectExecute', result.personal)
-    opponent.emit('effectExecute', result.opponent)
+    personal.emit('effectTrigger', result.personal)
+    opponent.emit('effectTrigger', result.opponent)
   }
 }
-
-// effect = game.default.all_card[card_name].effect
-// return {personal: data, opponent: data}
-Game.prototype.effectExecute = function (personal, opponent, effect) {
-
-  let player = {self: personal, foe: opponent}
-  for (let target in effect) {
-    for (let object in effect[target]) {
-
-      // attribute change
-      if (player[target][object]){
-        player[target][object] += effect[target][object]
-        return
-      }
-
-      // field change
-      if (player[target].card_ammount[object]) {
-        for (let type in effect[target][object]) {
-
-        }
-      }
-
-    }
-  }
-
-}
-
 
 // tools
 Game.prototype.idGenerate = function (length) {
