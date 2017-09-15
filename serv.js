@@ -170,13 +170,15 @@ Game.prototype.draw = function(personal, opponent, effect) {
 Game.prototype.equip = function() {}
 
 Game.prototype.modify = function(personal, opponent, effect) {
-  let player = {self: personal, foe: opponent}
+  let player = {personal: personal, opponent: opponent}
+  let param = {personal: {}, opponent: {}}
   for (let target in effect) {
     for (let object in effect[target]) {
       player[target][object] += effect[target][object]
-
+      param[target][object] = effect[target][object]
     }
   }
+  return param
 }
 
 Game.prototype.retrieve = function() {}
@@ -186,7 +188,7 @@ Game.prototype.set = function() {}
 Game.prototype.steal = function() {}
 
 Game.prototype.judge = function (personal, opponent, card_id) {
-  let player = {self: personal, foe: opponent}
+  let player = {personal: personal, opponent: opponent}
   let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
   let avail_effect = {}
   avail_effect[card_id] = []
@@ -232,19 +234,25 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // }
   //
   // effect = { effect: { target: { field: { type: value } } } }
-  let player = {self: personal, foe: opponent}
+  let player = {personal: personal, opponent: opponent}
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
-    let result = {personal: {}, opponent: {}}
+    let param = {personal: {}, opponent: {}}
     for (let avail_effect of card_list[id]) {
       let effect_name = avail_effect.split['_'][0]
       let effect = this.default.all_card[card_name].effect[avail_effect]
       let rlt = this[effect_name](personal, opponent, effect)
 
-      Object.assign(result.personal, rlt.personal)
-      Object.assign(result.opponent, rlt.opponent)
+      Object.assign(param.personal, rlt.personal)
+      Object.assign(param.opponent, rlt.opponent)
     }
+
+    let result = {personal: {}, opponent: {}}
+    result.personal = param
+    result.opponent.personal = param.opponent
+    result.opponent.opponent = param.personal
+
     personal.emit('effectTrigger', result.personal)
     opponent.emit('effectTrigger', result.opponent)
   }
