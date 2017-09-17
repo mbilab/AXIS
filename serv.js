@@ -164,18 +164,32 @@ Game.prototype.destroy = function() {}
 Game.prototype.drain = function() {}
 
 Game.prototype.draw = function(personal, opponent, effect) {
-
+  let player = { personal: personal, opponent: opponent }
+  let param = { card: {} }
+  for (let target in effect) {
+    for (let object in effect[target]) {
+      for (let type in effect[target][object]) {
+        // real execute
+        // ...
+        // let rlt = cardMove ...
+        // Object.assign(param.personal, rlt.personal)
+        param.card['card_id'] = {}
+      }
+    }
+  }
+  return param
 }
 
 Game.prototype.equip = function() {}
 
 Game.prototype.modify = function(personal, opponent, effect) {
-  let player = {personal: personal, opponent: opponent}
-  let param = {personal: {}, opponent: {}}
+  let player = { personal: personal, opponent: opponent }
+  let param = { personal: {}, opponent: {} }
   for (let target in effect) {
+    param[target].attr = {}
     for (let object in effect[target]) {
-      player[target][object] += effect[target][object]
-      param[target][object] = effect[target][object]
+      //player[target][object] += effect[target][object]
+      param[target].attr[object] = effect[target][object]
     }
   }
   return param
@@ -244,8 +258,16 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
       let effect = this.default.all_card[card_name].effect[avail_effect]
       let rlt = this[effect_name](personal, opponent, effect)
 
-      Object.assign(param.personal, rlt.personal)
-      Object.assign(param.opponent, rlt.opponent)
+      for (let target in rlt) {
+        for (let type in rlt[target]) {
+          if (param[target][type]) {
+            if (rlt[target][type].modify) param[target][type].modify += rlt[target][type].modify
+            else Object.assign(param[target][type], rlt[target][type])
+          }
+          else
+            else Object.assign(param[target], rlt[target])
+        }
+      }
     }
 
     let result = {personal: {}, opponent: {}}
