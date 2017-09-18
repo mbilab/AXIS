@@ -336,9 +336,6 @@ Game.prototype.judge = function (personal, opponent, card_id) {
 }
 
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
-
-  console.log(card_list)
-
   // card_list = {
   //   card_id_1: [effect1, effect2 ...],
   //   card_id_2 ...
@@ -819,11 +816,11 @@ io.on('connection', client => {
     cb(rlt.personal)
     game.room[rid].player[1 - curr].emit('foePlayHand', rlt.opponent)
 
-    // card effect triggers
-
-    let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
-    game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
-
+    // card effect triggers, only those trigger immediately
+    if (param[it.id].to !== 'battle') {
+      let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
+      game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
+    }
   })
 
 })
