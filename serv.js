@@ -163,7 +163,7 @@ Game.prototype.control = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['control'] = {}
       }
     }
   }
@@ -176,7 +176,20 @@ Game.prototype.destroy = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['destroy'] = {}
+      }
+    }
+  }
+  return param
+}
+
+Game.prototype.discard = function(personal, opponent, effect) {
+  let player = { personal: personal, opponent: opponent }
+  let param = { card: {} }
+  for (let target in effect) {
+    for (let object in effect[target]) {
+      for (let type in effect[target][object]) {
+        param.card['discard'] = {}
       }
     }
   }
@@ -189,7 +202,7 @@ Game.prototype.drain = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['drain'] = {}
       }
     }
   }
@@ -206,7 +219,7 @@ Game.prototype.draw = function(personal, opponent, effect) {
         // ...
         // let rlt = cardMove ...
         // Object.assign(param.personal, rlt.personal)
-        param.card['card_id'] = {}
+        param.card['draw'] = {}
       }
     }
   }
@@ -219,7 +232,7 @@ Game.prototype.equip = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['equip'] = {}
       }
     }
   }
@@ -244,7 +257,7 @@ Game.prototype.retrieve = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['retrieve'] = {}
       }
     }
   }
@@ -270,7 +283,7 @@ Game.prototype.steal = function(personal, opponent, effect) {
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
-        param.card['card_id'] = {}
+        param.card['steal'] = {}
       }
     }
   }
@@ -285,39 +298,47 @@ Game.prototype.judge = function (personal, opponent, card_id) {
   // judge: { effect: { target: { condition: { compare: value } } } }
 
   for (let effect in judge) {
-    for (let target in judge.effect) {
-      // for effects don't need to judge
-      if(!judge.effect.target){
-        avail_effect[card_id].push(effect)
-        continue
-      }
 
-      // for effects with judges
-      for (let condition in judge.effect.target) {
-        let curr_val = null
-        switch (condition) {
-          case 'hit':
-            if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
-            break
+    // for effects don't need to judge
+    if(!Object.keys(judge[effect]).length){
+      avail_effect[card_id].push(effect)
+      continue
+    }
+    // for effects with judges
+    else {
+      for (let target in judge.effect) {
+        for (let condition in judge.effect.target) {
+          let curr_val = null
+          switch (condition) {
+            case 'hit':
+              if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
+              break
 
-          case 'hp':
-            curr_val = player[target].hp
-            break
+            case 'hp':
+              curr_val = player[target].hp
+              break
 
-          case 'handcard': break
+            case 'handcard':
+              curr_val = player[target].card_ammount.hand
+              break
 
-          default:break
+            default:break
+          }
+
+          if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
         }
-
-        if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
       }
     }
+
   }
 
   return avail_effect
 }
 
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
+
+  console.log(card_list)
+
   // card_list = {
   //   card_id_1: [effect1, effect2 ...],
   //   card_id_2 ...
@@ -329,15 +350,14 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
     let param = {
-      card: {}
-      attr: { personal: {}, opponent: {} }
-      stat: { personal: {}. opponent: {} }
+      card: {},
+      attr: { personal: {}, opponent: {} },
+      stat: { personal: {}, opponent: {} }
     }
-
     for (let avail_effect of card_list[id]) {
-      let effect_name = avail_effect.split['_'][0]
+      let effect_name = avail_effect.split('_')[0]
       let effect = this.default.all_card[card_name].effect[avail_effect]
-      let rlt = this[effect_name](personal, opponent, effect)
+      let rlt = game[effect_name](personal, opponent, effect)
 
       for (let type in rlt) {
         if (type === 'card') Object.assign(param[type], rlt[type])
@@ -352,15 +372,15 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
       }
     }
 
-    let result = {personal: param, opponent: param}
-    for (let type in ['attr', 'stat']) {
-      let temp = result.opponent[type].personal
-      result.opponent[type].personal = result.opponent[type].opponent
-      result.opponent[type].opponent = temp
-    }
+    personal.emit('effectTrigger', param)
 
-    personal.emit('effectTrigger', result.personal)
-    opponent.emit('effectTrigger', result.opponent)
+    for(let type in param){
+      if(type === 'card') continue
+      let temp = param[type].personal
+      param[type].personal = param[type].opponent
+      param[type].opponent = temp
+    }
+    opponent.emit('effectTrigger', param)
   }
 }
 
@@ -800,10 +820,10 @@ io.on('connection', client => {
     game.room[rid].player[1 - curr].emit('foePlayHand', rlt.opponent)
 
     // card effect triggers
-    /*
+
     let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
     game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
-    */
+
   })
 
 })

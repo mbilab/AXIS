@@ -633,7 +633,17 @@ socket.on('turnStart', it => {
 })
 
 // card effects
-socket.on('effectTrigger', it => {})
+socket.on('effectTrigger', effect => {
+  /*
+  effect = {
+    card: {},
+    attr: { personal: {}, opponent: {} },
+    stat: { personal: {}, opponent: {} }
+  }
+  */
+  console.log(effect)
+})
+
 socket.on('damagePhase', it => {})
 
 //////////////////////////////////////////////////////////////////////////////////////
