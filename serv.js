@@ -155,6 +155,45 @@ Game.prototype.enchantAttack = function (personal, opponent) {
   this.effectTrigger(personal, opponent, avail_effect)
 }
 
+Game.prototype.playHandCard = function (personal, opponent) {
+  let param = {}
+  let card_id = this.room[personal._rid].card_trace.last
+  param[card_id] = {}
+
+  // field adjust
+  switch (this.default.all_card[card.name].type.base) {
+    case 'artifact':
+      personal.action_point -= 1
+      param[card_id].to = 'battle'
+      param[card_id].action = 'equip'
+      break
+
+    case 'item'		 :
+      param[card_id].to = 'grave'
+      param[card_id].action = 'use'
+      break
+
+    case 'spell'   :
+      personal.action_point -= 1
+      param[card_id].to = 'grave'
+      param[card_id].action = 'cast'
+      break
+
+    default        : break
+  }
+
+  // card move between fields
+  let rlt = this.cardMove(personal, opponent, param)
+  cb(rlt.personal)
+  opponent.emit('foePlayHand', rlt.opponent)
+
+  // card effect triggers, only those trigger immediately
+  if (param[card_id].to !== 'battle') {
+    let avail_effect = game.judge(personal, opponent, card_id)
+    this.effectTrigger(personal, opponent, avail_effect)
+  }
+}
+
 // card effects
 Game.prototype.control = function(personal, opponent, effect) {
   let player = { personal: personal, opponent: opponent }
@@ -563,8 +602,9 @@ io.on('connection', client => {
         client._fid = opponent._pid
 
         game.room[rid] = {
-          game_phase: 'normal',
+          game_phase: 'normal', // >> normal / attack / waiting
           atk_status: {hit: false, attacker: null, defender: null},
+          card_trace: {last: null},
           cards: {},
           card_id: 1,
           counter: 0,
@@ -638,6 +678,7 @@ io.on('connection', client => {
     let rid = client._rid
     let curr = game.room[rid].counter
     if (game.room[rid].game_phase === 'attack') return cb( { err: 'not allowed in atk phase'} )
+    if (game.room[rid].game_phase === 'waiting') return cb( { err: 'waiting opponent decision'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent'} )
     if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
@@ -719,10 +760,15 @@ io.on('connection', client => {
   })
 
   // neutral
+  client.on('decide', it => {
+
+  })
+
   client.on('drawCard', cb => {
     let rid = client._rid
     let curr = game.room[rid].counter
     if (game.room[rid].game_phase === 'attack') return cb( { err: 'not allowed in atk phase'} )
+    if (game.room[rid].game_phase === 'waiting') return cb( { err: 'waiting opponent decision'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
@@ -772,6 +818,7 @@ io.on('connection', client => {
     let rid = client._rid
     let curr = game.room[rid].counter
     if (game.room[rid].game_phase === 'attack') return cb({ err: 'not allowed in atk phase'})
+    if (game.room[rid].game_phase === 'waiting') return cb( { err: 'waiting opponent decision'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
 
     //checkCardEnergy
@@ -793,9 +840,22 @@ io.on('connection', client => {
     let card = game.room[rid].cards[it.id]
 
     if (game.room[rid].game_phase === 'attack') return cb( { err: 'atk phase'} )
+    if (game.room[rid].game_phase === 'waiting') return cb( { err: 'waiting opponent decision'} )
     if (game.room[rid].player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
+
+    /*
+    // check if counter effect exist
+    let card_type =
+
+
+    if ()
+
+    else
+      game.playHandCard(client, game.room[rid].player[1-curr])
+
+    */
 
     let param = {}
     param[it.id] = {}

@@ -641,6 +641,14 @@ socket.on('effectTrigger', effect => {
     stat: { personal: {}, opponent: {} }
   }
   */
+  /*
+  // attr
+
+  // card
+
+  // stat
+
+  */
   console.log(effect)
 })
 
