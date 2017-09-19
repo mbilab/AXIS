@@ -155,7 +155,6 @@ Game.prototype.enchantAttack = function (personal, opponent) {
   this.effectTrigger(personal, opponent, avail_effect)
 }
 
-
 // card effects
 Game.prototype.control = function(personal, opponent, effect) {
   let player = { personal: personal, opponent: opponent }
@@ -218,7 +217,7 @@ Game.prototype.draw = function(personal, opponent, effect) {
         // real execute
         // ...
         // let rlt = cardMove ...
-        // Object.assign(param.personal, rlt.personal)
+        // Object.assign(param.card, rlt.personal)
         param.card['draw'] = {}
       }
     }
@@ -335,6 +334,10 @@ Game.prototype.judge = function (personal, opponent, card_id) {
   return avail_effect
 }
 
+Game.prototype.counterEffect = function () {
+
+}
+
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // card_list = {
   //   card_id_1: [effect1, effect2 ...],
@@ -406,9 +409,17 @@ Game.prototype.shuffle = function (card_list) {
 // utility
 function operation (curr_val, condition) {
   let operator = Object.keys(condition)[0]
-  switch (operation) {
-    case 'goe':
+  switch (operator) {
+    case 'more':
       return (curr_val > condition.operator)? true : false
+    case 'goe':
+      return (curr_val >= condition.operator)? true : false
+    case 'less':
+      return (curr_val < condition.operator)? true : false
+    case 'loe':
+      return (curr_val <= condition.operator)? true : false
+    case 'eql':
+      return (curr_val == condition.operator)? true : false
 
     default: break
   }
