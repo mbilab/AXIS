@@ -74,6 +74,7 @@ Game.prototype.buildPlayer = function (client) {
   client.action_point = game.default.action_point
   client.atk_enchant = [] // card_ids
   client.buff_action = [] // card_ids
+  client.counter_queue = [] // card_ids
   client.first_conceal = false
 
   client.deck_slot = {}
@@ -146,6 +147,22 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
+Game.prototype.counterInquire = function (personal, opponent) {
+  let rid = personal._rid
+  let card_type = game.room[rid].cards[game.room[rid].card_trace.last].type.base
+  let param = []
+
+  for (let id of opponent.counter_queue) {
+    let card = game.room[rid].cards[id]
+    let target_type = Object.keys(game.default.all_card[card.name].effect.counter.opponent.hand)[0]
+    if (target_type !== card_type) continue
+    else param.push(id)
+  }
+
+  if (param.length) opponent.emit('counterDecide', {card_list: param})
+  else this.playHandCard(personal, opponent)
+}
+
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
   let avail_effect = {}
@@ -161,7 +178,7 @@ Game.prototype.playHandCard = function (personal, opponent) {
   param[card_id] = {}
 
   // field adjust
-  switch (this.default.all_card[card.name].type.base) {
+  switch (this.room[personal._rid].cards[card_id].type.base) {
     case 'artifact':
       personal.action_point -= 1
       param[card_id].to = 'battle'
@@ -184,8 +201,8 @@ Game.prototype.playHandCard = function (personal, opponent) {
 
   // card move between fields
   let rlt = this.cardMove(personal, opponent, param)
-  cb(rlt.personal)
-  opponent.emit('foePlayHand', rlt.opponent)
+  personal.emit('playHandCard', rlt.personal)
+  opponent.emit('playHandCard', rlt.opponent)
 
   // card effect triggers, only those trigger immediately
   if (param[card_id].to !== 'battle') {
@@ -373,10 +390,6 @@ Game.prototype.judge = function (personal, opponent, card_id) {
   return avail_effect
 }
 
-Game.prototype.counterEffect = function () {
-
-}
-
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // card_list = {
   //   card_id_1: [effect1, effect2 ...],
@@ -488,6 +501,8 @@ io.on('connection', client => {
     let rid = client._rid
     let pid = client._pid
 
+    console.log(`${client._pid} disconnect`)
+
     // if client is still in pool
     if(game.pool[pid]) return delete game.pool[pid]
 
@@ -497,17 +512,17 @@ io.on('connection', client => {
 
     // if client is in a match
     if(client._rid){
-      game.room[rid].player.map(it => {
-        if (it._pid !== client._fid) return
-
-        game.buildPlayer(it)
-        game.pool[client._fid] = it
-        delete it._rid
-        it.emit('interrupt', {err: 'opponent disconnect'})
-      })
-
-      delete game.room[rid]
-      return
+      for (let player of game.room[rid].player){
+        if (player._pid !== pid) {
+          game.buildPlayer(player)
+          game.pool[player._pid] = player
+          player.emit('interrupt', {err: 'opponent disconnect'})
+          console.log(`reset player ${player._pid}`)
+          delete player._rid
+          delete game.room[rid]
+          return
+        }
+      }
     }
   })
 
@@ -520,19 +535,16 @@ io.on('connection', client => {
 
   client.on('leaveMatch', cb => {
     let rid = client._rid
-    let pid = client._pid
-    let fid = client._fid
-
-    game.room[rid].player.map(it => {
-      if(it._pid === fid)
-        it.emit('interrupt', {err: 'opponent leave'})
-
-      game.buildPlayer(it)
-      game.pool[it._pid] = it
-      delete it._rid
-    })
-
+    console.log(`${player._pid} leave`)
+    for (let player of game.room[rid].player) {
+      game.buildPlayer(player)
+      game.pool[player._pid] = player
+      player.emit('interrupt', {err: 'opponent leave'})
+      console.log(`reset player ${player._pid}`)
+      delete player._rid
+    }
     delete game.room[rid]
+    return
   })
 
   // personal interface
@@ -634,12 +646,11 @@ io.on('connection', client => {
           }
         }
 
-        opponent.emit('buildLife', life[opponent._pid])
-        client.emit('buildLife', life[client._pid])
-
         // game start
         game.room[rid].player[0].emit('gameStart', { msg: 'your turn' })
         game.room[rid].player[1].emit('gameStart', { msg: 'waiting for opponent' })
+        opponent.emit('buildLife', life[opponent._pid])
+        client.emit('buildLife', life[client._pid])
       }
       else{
         game.queue.push(client)
@@ -713,6 +724,10 @@ io.on('connection', client => {
     let rlt = game.cardMove(client, game.room[rid].player[curr], it.card_pick)
     cb(rlt.personal)
     game.room[rid].player[curr].emit(`foeConceal`, rlt.opponent)
+  })
+
+  client.on('counterResult', (it, cb) => {
+
   })
 
   client.on('tracking', (it, cb) => {
@@ -845,53 +860,8 @@ io.on('connection', client => {
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
 
-    /*
-    // check if counter effect exist
-    let card_type =
-
-
-    if ()
-
-    else
-      game.playHandCard(client, game.room[rid].player[1-curr])
-
-    */
-
-    let param = {}
-    param[it.id] = {}
-
-    // field adjust
-    switch (game.default.all_card[card.name].type.base) {
-      case 'artifact':
-        client.action_point -= 1
-        param[it.id].to = 'battle'
-        param[it.id].action = 'equip'
-        break
-
-      case 'item'		 :
-        param[it.id].to = 'grave'
-        param[it.id].action = 'use'
-        break
-
-      case 'spell'   :
-        client.action_point -= 1
-        param[it.id].to = 'grave'
-        param[it.id].action = 'cast'
-        break
-
-      default        : break
-    }
-
-    // card move between fields
-    let rlt = game.cardMove(client, game.room[rid].player[1 - curr], param)
-    cb(rlt.personal)
-    game.room[rid].player[1 - curr].emit('foePlayHand', rlt.opponent)
-
-    // card effect triggers, only those trigger immediately
-    if (param[it.id].to !== 'battle') {
-      let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
-      game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
-    }
+    game.room[rid].card_trace.last = it.id
+    game.counterInquire(client, game.room[rid].player[1-curr])
   })
 
 })

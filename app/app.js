@@ -146,7 +146,8 @@ Game.prototype.changePage = function (obj) {
         if ('html' === new_page[elem].type)
           this.shiftInputForm(new_page[elem], 'front')
         else
-          new_page[elem].reset(new_page[elem].x, new_page[elem].y)
+          if(!Array.isArray(new_page[elem]))
+            new_page[elem].reset(new_page[elem].x, new_page[elem].y)
       }
     }
   }
@@ -474,8 +475,6 @@ Player.prototype.playHandCard = function (card) {
       else game.text.setText(it.err)
       return
     }
-
-    game.cardMove(it)
   })
 }
 
@@ -609,7 +608,7 @@ socket.on('foeDrawCard', it => {
   if (it.deck_empty) opponent.deck.kill()
 })
 
-socket.on('foePlayHand', it => {
+socket.on('playHandCard', it => {
   game.cardMove(it)
 })
 
@@ -626,6 +625,7 @@ socket.on('joinGame', it => {//
   game.text.setText(it.msg)
   game.changePage({next:'game'})
 })
+
 
 socket.on('turnStart', it => {
   //game.checkCardEnergy(it.card_list)
