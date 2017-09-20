@@ -468,13 +468,14 @@ Player.prototype.signUp = function () {
   })
 }
 
-Player.prototype.playHandCard = function (card) {
-  socket.emit('playHandCard', {id: card.id}, it => {
+Player.prototype.useCard = function (card) {
+  socket.emit('useCard', {id: card.id}, it => {
     if (it.err){
       if (it.err === 'atk phase') personal.chooseCard(card)
       else game.text.setText(it.err)
       return
     }
+    game.cardMove(it)
   })
 }
 
@@ -550,7 +551,7 @@ Card.prototype.click = function () {
       break
 
     case 'hand'	 :
-      personal.playHandCard(this)
+      personal.useCard(this)
       break
 
     case 'life'	 :
@@ -575,6 +576,10 @@ socket.on('buildLife', it => {
     }
   }
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})
+})
+
+socket.on('counterRequest', it => {
+
 })
 
 socket.on('foeAttack', () => {
@@ -608,7 +613,7 @@ socket.on('foeDrawCard', it => {
   if (it.deck_empty) opponent.deck.kill()
 })
 
-socket.on('playHandCard', it => {
+socket.on('foeUseCard', it => {
   game.cardMove(it)
 })
 

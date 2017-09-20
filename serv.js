@@ -147,7 +147,7 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
-Game.prototype.counterInquire = function (personal, opponent) {
+Game.prototype.counterRequest = function (personal, opponent, action) {
   let rid = personal._rid
   let card_type = game.room[rid].cards[game.room[rid].card_trace.last].type.base
   let param = []
@@ -159,8 +159,13 @@ Game.prototype.counterInquire = function (personal, opponent) {
     else param.push(id)
   }
 
-  if (param.length) opponent.emit('counterDecide', {card_list: param})
-  else this.playHandCard(personal, opponent)
+  if (param.length) {
+    this.room[rid].counter_status.prev = opponent
+    opponent.emit('counterRequest', {card_list: param})
+  }
+  else {
+    // effect
+  }
 }
 
 // personal >> who announce this attack
@@ -170,45 +175,6 @@ Game.prototype.enchantAttack = function (personal, opponent) {
     Object.assign(avail_effect, this.judge(personal, opponent, id))
 
   this.effectTrigger(personal, opponent, avail_effect)
-}
-
-Game.prototype.playHandCard = function (personal, opponent) {
-  let param = {}
-  let card_id = this.room[personal._rid].card_trace.last
-  param[card_id] = {}
-
-  // field adjust
-  switch (this.room[personal._rid].cards[card_id].type.base) {
-    case 'artifact':
-      personal.action_point -= 1
-      param[card_id].to = 'battle'
-      param[card_id].action = 'equip'
-      break
-
-    case 'item'		 :
-      param[card_id].to = 'grave'
-      param[card_id].action = 'use'
-      break
-
-    case 'spell'   :
-      personal.action_point -= 1
-      param[card_id].to = 'grave'
-      param[card_id].action = 'cast'
-      break
-
-    default        : break
-  }
-
-  // card move between fields
-  let rlt = this.cardMove(personal, opponent, param)
-  personal.emit('playHandCard', rlt.personal)
-  opponent.emit('playHandCard', rlt.opponent)
-
-  // card effect triggers, only those trigger immediately
-  if (param[card_id].to !== 'battle') {
-    let avail_effect = game.judge(personal, opponent, card_id)
-    this.effectTrigger(personal, opponent, avail_effect)
-  }
 }
 
 // card effects
@@ -614,9 +580,9 @@ io.on('connection', client => {
         client._fid = opponent._pid
 
         game.room[rid] = {
-          game_phase: 'normal', // >> normal / attack / waiting
+          game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
-          card_trace: {last: null},
+          counter_status: {type: null, card: null, prev: null},
           cards: {},
           card_id: 1,
           counter: 0,
@@ -727,7 +693,11 @@ io.on('connection', client => {
   })
 
   client.on('counterResult', (it, cb) => {
-
+    /*
+    let room = game.room[client._rid]
+    if( counter triggers ) game.counterRequest(client, room.counter_status.prev, room.counter_status.type)
+    else {trigger effect of the card which chose to be counter}
+    */
   })
 
   client.on('tracking', (it, cb) => {
@@ -775,10 +745,6 @@ io.on('connection', client => {
   })
 
   // neutral
-  client.on('decide', it => {
-
-  })
-
   client.on('drawCard', cb => {
     let rid = client._rid
     let curr = game.room[rid].counter
@@ -849,7 +815,7 @@ io.on('connection', client => {
     game.room[rid].player[curr].emit('turnStart', { msg: 'your turn' })
   })
 
-  client.on('playHandCard', (it, cb) => {
+  client.on('useCard', (it, cb) => {
     let rid = client._rid
     let curr = game.room[rid].counter
     let card = game.room[rid].cards[it.id]
@@ -860,8 +826,44 @@ io.on('connection', client => {
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
 
-    game.room[rid].card_trace.last = it.id
-    game.counterInquire(client, game.room[rid].player[1-curr])
+    game.room[rid].counter_status.card = it.id
+    let param = {}
+    param[it.id] = {}
+
+    // field adjust
+    switch (game.room[rid].cards[it.id].type.base) {
+      case 'artifact':
+        client.action_point -= 1
+        param[it.id].to = 'battle'
+        param[it.id].action = 'equip'
+        break
+
+      case 'item'		 :
+        param[it.id].to = 'grave'
+        param[it.id].action = 'use'
+        break
+
+      case 'spell'   :
+        client.action_point -= 1
+        param[it.id].to = 'grave'
+        param[it.id].action = 'cast'
+        break
+
+      default        : break
+    }
+
+    // card move between fields
+    let rlt = game.cardMove(client, game.room[rid].player[1-curr], param)
+    cb(rlt.personal)
+    game.room[rid].player[1-curr].emit('foeUseCard', rlt.opponent)
+
+    if (param[it.id].to !== 'battle') {
+      let avail_effect = game.judge(client, game.room[rid].player[1-curr], it.id)
+      game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
+    }
+
+    // game.counterRequest(client, game.room[rid].player[1-curr])
+
   })
 
 })
