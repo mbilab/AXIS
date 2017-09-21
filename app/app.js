@@ -128,8 +128,10 @@ Game.prototype.changePage = function (obj) {
   if (old_page) {
     for (let elem in old_page) {
       if (Array.isArray(old_page[elem])) {
+        console.log(elem)
         for (let card of old_page[elem])
           card.img.destroy()
+        old_page[elem] = []
       }
       else {
         if ('html' === old_page[elem].type)
@@ -270,7 +272,13 @@ Game.prototype.pageInit = function () {
 Game.prototype.resetPlayer = function () {
   this.text.setText('')
   for (let field of ['altar', 'battle', 'grave', 'hand', 'life']){
+    for (let card of personal[field]) {
+      card.img.destroy()
+    }
     personal[field] = []
+    for (let card of opponent[field]) {
+      card.img.destroy()
+    }
     opponent[field] = []
   }
 }
@@ -443,12 +451,11 @@ Player.prototype.login = function () {
 
 Player.prototype.searchMatch = function () {
   socket.emit('searchMatch', {curr_deck: personal.curr_deck}, it => {
-    if(it.err) return game.text.setText(it.err)
-
-    if(it.msg !== 'searching for match...') game.changePage({next:'game'})
-    else game.changePage({next:'loading'})
-
-    game.text.setText(it.msg)
+    if (it.err) return game.text.setText(it.err)
+    if (it.msg) {
+      game.changePage({next:'loading'})
+      game.text.setText(it.msg)
+    }
   })
 }
 
@@ -567,15 +574,16 @@ Card.prototype.click = function () {
 // socket server
 
 socket.on('buildLife', it => {
-  console.log(it)
-  for (let target in it){
-    for(let card of it[target]){
+  for (let target in it.card_list){
+    for(let card of it.card_list[target]){
       let name = (card.name)? card.name : 'cardback'
       let input = (target === 'personal')? true : false
       game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
     }
   }
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})
+  game.changePage({next: 'game'})
+  game.text.setText(it.msg)
 })
 
 socket.on('counterRequest', it => {
@@ -617,20 +625,12 @@ socket.on('foeUseCard', it => {
   game.cardMove(it)
 })
 
-socket.on('gameStart', it => game.text.setText(it.msg))
-
 socket.on('interrupt', it => {
-  alert(it.err)
   game.text.setText('')
-  game.changePage({next: 'lobby'})
   game.resetPlayer()
+  game.changePage({next: 'lobby'})
+  //alert(it.err)
 })
-
-socket.on('joinGame', it => {//
-  game.text.setText(it.msg)
-  game.changePage({next:'game'})
-})
-
 
 socket.on('turnStart', it => {
   //game.checkCardEnergy(it.card_list)
