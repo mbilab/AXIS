@@ -81,6 +81,8 @@ const Game = function () {
       conceal: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
       tracking: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
       give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} }
+      // counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
+      // pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2, img: 'pass', func: this.player.personal.pass, ext: {req: true} }
     }
   }
   this.phaser = null
@@ -127,12 +129,7 @@ Game.prototype.changePage = function (obj) {
 
   if (old_page) {
     for (let elem in old_page) {
-      if (Array.isArray(old_page[elem])) {
-        console.log(elem)
-        for (let card of old_page[elem])
-          card.img.destroy()
-        old_page[elem] = []
-      }
+      if (Array.isArray(old_page[elem])) old_page[elem] = []
       else {
         if ('html' === old_page[elem].type)
           this.shiftInputForm(old_page[elem], 'bottom')
@@ -363,6 +360,7 @@ Player.prototype.tracking = function () {
 }
 
 Player.prototype.giveUp = function () {
+  personal.card_pick = {}
   socket.emit('giveUp', it => {
     let param = {personal: true, give_up: true}
     param[it.action] = true
@@ -379,6 +377,23 @@ Player.prototype.chooseCard = function (card) {
     delete personal.card_pick[card.id]
     card.img.alpha = 1
   }
+}
+
+Player.prototype.counter = function () {
+  socket.emit('counter', {card_pick: personal.card_pick}, it => {
+    if(it.err) return game.text.setText(it.err)
+
+    game.cardMove(it)
+    game.page.counter.kill()
+    game.page.pass.kill()
+  })
+}
+
+Player.prototype.pass = function () {
+  socket.emit('pass', it => {
+    game.page.counter.kill()
+    game.page.pass.kill()
+  })
 }
 
 Player.prototype.drawCard = function () {
@@ -586,7 +601,7 @@ socket.on('buildLife', it => {
   game.text.setText(it.msg)
 })
 
-socket.on('counterRequest', it => {
+socket.on('counterPhase', it => {
 
 })
 

@@ -562,7 +562,6 @@ io.on('connection', client => {
           counter_status: {type: null, card: null, prev: null},
           cards: {},
           card_id: 1,
-          counter: 0,
           player_pointer: 0,
           player: [opponent, client]
         }
@@ -710,6 +709,55 @@ io.on('connection', client => {
     */
   })
 
+  client.on('counter', (it, cb) => {
+    let card_pick = Object.keys(it.card_pick)
+    if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
+
+    let room = game.room[client._rid]
+    let card = room.cards[card_pick[0]]
+    let effect = game.default.all_card[card.name].effect
+    let effect_type = Object.keys(effect.counter.opponent)[0]
+    let effect_object = Object.keys(effect.counter.opponent[effect_type])[0]
+    let counter_card = room.cards[room.counter_status.card]
+
+    if (!effect.counter) return cb({err: 'no counter effect'})
+    if (effect_type !== room.counter_status.type) return cb({err: 'counter action type mismatch'})
+    if (effect_object !== 'card' && effect_object !== counter_card.type.base) return cb({err: 'counter object type mismatch'})
+
+    let param = {}
+    param[card_pick[0]] = {from: card.field}
+    let rlt = cardMove(client, room.counter_status.last, param)
+    cb(rlt.personal)
+    room.counter_status.last.emit('counterPhase', rlt.opponent)
+
+    room.counter_status.last = client
+    room.counter_status.type = 'trigger'
+  })
+
+  client.pass('pass', (it, cb) => {
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    let counter = (client == room.player[curr])? true : false
+    let personal = (counter == true)? client : (room.counter_status.last)
+    let opponent = (counter == true)? (room.counter_status.last) : client
+
+    if (counter == true) {
+      let param = {}
+      param[room.counter_status.last] = {from: room.cards[room.counter_status.last].field}
+      let rlt = game.cardMove(personal, opponent, param)
+      cb(rlt.personal)
+      opponent.emit('counterEnd', rlt.opponent)
+    }
+    else {
+      let avail_effect = game.judge(personal, opponent, it.id)
+      game.effectTrigger(personal, opponent, avail_effect)
+      cb({})
+    }
+
+    room.game_status = 'normal'
+    room.counter_status = {card: null, last: null, type: null}
+  })
+
   // neutral
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
@@ -742,9 +790,9 @@ io.on('connection', client => {
 
   client.on('triggerEffect', (it, cb) => {
     // action varies based on its type
-    let rid = client._rid
-    let curr = game.room[rid].counter
-    let card = game.room[rid].cards[it.id]
+    let room = game.room[client._rid]
+    let curr = room.counter
+    let card = room.cards[it.id]
 
     if (card.type.base === 'artifact' && card.type.effect === 'enchant') {
       if (card.overheat) return cb({err: 'artifact overheat'})
@@ -754,8 +802,8 @@ io.on('connection', client => {
       cb({msg: `attack enchanted by ${card.name}`})
     }
     else {
-      let avail_effect = game.judge(client, game.room[rid].player[1-curr], id)
-      game.effectTrigger(client, game.room[rid].player[1-curr], avail_effect)
+      let avail_effect = game.judge(client, room.player[1-curr], id)
+      game.effectTrigger(client, room.player[1-curr], avail_effect)
       cb({})
     }
   })
@@ -785,7 +833,7 @@ io.on('connection', client => {
     let card = room.cards[it.id]
 
     if (room.game_phase === 'attack') return cb( { err: 'atk phase'} )
-    if (room.game_phase === 'waiting') return cb( { err: 'waiting opponent decision'} )
+    if (room.game_phase === 'counter') return cb( { err: 'not allowed in counter phase'} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
@@ -821,10 +869,13 @@ io.on('connection', client => {
     cb(rlt.personal)
     room.player[1-curr].emit('foeUseCard', rlt.opponent)
 
-    // game.room[rid].game_phase = 'counter'
-    // client.emit('counterPhase')
-    // game.room[rid].player[1-curr].emit('counterPhase')
-
+    /*
+    room.game_phase = 'counter'
+    room.counter_status.last = room.player[1-curr]
+    room.counter_status.type = 'use'
+    client.emit('counterPhase')
+    game.room[rid].player[1-curr].emit('foeCounterPhase')
+    */
 
     if (param[it.id].to !== 'battle') {
       let avail_effect = game.judge(client, room.player[1-curr], it.id)
