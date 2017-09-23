@@ -391,6 +391,7 @@ Player.prototype.counter = function () {
 
 Player.prototype.pass = function () {
   socket.emit('pass', it => {
+    if (Object.keys(it).length) cardMove(it)
     game.page.counter.kill()
     game.page.pass.kill()
   })
@@ -601,7 +602,11 @@ socket.on('buildLife', it => {
   game.text.setText(it.msg)
 })
 
-socket.on('counterPhase', it => {
+socket.on('foeCounter', it => {
+
+})
+
+socket.on('counterEnd', it => {
 
 })
 

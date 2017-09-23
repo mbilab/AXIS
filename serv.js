@@ -728,13 +728,13 @@ io.on('connection', client => {
     param[card_pick[0]] = {from: card.field}
     let rlt = cardMove(client, room.counter_status.last, param)
     cb(rlt.personal)
-    room.counter_status.last.emit('counterPhase', rlt.opponent)
+    room.counter_status.last.emit('foeCounter', rlt.opponent)
 
     room.counter_status.last = client
     room.counter_status.type = 'trigger'
   })
 
-  client.pass('pass', (it, cb) => {
+  client.pass('pass', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
     let counter = (client == room.player[curr])? true : false
@@ -745,13 +745,14 @@ io.on('connection', client => {
       let param = {}
       param[room.counter_status.last] = {from: room.cards[room.counter_status.last].field}
       let rlt = game.cardMove(personal, opponent, param)
-      cb(rlt.personal)
-      opponent.emit('counterEnd', rlt.opponent)
+      cb({msg: 'be countered', card_move: rlt.personal})
+      opponent.emit('counterEnd', {msg: 'counter success', card_move: rlt.opponent})
     }
     else {
+      cb({msg: 'card remains'})
+      opponent.emit('counterEnd', {msg: 'counter failed'})
       let avail_effect = game.judge(personal, opponent, it.id)
       game.effectTrigger(personal, opponent, avail_effect)
-      cb({})
     }
 
     room.game_status = 'normal'
