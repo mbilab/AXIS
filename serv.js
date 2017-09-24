@@ -559,7 +559,7 @@ io.on('connection', client => {
         game.room[rid] = {
           game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
-          counter_status: {type: null, card: null, prev: null},
+          counter_status: {type: null, id: null, last: null},
           cards: {},
           card_id: 1,
           player_pointer: 0,
@@ -718,7 +718,7 @@ io.on('connection', client => {
     let effect = game.default.all_card[card.name].effect
     let effect_type = Object.keys(effect.counter.opponent)[0]
     let effect_object = Object.keys(effect.counter.opponent[effect_type])[0]
-    let counter_card = room.cards[room.counter_status.card]
+    let counter_card = room.cards[room.counter_status.id]
 
     if (!effect.counter) return cb({err: 'no counter effect'})
     if (effect_type !== room.counter_status.type) return cb({err: 'counter action type mismatch'})
@@ -751,12 +751,16 @@ io.on('connection', client => {
     else {
       cb({msg: 'card remains'})
       opponent.emit('counterEnd', {msg: 'counter failed'})
-      let avail_effect = game.judge(personal, opponent, it.id)
-      game.effectTrigger(personal, opponent, avail_effect)
+
+      let card = room.cards[room.counter_status.id]
+      if (card.field === 'grave') {
+        let avail_effect = game.judge(personal, opponent, room.counter_status.id)
+        game.effectTrigger(personal, opponent, avail_effect)
+      }
     }
 
     room.game_status = 'normal'
-    room.counter_status = {card: null, last: null, type: null}
+    room.counter_status = {type: null, id: null, last: null}
   })
 
   // neutral
@@ -839,7 +843,7 @@ io.on('connection', client => {
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
 
-    room.counter_status.card = it.id
+    room.counter_status.id = it.id
     let param = {}
     param[it.id] = {}
 
@@ -874,8 +878,8 @@ io.on('connection', client => {
     room.game_phase = 'counter'
     room.counter_status.last = room.player[1-curr]
     room.counter_status.type = 'use'
-    client.emit('counterPhase')
-    game.room[rid].player[1-curr].emit('foeCounterPhase')
+    client.emit('counterPhase', {msg: 'foe counter phase', foe: true})
+    game.room[rid].player[1-curr].emit('counterPhase', {msg: 'counter phase', self: true})
     */
 
     if (param[it.id].to !== 'battle') {

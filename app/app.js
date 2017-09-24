@@ -10,7 +10,6 @@ const opt = {
 }
 
 const Game = function () {
-  this.counter = 0 //-! move to serv.js and rename
   this.curr_page = 'start'
   this.default = { //-! extract height and width
     game: {
@@ -602,12 +601,24 @@ socket.on('buildLife', it => {
   game.text.setText(it.msg)
 })
 
-socket.on('foeCounter', it => {
-
+socket.on('counterPhase', it => {
+  game.text.setText(it.msg)
+  if (it.self) {
+    game.page.counter.reset(game.page.counter.x, game.page.counter.y)
+    game.page.pass.reset(game.page.pass.x, game.page.pass.y)
+  }
 })
 
 socket.on('counterEnd', it => {
+  game.page.counter.kill()
+  game.page.pass.kill()
+  cardMove(it)
+})
 
+socket.on('foeCounter', it => {
+  cardMove(it)
+  game.page.counter.reset(game.page.counter.x, game.page.counter.y)
+  game.page.pass.reset(game.page.pass.x, game.page.pass.y)
 })
 
 socket.on('foeAttack', () => {
