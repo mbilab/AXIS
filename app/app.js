@@ -79,9 +79,9 @@ const Game = function () {
       attack: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'attack', func: this.player.personal.attack},
       conceal: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
       tracking: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
-      give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} }
-      // counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
-      // pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2, img: 'pass', func: this.player.personal.pass, ext: {req: true} }
+      give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
+      counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
+      pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} }
     }
   }
   this.phaser = null
@@ -379,20 +379,22 @@ Player.prototype.chooseCard = function (card) {
 }
 
 Player.prototype.counter = function () {
+  personal.card_pick = {}
   socket.emit('counter', {card_pick: personal.card_pick}, it => {
     if(it.err) return game.text.setText(it.err)
 
     game.cardMove(it)
-    game.page.counter.kill()
-    game.page.pass.kill()
+    game.page.game.counter.kill()
+    game.page.game.pass.kill()
   })
 }
 
 Player.prototype.pass = function () {
   socket.emit('pass', it => {
-    if (Object.keys(it).length) cardMove(it)
-    game.page.counter.kill()
-    game.page.pass.kill()
+    if (it.card_move) game.cardMove(it)
+    game.text.setText(it.msg)
+    game.page.game.counter.kill()
+    game.page.game.pass.kill()
   })
 }
 
@@ -498,6 +500,7 @@ Player.prototype.useCard = function (card) {
       return
     }
     game.cardMove(it)
+    game.text.setText(`${game.text.text}... foe counter phase`)
   })
 }
 
@@ -601,24 +604,18 @@ socket.on('buildLife', it => {
   game.text.setText(it.msg)
 })
 
-socket.on('counterPhase', it => {
-  game.text.setText(it.msg)
-  if (it.self) {
-    game.page.counter.reset(game.page.counter.x, game.page.counter.y)
-    game.page.pass.reset(game.page.pass.x, game.page.pass.y)
-  }
-})
-
-socket.on('counterEnd', it => {
-  game.page.counter.kill()
-  game.page.pass.kill()
-  cardMove(it)
+socket.on('foePass', it => {
+  game.text.setText(`foe pass counter... ${it.msg}`)
+  game.page.game.counter.kill()
+  game.page.game.pass.kill()
+  if(it.card_move) game.cardMove(it)
 })
 
 socket.on('foeCounter', it => {
-  cardMove(it)
-  game.page.counter.reset(game.page.counter.x, game.page.counter.y)
-  game.page.pass.reset(game.page.pass.x, game.page.pass.y)
+  game.text.setText('foe counter')
+  if(it.card_move) game.cardMove(it)
+  game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
+  game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
 
 socket.on('foeAttack', () => {
@@ -654,13 +651,16 @@ socket.on('foeDrawCard', it => {
 
 socket.on('foeUseCard', it => {
   game.cardMove(it)
+  game.text.setText(`${game.text.text}... counter phase`)
+  game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
+  game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
 
 socket.on('interrupt', it => {
   game.text.setText('')
   game.resetPlayer()
   game.changePage({next: 'lobby'})
-  //alert(it.err)
+  alert(it.err)
 })
 
 socket.on('turnStart', it => {

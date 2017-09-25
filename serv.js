@@ -126,7 +126,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     // move card
     rlt[id].from = card.field
     personal.card_ammount[rlt[id].from] -= 1
-    card.field = rlt.to
+    card.field = rlt[id].to
     player[rlt[id].new_own].card_ammount[rlt[id].to] += 1
     card.curr_own = player[rlt[id].new_own]._pid
 
@@ -500,7 +500,7 @@ io.on('connection', client => {
 
     user.find({account: it.acc}).toArray((err, rlt) => {
       if(!rlt.length) return cb({err: 'no such user exists'})
-      if(!rlt[0].passwd === it.passwd) return cb({err: 'wrong password'})
+      if(rlt[0].passwd !== it.passwd) return cb({err: 'wrong password'})
 
       client._account = it.acc
       client.deck_slot = rlt[0].deck_slot
@@ -629,7 +629,7 @@ io.on('connection', client => {
   client.on('attack', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
-    if (room.game_phase === ('attack' || 'counter') ) return cb( { err: `not allowed in ${room.game_phase} phase`} )
+    if (room.game_phase !== 'normal') return cb( { err: `not allowed in ${room.game_phase} phase`} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent'} )
     if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
@@ -734,32 +734,31 @@ io.on('connection', client => {
     room.counter_status.type = 'trigger'
   })
 
-  client.pass('pass', cb => {
+  client.on('pass', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
     let counter = (client == room.player[curr])? true : false
-    let personal = (counter == true)? client : (room.counter_status.last)
-    let opponent = (counter == true)? (room.counter_status.last) : client
+    let last_counter = room.counter_status.last
 
     if (counter == true) {
       let param = {}
-      param[room.counter_status.last] = {from: room.cards[room.counter_status.last].field}
-      let rlt = game.cardMove(personal, opponent, param)
+      param[room.counter_status.id] = {from: room.cards[room.counter_status.id].field}
+      let rlt = game.cardMove(client, last_counter, param)
       cb({msg: 'be countered', card_move: rlt.personal})
-      opponent.emit('counterEnd', {msg: 'counter success', card_move: rlt.opponent})
+      last_counter.last.emit('foePass', {msg: 'counter success', card_move: rlt.opponent})
     }
     else {
-      cb({msg: 'card remains'})
-      opponent.emit('counterEnd', {msg: 'counter failed'})
+      cb({msg: 'counter failed'})
+      last_counter.emit('foePass', {msg: 'action recover'})
 
       let card = room.cards[room.counter_status.id]
       if (card.field === 'grave') {
-        let avail_effect = game.judge(personal, opponent, room.counter_status.id)
-        game.effectTrigger(personal, opponent, avail_effect)
+        let avail_effect = game.judge(client, last_counter, room.counter_status.id)
+        game.effectTrigger(client, last_counter, avail_effect)
       }
     }
 
-    room.game_status = 'normal'
+    room.game_phase = 'normal'
     room.counter_status = {type: null, id: null, last: null}
   })
 
@@ -767,7 +766,7 @@ io.on('connection', client => {
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
-    if (room.game_phase === ('attack' || 'counter')) return cb( { err: `not allowed in ${room.game_phase} phase`} )
+    if (room.game_phase !== 'normal') return cb( { err: `not allowed in ${room.game_phase} phase`} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
@@ -816,7 +815,7 @@ io.on('connection', client => {
   client.on('endTurn', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
-    if (room.game_phase === ('attack' || 'counter')) return cb({ err: `not allowed in ${room.game_phase} phase`})
+    if (room.game_phase !== 'normal') return cb({ err: `not allowed in ${room.game_phase} phase`})
     if (room.player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
 
     //checkCardEnergy
@@ -874,19 +873,17 @@ io.on('connection', client => {
     cb(rlt.personal)
     room.player[1-curr].emit('foeUseCard', rlt.opponent)
 
-    /*
-    room.game_phase = 'counter'
-    room.counter_status.last = room.player[1-curr]
-    room.counter_status.type = 'use'
-    client.emit('counterPhase', {msg: 'foe counter phase', foe: true})
-    game.room[rid].player[1-curr].emit('counterPhase', {msg: 'counter phase', self: true})
-    */
 
+    room.game_phase = 'counter'
+    room.counter_status.last = client
+    room.counter_status.type = 'use'
+
+/*
     if (param[it.id].to !== 'battle') {
       let avail_effect = game.judge(client, room.player[1-curr], it.id)
       game.effectTrigger(client, room.player[1-curr], avail_effect)
     }
-
+*/
   })
 
 })
