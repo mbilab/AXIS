@@ -85,8 +85,15 @@ const Game = function () {
     }
   }
   this.phaser = null
+  //this.text = {phase: null, action: null, cursor: null}
   this.text = null
   this.text_group = null
+}
+
+Game.prototype.textPanel = function (text) {
+  if(text.phase) this.text.phase.setText(text.phase)
+  if(text.action) this.text.action.setText(text.action)
+  if(text.cursor) this.text.cursor.setText(text.cursor)
 }
 
 // action = {give_up: true, conceal: true ...}
@@ -99,6 +106,12 @@ Game.prototype.attackPanel = function (action) {
     atk_btn.reset(atk_btn.x, atk_btn.y)
     this.page.game[elem].kill()
     give_up.kill()
+    /*
+    let text = ''
+    if(action.personal) text = (action.conceal)? 'be hit... waiting for opponent' : 'attack miss... your turn'
+    else text = (action.conceal)? 'attack hits... your turn' : 'dodge attack... waiting for opponent'
+    this.textPanel({action: text})
+    */
     if(action.personal)
       this.text.setText((action.conceal)?'be hit... waiting for opponent':'attack miss... your turn')
     else
