@@ -85,15 +85,14 @@ const Game = function () {
     }
   }
   this.phaser = null
-  //this.text = {phase: null, action: null, cursor: null}
-  this.text = null
+  this.text = {phase: null, action: null, cursor: null}
   this.text_group = null
 }
 
 Game.prototype.textPanel = function (text) {
-  if(text.phase) this.text.phase.setText(text.phase)
-  if(text.action) this.text.action.setText(text.action)
-  if(text.cursor) this.text.cursor.setText(text.cursor)
+  if(text.phase) game.text.phase.setText(text.phase)
+  if(text.action) game.text.action.setText(text.action)
+  if(text.cursor) game.text.cursor.setText(text.cursor)
 }
 
 // action = {give_up: true, conceal: true ...}
@@ -106,28 +105,16 @@ Game.prototype.attackPanel = function (action) {
     atk_btn.reset(atk_btn.x, atk_btn.y)
     this.page.game[elem].kill()
     give_up.kill()
-    /*
-    let text = ''
-    if(action.personal) text = (action.conceal)? 'be hit... waiting for opponent' : 'attack miss... your turn'
-    else text = (action.conceal)? 'attack hits... your turn' : 'dodge attack... waiting for opponent'
-    this.textPanel({action: text})
-    */
-    if(action.personal)
-      this.text.setText((action.conceal)?'be hit... waiting for opponent':'attack miss... your turn')
-    else
-      this.text.setText((action.conceal)?'attack hits... your turn':'dodge attack... waiting for opponent')
   }
   else{
     if(action.personal){
       let elem = (action.attack)? 'attack' : ((action.conceal)? 'conceal' : 'tracking')
-      this.text.setText(`${elem}... waiting opponent`)
       this.page.game[elem].kill()
       give_up.kill()
     }
     else{
       let foe_action = (action.attack)? 'attack' : ((action.conceal)? 'conceal' : 'tracking')
       let elem = (action.attack || action.tracking)? 'conceal' : 'tracking'
-      this.text.setText(`foe ${foe_action}`)
       atk_btn.kill()
       this.page.game[elem].reset(atk_btn.x, atk_btn.y)
       give_up.reset(give_up.x, give_up.y)
@@ -165,7 +152,8 @@ Game.prototype.changePage = function (obj) {
 
   // variable reset due to page change
   personal.curr_deck = null
-  game.text.setText('')
+  game.textPanel({phase: ' ', action: ' ', cursor: ' '})
+
 }
 
 Game.prototype.cardMove = function (rlt) {
@@ -194,10 +182,6 @@ Game.prototype.cardMove = function (rlt) {
     card.name = rlt[id].name
     card.img.loadTexture(card.name)
     card.img.alpha = 1
-
-    // text
-    let target = (rlt[id].curr_own === 'personal')? '' : 'foe '
-    if(rlt[id].action) this.text.setText(`${target}${rlt[id].action} ${card.name}`)
 
     // move
     game.player[rlt[id].new_own][rlt[id].to].push(card)
@@ -279,7 +263,6 @@ Game.prototype.pageInit = function () {
 }
 
 Game.prototype.resetPlayer = function () {
-  this.text.setText('')
   for (let field of ['altar', 'battle', 'grave', 'hand', 'life']){
     for (let card of personal[field]) {
       card.img.destroy()
@@ -344,39 +327,42 @@ const Player = function (id, location) {
 
 Player.prototype.attack = function () {
   socket.emit('attack', it => {
-    if(it.err) return game.text.setText(it.err)
-    game.attackPanel({personal: true, attack: true})
+
+    if(it.err) return game.textPanel({cursor: it.err})
+    game.textPanel(it.msg)
+    game.attackPanel(it.rlt)
   })
 }
 
 Player.prototype.conceal = function () {
   socket.emit('conceal', {card_pick: personal.card_pick}, it => {
-    if(it.err) return game.text.setText(it.err)
 
+    if(it.err) return game.textPanel({cursor: it.err})
     personal.card_pick = {}
-    game.cardMove(it)
-    let param = {personal: true, conceal: true}
-    game.attackPanel(param)
+    game.textPanel(it.msg)
+    game.cardMove(it.card)
+    game.attackPanel(it.rlt)
   })
 }
 
 Player.prototype.tracking = function () {
   socket.emit('tracking', {card_pick: personal.card_pick}, it => {
-    if(it.err) return game.text.setText(it.err)
 
+    if(it.err) return game.textPanel({cursor: it.err})
     personal.card_pick = {}
-    game.cardMove(it)
-    let param = {personal: true, tracking: true}
-    game.attackPanel(param)
+    game.textPanel(it.msg)
+    game.cardMove(it.card)
+    game.attackPanel(it.rlt)
   })
 }
 
 Player.prototype.giveUp = function () {
   personal.card_pick = {}
   socket.emit('giveUp', it => {
-    let param = {personal: true, give_up: true}
-    param[it.action] = true
-    game.attackPanel(param)
+
+    personal.card_pick = {}
+    game.textPanel(it.msg)
+    game.attackPanel(it.rlt)
   })
 }
 
@@ -394,9 +380,11 @@ Player.prototype.chooseCard = function (card) {
 Player.prototype.counter = function () {
   personal.card_pick = {}
   socket.emit('counter', {card_pick: personal.card_pick}, it => {
-    if(it.err) return game.text.setText(it.err)
 
-    game.cardMove(it)
+    if (it.err) return game.textPanel({cursor: it.err})
+    personal.card_pick = {}
+    game.textPanel(it.msg)
+    game.cardMove(it.card)
     game.page.game.counter.kill()
     game.page.game.pass.kill()
   })
@@ -404,8 +392,10 @@ Player.prototype.counter = function () {
 
 Player.prototype.pass = function () {
   socket.emit('pass', it => {
-    if (it.card_move) game.cardMove(it)
-    game.text.setText(it.msg)
+
+    if (it.card) game.cardMove(it.card)
+    personal.card_pick = {}
+    game.textPanel(it.msg)
     game.page.game.counter.kill()
     game.page.game.pass.kill()
   })
@@ -413,11 +403,11 @@ Player.prototype.pass = function () {
 
 Player.prototype.drawCard = function () {
   socket.emit('drawCard', it => {
-    if (it.err) return game.text.setText(it.err)
 
-    // it = {name: }
-    game.text.setText(`draw ${it.name}`)
-    personal.hand.push( new Card({name: it.name, id: it.id, cover: false, input: true, field: 'hand'}) )
+    if (it.err) return game.textPanel({cursor: it.err})
+    game.textPanel(it.msg)
+
+    personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
     game.fixCardPos({ personal: {hand: true} })
 
     if (it.deck_empty) personal.deck.kill()
@@ -436,9 +426,8 @@ Player.prototype.triggerEffect = function (card) {
 
 Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
-    if(it.err) return game.text.setText(it.err)
-    //game.checkCardEnergy(it.card_list)
-    game.text.setText(it.msg)
+    if (it.err) return game.textPanel({cursor: it.err})
+    game.textPanel(it.msg)
   })
 }
 
@@ -449,11 +438,11 @@ Player.prototype.leaveMatch = function () {
 }
 
 Player.prototype.login = function () {
-  if (!$('#logAcc').val()) return game.text.setText('please enter your account')
-  if (!$('#logPswd').val()) return game.text.setText('please enter your password')
+  if (!$('#logAcc').val()) return game.textPanel({cursor: 'please enter your account'})
+  if (!$('#logPswd').val()) return game.textPanel({cursor: 'please enter your password'})
   socket.emit('login',  { acc: $('#logAcc').val(), passwd: $('#logPswd').val() }, it => {
     if (it.err) {
-      game.text.setText(it.err)
+      game.textPanel({cursor: it.err})
       $('#logAcc, #logPswd').val('')
       return
     }
@@ -481,10 +470,10 @@ Player.prototype.login = function () {
 
 Player.prototype.searchMatch = function () {
   socket.emit('searchMatch', {curr_deck: personal.curr_deck}, it => {
-    if (it.err) return game.text.setText(it.err)
+    if (it.err) return game.textPanel({cursor: it.err})
     if (it.msg) {
       game.changePage({next:'loading'})
-      game.text.setText(it.msg)
+      game.textPanel(it.msg)
     }
   })
 }
@@ -509,11 +498,11 @@ Player.prototype.useCard = function (card) {
   socket.emit('useCard', {id: card.id}, it => {
     if (it.err){
       if (it.err === 'atk phase') personal.chooseCard(card)
-      else game.text.setText(it.err)
+      else game.textPanel({cursor: it.err})
       return
     }
-    game.cardMove(it)
-    game.text.setText(`${game.text.text}... foe counter phase`)
+    game.cardMove(it.card)
+    game.textPanel(it.msg)
   })
 }
 
@@ -541,13 +530,13 @@ Deck.prototype.click = function (){
     case 'deck_build':
       game.changePage({ next: 'deck_view' })
       personal.curr_deck = this.slot
-      game.text.setText(`${this.name}`)
+      game.textPanel({cursor: `${this.name}`})
       game.showTexture({init: 1})
       break
 
     case 'match_search':
       personal.curr_deck = this.slot
-      game.text.setText(`${this.name}`)
+      game.textPanel({cursor: `${this.name}`})
       break
 
     default: break
@@ -593,7 +582,7 @@ Card.prototype.click = function () {
       break
 
     case 'life'	 :
-      game.text.setText(this.name)
+      game.textPanel({cursor: this.name})
       break
 
     default			 : break
@@ -614,39 +603,37 @@ socket.on('buildLife', it => {
   }
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})
   game.changePage({next: 'game'})
-  game.text.setText(it.msg)
+  game.textPanel(it.msg)
 })
 
 socket.on('foePass', it => {
-  game.text.setText(`foe pass counter... ${it.msg}`)
+  if(it.card) game.cardMove(it.card)
+  game.textPanel(it.msg)
   game.page.game.counter.kill()
   game.page.game.pass.kill()
-  if(it.card_move) game.cardMove(it)
 })
 
 socket.on('foeCounter', it => {
-  game.text.setText('foe counter')
-  if(it.card_move) game.cardMove(it)
+  if(it.card) game.cardMove(it.card)
+  game.textPanel(it.msg)
   game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
   game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
 
-socket.on('foeAttack', () => {
-  game.text.setText('foe attack')
-  game.attackPanel({opponent: true, attack: true})
+socket.on('foeAttack', it => {
+  game.textPanel(it.msg)
+  game.attackPanel(it.rlt)
 })
 
 socket.on('foeGiveUp', it => {
-  let param = {opponent: true, give_up: true}
-  param[it.action] = true
-  game.attackPanel(param)
+  game.textPanel(it.msg)
+  game.attackPanel()
 })
 
 socket.on('foeConceal', it => {
-  console.log(it)
-  game.cardMove(it)
-  let param = {opponent: true, conceal: true}
-  game.attackPanel(param)
+  game.cardMove(it.card)
+  game.textPanel(it.msg)
+  game.attackPanel(it.rlt)
 })
 
 socket.on('foeTracking', it => {
@@ -656,21 +643,21 @@ socket.on('foeTracking', it => {
 })
 
 socket.on('foeDrawCard', it => {
-  game.text.setText(`foe drawcard`)
-  opponent.hand.push(new Card({name: 'cardback', id: it.id, cover: true, input: false, field: 'hand'}))
+  game.textPanel(it.msg)
+  opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
   game.fixCardPos({opponent: {hand: true}})
   if (it.deck_empty) opponent.deck.kill()
 })
 
 socket.on('foeUseCard', it => {
-  game.cardMove(it)
-  game.text.setText(`${game.text.text}... counter phase`)
+  game.cardMove(it.card)
+  game.textPanel(it.msg)
   game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
   game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
 
 socket.on('interrupt', it => {
-  game.text.setText('')
+  game.textPanel({phase: ' ', action: ' ', cursor: ' '})
   game.resetPlayer()
   game.changePage({next: 'lobby'})
   alert(it.err)
@@ -678,7 +665,7 @@ socket.on('interrupt', it => {
 
 socket.on('turnStart', it => {
   //game.checkCardEnergy(it.card_list)
-  game.text.setText(it.msg)
+  game.textPanel(it.msg)
 })
 
 // card effects
@@ -720,12 +707,12 @@ socket.emit('preload', res => {
       game.phaser.add.sprite(0, 0, 'background')
       //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
+      let text_yscale = { phase: -44, action: 11, cursor: 66 }
       game.text_group = game.phaser.add.group()
-      game.text = game.phaser.add.text(0,0, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
-      game.text.fixedToCamera = true
-      game.text.cameraOffset.setTo(21, game.default.game.height/2 - 44/game.default.scale)
-      game.text_group.add(game.text)
-
+      for (let type in game.text) {
+        game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+        game.text_group.add(game.text[type])
+      }
       socket.emit('init', it => { game.pageInit() })
     },
     preload: () => {

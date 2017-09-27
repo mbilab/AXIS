@@ -586,17 +586,16 @@ io.on('connection', client => {
             game.room[rid].card_id ++
           }
         }
-
         cb({})
 
         // game start
-        opponent.emit('buildLife', {card_list: life[opponent._pid], msg: 'your turn'})
-        client.emit('buildLife', {card_list: life[client._pid], msg: 'waiting for opponent'})
+        opponent.emit('buildLife', {card_list: life[opponent._pid], msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
+        client.emit('buildLife', {card_list: life[client._pid], msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
       }
       else{
         game.queue.push(client)
         delete game.pool[client._pid]
-        cb({msg: 'searching for match...'})
+        cb({msg: {cursor: 'searching for match...'}})
       }
     })
   })
@@ -640,15 +639,10 @@ io.on('connection', client => {
     room.atk_status.defender = room.player[1-curr]
     client.action_point -= 1
     client.atk_phase -= 1
-    /*
-    cb({ msg: {action: 'attack... waiting opponent'}, btn: {personal: true, attack: true} })
-    room.player[1-curr].first_conceal = true
-    room.player[1-curr].emit('foeAttack', { msg: {action: 'foe attack'}, btn: {opponent: true, attack: true} })
-    */
 
-    cb({})
+    cb({ msg: {phase: 'attack phase', action: 'attack... waiting opponent'}, rlt: {personal: true, attack: true} })
     room.player[1-curr].first_conceal = true
-    room.player[1-curr].emit('foeAttack')
+    room.player[1-curr].emit('foeAttack', { msg: {phase: 'attack phase', action: 'foe attack'}, rlt: {opponent: true, attack: true} })
   })
 
   client.on('conceal', (it, cb) => {
@@ -666,15 +660,10 @@ io.on('connection', client => {
       if ('vanish' !== room.cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
     }
 
-    /*
-    let rlt = game.cardMove(client, room.player[curr], it.card_pick)
-    cb({ msg: {action: 'conceal... waiting opponent'}, card: rlt.personal, btn: {personal: true, conceal: true} })
-    room.player[curr].emit('foeConceal', { msg: {action: 'foe conceal'}, card: rlt.opponent, btn: {opponent: true, conceal: true} })
-    */
 
     let rlt = game.cardMove(client, room.player[curr], it.card_pick)
-    cb(rlt.personal)
-    room.player[curr].emit(`foeConceal`, rlt.opponent)
+    cb({ msg: {action: 'conceal... waiting opponent'}, card: rlt.personal, rlt: {personal: true, conceal: true} })
+    room.player[curr].emit('foeConceal', { msg: {action: 'foe conceal'}, card: rlt.opponent, rlt: {opponent: true, conceal: true} })
   })
 
   client.on('tracking', (it, cb) => {
@@ -684,15 +673,10 @@ io.on('connection', client => {
     if (card_pick.length != 2) return cb( {err: 'choose exact 2 cards'} )
     if ('vanish' !== room.cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
 
-    /*
-    let rlt = game.cardMove(client, room.player[1-curr], it.card_pick)
-    cb({ msg: {action: 'tracking... waiting opponent'}, card: rlt.personal, btn: {personal: true, tracking: true} })
-    room.player[curr].emit('foeTracking', { msg: {action: 'foe tracking'}, card: rlt.opponent, btn: {opponent: true, tracking: true} })
-    */
 
-    let rlt = game.cardMove(client, room.player[1 - curr], it.card_pick)
-    cb(rlt.personal)
-    room.player[1 - curr].emit(`foeTracking`, rlt.opponent)
+    let rlt = game.cardMove(client, room.player[1-curr], it.card_pick)
+    cb({ msg: {action: 'tracking... waiting opponent'}, card: rlt.personal, rlt: {personal: true, tracking: true} })
+    room.player[curr].emit('foeTracking', { msg: {action: 'foe tracking'}, card: rlt.opponent, rlt: {opponent: true, tracking: true} })
   })
 
   client.on('giveUp', cb => {
@@ -702,7 +686,7 @@ io.on('connection', client => {
     let opponent = room.player[(action === 'tracking')? (1-curr) : curr]
     room.game_phase = 'normal'
 
-    /*
+
     let msg = {personal: '', opponent: ''}
     msg.personal = (action === 'conceal')? 'be hit... waiting opponent' : 'attack miss... your turn'
     msg.opponent = (action === 'conceal')? 'attack hits... your turn' : 'dodge attack... waiting opponent'
@@ -711,12 +695,8 @@ io.on('connection', client => {
     rlt.personal[action] = true
     rlt.opponent[action] = true
 
-    cb({ msg: {phase: 'normal phase', action: msg.personal}, btn: rlt.personal })
-    opponent.emit('foeGiveUp', { msg: {phase: 'normal phase', action: msg.opponent}, btn: rlt.opponent })
-    */
-
-    cb({action: action})
-    opponent.emit('foeGiveUp', {action: action})
+    cb({ msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
+    opponent.emit('foeGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
 
     /*
     game.room[rid].atk_status.hit = (action === 'tracking')? false : true
@@ -758,13 +738,9 @@ io.on('connection', client => {
     let param = {}
     param[card_pick[0]] = {from: card.field}
     let rlt = cardMove(client, room.counter_status.last, param)
-    /*
+
     cb({ msg: {action: `use ${card.name} to counter`}, card: rlt.personal })
     room.counter_status.last.emit('foeCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent })
-    */
-    cb(rlt.personal)
-    room.counter_status.last.emit('foeCounter', rlt.opponent)
-
     room.counter_status.last = client
     room.counter_status.type = 'trigger'
   })
@@ -779,21 +755,13 @@ io.on('connection', client => {
       let param = {}
       param[room.counter_status.id] = {from: room.cards[room.counter_status.id].field}
       let rlt = game.cardMove(client, last_counter, param)
-      /*
-      cb({ msg: {phase: 'normal phase', action: 'be countered... your turn'}, card: rlt.personal })
-      room.counter_status.last.emit('foePass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent'}, card: rlt.opponent })
-      */
-      cb({msg: 'be countered', card_move: rlt.personal})
-      last_counter.last.emit('foePass', {msg: 'counter success', card_move: rlt.opponent})
+
+      cb({ msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal })
+      room.counter_status.last.emit('foePass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent })
     }
     else {
-      /*
       cb({ msg: {phase: 'normal phase', action: 'counter failed... waiting opponent'} })
       room.counter_status.last.emit('foePass', { msg: {phase: 'normal phase', action: 'action recover... your turn'} })
-      */
-      cb({msg: 'counter failed'})
-      last_counter.emit('foePass', {msg: 'action recover'})
-
       let card = room.cards[room.counter_status.id]
       if (card.field === 'grave') {
         let avail_effect = game.judge(client, last_counter, room.counter_status.id)
@@ -827,17 +795,9 @@ io.on('connection', client => {
       client.card_ammount.deck -= 1
       if (client.card_ammount.deck == 0) param.deck_empty = true
 
-      /*
-      // !msg
-      cb({msg: `draw ${param.name}`, card: param})
+      cb({msg: {action: `draw ${param.name}`}, card: param})
       delete param.name
-      room.player[1-curr].emit('foeDrawCard', {msg: 'foe draw card', card: param})
-      */
-
-      cb(param)
-      delete param.name
-      room.player[1 - curr].emit('foeDrawCard', param)
-
+      room.player[1-curr].emit('foeDrawCard', {msg: {action: 'foe draw card'}, card: param})
       return
     }
   })
@@ -877,13 +837,9 @@ io.on('connection', client => {
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
 
-    /*
-    cb({ msg: {action: 'opponent's turn'} })
-    room.plauer[curr].emit('turnStart', { msg: {action: 'your turn'} })
-    */
 
-    cb({ msg: 'waiting for opponent' })
-    room.player[curr].emit('turnStart', { msg: 'your turn' })
+    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
+    room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
   })
 
   client.on('useCard', (it, cb) => {
@@ -923,17 +879,10 @@ io.on('connection', client => {
       default        : break
     }
 
-    // card move between fields
-    let rlt = game.cardMove(client, room.player[1-curr], param)
-    cb(rlt.personal)
-    room.player[1-curr].emit('foeUseCard', rlt.opponent)
-    /*
-    // !msg
     let rlt = game.cardMove(client, room.player[1-curr], param)
     let msg = `${param[it.id].action} ${card.name}`
-    cb({ msg: {action: msg}, card: rlt })
-    room.player[1-curr].emit('foeUseCard', { msg: {action: `foe ${msg}`}, card: rlt })
-    */
+    cb({ msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
+    room.player[1-curr].emit('foeUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent })
 
     room.game_phase = 'counter'
     room.counter_status.last = client
