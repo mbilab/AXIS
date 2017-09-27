@@ -90,9 +90,24 @@ const Game = function () {
 }
 
 Game.prototype.textPanel = function (text) {
-  if(text.phase) game.text.phase.setText(text.phase)
-  if(text.action) game.text.action.setText(text.action)
-  if(text.cursor) game.text.cursor.setText(text.cursor)
+  if (text.phase) game.text.phase.setText(text.phase)
+  if (text.action) game.text.action.setText(text.action)
+  if (text.cursor) game.text.cursor.setText(text.cursor)
+}
+
+// action = {pass: true, personal: true ...}
+Game.prototype.counterPanel = function (action) {
+  let counter_btn = this.page.game.counter
+  let pass_btn = this.page.game.pass
+
+  if (action.opponent && action.counter) {
+    counter_btn.reset(counter_btn.x, counter_btn.y)
+    pass_btn.reset(pass_btn.x, pass_btn.y)
+  }
+  else {
+    counter_btn.kill()
+    pass_btn.kill()
+  }
 }
 
 // action = {give_up: true, conceal: true ...}
@@ -100,19 +115,19 @@ Game.prototype.attackPanel = function (action) {
   let atk_btn = this.page.game.attack
   let give_up = this.page.game.give_up
 
-  if(action.give_up){
+  if (action.give_up) {
     let elem = ((action.personal && action.conceal) || (action.opponent && action.tracking))?'conceal':'tracking'
     atk_btn.reset(atk_btn.x, atk_btn.y)
     this.page.game[elem].kill()
     give_up.kill()
   }
-  else{
-    if(action.personal){
+  else {
+    if (action.personal) {
       let elem = (action.attack)? 'attack' : ((action.conceal)? 'conceal' : 'tracking')
       this.page.game[elem].kill()
       give_up.kill()
     }
-    else{
+    else {
       let foe_action = (action.attack)? 'attack' : ((action.conceal)? 'conceal' : 'tracking')
       let elem = (action.attack || action.tracking)? 'conceal' : 'tracking'
       atk_btn.kill()
@@ -327,32 +342,19 @@ const Player = function (id, location) {
 
 Player.prototype.attack = function () {
   socket.emit('attack', it => {
-
     if(it.err) return game.textPanel({cursor: it.err})
-    game.textPanel(it.msg)
-    game.attackPanel(it.rlt)
   })
 }
 
 Player.prototype.conceal = function () {
   socket.emit('conceal', {card_pick: personal.card_pick}, it => {
-
     if(it.err) return game.textPanel({cursor: it.err})
-    personal.card_pick = {}
-    game.textPanel(it.msg)
-    game.cardMove(it.card)
-    game.attackPanel(it.rlt)
   })
 }
 
 Player.prototype.tracking = function () {
   socket.emit('tracking', {card_pick: personal.card_pick}, it => {
-
     if(it.err) return game.textPanel({cursor: it.err})
-    personal.card_pick = {}
-    game.textPanel(it.msg)
-    game.cardMove(it.card)
-    game.attackPanel(it.rlt)
   })
 }
 
@@ -380,25 +382,12 @@ Player.prototype.chooseCard = function (card) {
 Player.prototype.counter = function () {
   personal.card_pick = {}
   socket.emit('counter', {card_pick: personal.card_pick}, it => {
-
     if (it.err) return game.textPanel({cursor: it.err})
-    personal.card_pick = {}
-    game.textPanel(it.msg)
-    game.cardMove(it.card)
-    game.page.game.counter.kill()
-    game.page.game.pass.kill()
   })
 }
 
 Player.prototype.pass = function () {
-  socket.emit('pass', it => {
-
-    if (it.card) game.cardMove(it.card)
-    personal.card_pick = {}
-    game.textPanel(it.msg)
-    game.page.game.counter.kill()
-    game.page.game.pass.kill()
-  })
+  socket.emit('pass')
 }
 
 Player.prototype.drawCard = function () {
@@ -606,40 +595,42 @@ socket.on('buildLife', it => {
   game.textPanel(it.msg)
 })
 
-socket.on('foePass', it => {
-  if(it.card) game.cardMove(it.card)
+socket.on('playerPass', it => {
+  if (it.card) game.cardMove(it.card)
+  personal.card_pick = {}
   game.textPanel(it.msg)
-  game.page.game.counter.kill()
-  game.page.game.pass.kill()
+  game.counterPanel(it.rlt)
 })
 
-socket.on('foeCounter', it => {
-  if(it.card) game.cardMove(it.card)
+socket.on('playerCounter', it => {
+  personal.card_pick = {}
+  game.cardMove(it.card)
   game.textPanel(it.msg)
-  game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
-  game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
+  game.counterPanel(it.rlt)
 })
 
-socket.on('foeAttack', it => {
+socket.on('playerAttack', it => {
   game.textPanel(it.msg)
   game.attackPanel(it.rlt)
 })
 
 socket.on('foeGiveUp', it => {
   game.textPanel(it.msg)
-  game.attackPanel()
-})
-
-socket.on('foeConceal', it => {
-  game.cardMove(it.card)
-  game.textPanel(it.msg)
   game.attackPanel(it.rlt)
 })
 
-socket.on('foeTracking', it => {
-  game.cardMove(it)
-  let param = {opponent: true, tracking: true}
-  game.attackPanel(param)
+socket.on('playerConceal', it => {
+  personal.card_pick = {}
+  game.textPanel(it.msg)
+  game.cardMove(it.card)
+  game.attackPanel(it.rlt)
+})
+
+socket.on('playerTracking', it => {
+  personal.card_pick = {}
+  game.textPanel(it.msg)
+  game.cardMove(it.card)
+  game.attackPanel(it.rlt)
 })
 
 socket.on('foeDrawCard', it => {
