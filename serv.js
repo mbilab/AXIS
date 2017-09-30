@@ -169,6 +169,15 @@ Game.prototype.control = function(personal, opponent, effect) {
   return param
 }
 
+Game.prototype.damage = function(personal, opponent, effect) {
+  let player = { personal: personal, opponent: opponent }
+  let param = { damage: { personal: null, opponent: null } }
+  for (let target in effect)
+    param.damage[target] = true
+
+  return param
+}
+
 Game.prototype.destroy = function(personal, opponent, effect) {
   let player = { personal: personal, opponent: opponent }
   let param = { card: {} }
@@ -307,6 +316,7 @@ Game.prototype.judge = function (personal, opponent, card_id) {
       for (let target in judge.effect) {
         for (let condition in judge.effect.target) {
           let curr_val = null
+
           switch (condition) {
             case 'hit':
               if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
@@ -323,7 +333,7 @@ Game.prototype.judge = function (personal, opponent, card_id) {
             default:break
           }
 
-          if(operation(curr_val, judge.effect.target.condition)) avail_effect[card_id].push(effect)
+          if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
         }
       }
     }
@@ -340,10 +350,12 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // }
   //
   // effect = { effect: { target: { field: { type: value } } } }
+  let room = this.room[personal._rid]
   let player = {personal: personal, opponent: opponent}
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
+    let damage = {personal: false, opponent: false}
     let param = {
       card: {},
       attr: { personal: {}, opponent: {} },
@@ -358,10 +370,13 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
         if (type === 'card') Object.assign(param[type], rlt[type])
         else
           for (target in rlt[type]) {
-            for (object in rlt[type][target]) {
-              if (!param[type][target][object]) param[type][target][object] = null
-              if (effect_name === 'modify') param[type][target][object] += rlt[type][target][object]
-              else param[type][target][object] = rlt[type][target][object]
+            if (type === 'damage') damage[target] = rlt[type][target]
+            else {
+              for (object in rlt[type][target]) {
+                if (!param[type][target][object]) param[type][target][object] = null
+                if (effect_name === 'modify') param[type][target][object] += rlt[type][target][object]
+                else param[type][target][object] = rlt[type][target][object]
+              }
             }
           }
       }
@@ -376,6 +391,13 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
       param[type].opponent = temp
     }
     opponent.emit('effectTrigger', param)
+
+    /*
+    if (damage.personal == true) personal.emit('blockPhase', { msg: {phase: 'block phase'} })
+    if (damage.opponent == true) opponent.emit('blockPhase', { msg: {phase: 'block phase'} })
+
+    room.game_phase = 'block'
+    */
   }
 }
 
@@ -559,6 +581,7 @@ io.on('connection', client => {
           game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {type: null, id: null, last: null},
+          block_status: {},
           cards: {},
           card_id: 1,
           player_pointer: 0,
@@ -661,7 +684,7 @@ io.on('connection', client => {
 
     let rlt = game.cardMove(client, room.player[curr], it.card_pick)
     client.emit('playerConceal', { msg: {action: 'conceal... waiting opponent'}, card: rlt.personal, rlt: {personal: true, conceal: true} })
-    room.player[1 - curr].emit('playerConceal', { msg: {action: 'foe conceal'}, card: rlt.opponent, rlt: {opponent: true, conceal: true} })
+    room.player[curr].emit('playerConceal', { msg: {action: 'foe conceal'}, card: rlt.opponent, rlt: {opponent: true, conceal: true} })
   })
 
   client.on('tracking', (it, cb) => {
@@ -673,7 +696,7 @@ io.on('connection', client => {
 
     let rlt = game.cardMove(client, room.player[1-curr], it.card_pick)
     client.emit('playerTracking', { msg: {action: 'tracking... waiting opponent'}, card: rlt.personal, rlt: {personal: true, tracking: true} })
-    room.player[curr].emit('playerTracking', { msg: {action: 'foe tracking'}, card: rlt.opponent, rlt: {opponent: true, tracking: true} })
+    room.player[1 - curr].emit('playerTracking', { msg: {action: 'foe tracking'}, card: rlt.opponent, rlt: {opponent: true, tracking: true} })
   })
 
   client.on('giveUp', cb => {
@@ -706,7 +729,7 @@ io.on('connection', client => {
     this.effectTrigger(player.attacker, player.defender, avail_effect)
 
     // damage phase
-    socket.emit('damagePhase', {})
+    client.emit('damagePhase', {})
 
     // end phase
     game.room[rid].game_phase = 'normal'
@@ -715,6 +738,14 @@ io.on('connection', client => {
     game.room[rid].atk_status.defender = null
 
     */
+  })
+
+  client.on('block', (it, cb) => {
+
+  })
+
+  client.on('receive', (it, cb) => {
+
   })
 
   client.on('counter', (it, cb) => {
@@ -845,7 +876,7 @@ io.on('connection', client => {
     let card = room.cards[it.id]
 
     if (room.game_phase === 'attack') return cb( { err: 'atk phase'} )
-    if (room.game_phase === 'counter') return cb( { err: 'not allowed in counter phase'} )
+    if (room.game_phase === ('counter' || 'block')) return cb( { err: 'not allowed in counter phase'} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )

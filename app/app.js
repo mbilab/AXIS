@@ -76,12 +76,17 @@ const Game = function () {
       opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13), y: this.default.player.opponent_y.deck, img: 'cardback', func: null },
       end_turn: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 - 44/this.default.scale, img: 'endTurn', func: this.player.personal.endTurn},
       leave: {type: 'button', x: 0, y: this.default.game.height - 43, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby'} },
+
       attack: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'attack', func: this.player.personal.attack},
       conceal: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
       tracking: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
       give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
+
       counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
       pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} }
+
+      //block: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'block', func: this.player.personal.block, ext: {req: true} },
+      //receive: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
     }
   }
   this.phaser = null
@@ -368,15 +373,14 @@ Player.prototype.giveUp = function () {
   })
 }
 
-Player.prototype.chooseCard = function (card) {
-  if(!personal.card_pick[card.id]){
-    personal.card_pick[card.id] = {}
-    card.img.alpha = 0.5
-  }
-  else{
-    delete personal.card_pick[card.id]
-    card.img.alpha = 1
-  }
+Player.prototype.block = function () {
+  socket.emit('block', {card_pick: personal.card_pick}, it => {
+    if (it.err) return game.textPanel({cursor: it.err})
+  })
+}
+
+Player.prototype.receive = function () {
+  socket.emit('receive')
 }
 
 Player.prototype.counter = function () {
@@ -388,6 +392,17 @@ Player.prototype.counter = function () {
 
 Player.prototype.pass = function () {
   socket.emit('pass')
+}
+
+Player.prototype.chooseCard = function (card) {
+  if(!personal.card_pick[card.id]){
+    personal.card_pick[card.id] = {}
+    card.img.alpha = 0.5
+  }
+  else{
+    delete personal.card_pick[card.id]
+    card.img.alpha = 1
+  }
 }
 
 Player.prototype.drawCard = function () {
@@ -679,7 +694,15 @@ socket.on('effectTrigger', effect => {
   console.log(effect)
 })
 
-socket.on('damagePhase', it => {})
+socket.on('blockPhase', it => {
+  // show block panel
+  // show text
+})
+
+socket.on('damagePhase', it => {
+
+
+})
 
 //////////////////////////////////////////////////////////////////////////////////////
 
