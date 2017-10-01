@@ -100,6 +100,20 @@ Game.prototype.textPanel = function (text) {
   if (text.cursor) game.text.cursor.setText(text.cursor)
 }
 
+Game.prototype.blockPanel = function (command) {
+  let block_btn = this.page.game.block
+  let receive_btn = this.page.game.receive
+
+  if (command == true) {
+    block_btn.reset(block_btn.x, block_btn.y)
+    receive_btn.reset(receive_btn.x, receive_btn.y)
+  }
+  else{
+    block_btn.kill()
+    receive_btn.kill()
+  }
+}
+
 // action = {pass: true, personal: true ...}
 Game.prototype.counterPanel = function (action) {
   let counter_btn = this.page.game.counter
@@ -282,6 +296,13 @@ Game.prototype.pageInit = function () {
   this.changePage({next: 'start'})
 }
 
+Game.prototype.resetCardPick = function () {
+  for (let id in personal.card_pick) {
+    personal.card_pick[id].img.alpha = 1
+  }
+  personal.card_pick = {}
+}
+
 Game.prototype.resetPlayer = function () {
   for (let field of ['altar', 'battle', 'grave', 'hand', 'life']){
     for (let card of personal[field]) {
@@ -352,29 +373,23 @@ Player.prototype.attack = function () {
 }
 
 Player.prototype.conceal = function () {
-  socket.emit('conceal', {card_pick: personal.card_pick}, it => {
+  socket.emit('conceal', {card_pick: buildList(personal.card_pick)}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
 }
 
 Player.prototype.tracking = function () {
-  socket.emit('tracking', {card_pick: personal.card_pick}, it => {
+  socket.emit('tracking', {card_pick: buildList(personal.card_pick)}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
 }
 
 Player.prototype.giveUp = function () {
-  personal.card_pick = {}
-  socket.emit('giveUp', it => {
-
-    personal.card_pick = {}
-    game.textPanel(it.msg)
-    game.attackPanel(it.rlt)
-  })
+  socket.emit('giveUp')
 }
 
 Player.prototype.block = function () {
-  socket.emit('block', {card_pick: personal.card_pick}, it => {
+  socket.emit('block', {card_pick: buildList(personal.card_pick)}, it => {
     if (it.err) return game.textPanel({cursor: it.err})
   })
 }
@@ -384,8 +399,7 @@ Player.prototype.receive = function () {
 }
 
 Player.prototype.counter = function () {
-  personal.card_pick = {}
-  socket.emit('counter', {card_pick: personal.card_pick}, it => {
+  socket.emit('counter', {card_pick: buildList(personal.card_pick)}, it => {
     if (it.err) return game.textPanel({cursor: it.err})
   })
 }
@@ -395,11 +409,11 @@ Player.prototype.pass = function () {
 }
 
 Player.prototype.chooseCard = function (card) {
-  if(!personal.card_pick[card.id]){
-    personal.card_pick[card.id] = {}
+  if (!personal.card_pick[card.id]) {
+    personal.card_pick[card.id] = card
     card.img.alpha = 0.5
   }
-  else{
+  else {
     delete personal.card_pick[card.id]
     card.img.alpha = 1
   }
@@ -595,6 +609,19 @@ Card.prototype.click = function () {
 
 ///////////////////////////////////////////////////////////////////////////////////
 
+// utility
+
+function buildList (obj) {
+  let rlt = {}
+  for (let id in obj) {
+    rlt[id] = {}
+  }
+  game.resetCardPick()
+  return rlt
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+
 // socket server
 
 socket.on('buildLife', it => {
@@ -611,14 +638,13 @@ socket.on('buildLife', it => {
 })
 
 socket.on('playerPass', it => {
-  if (it.card) game.cardMove(it.card)
+  game.resetCardPick()
   personal.card_pick = {}
   game.textPanel(it.msg)
   game.counterPanel(it.rlt)
 })
 
 socket.on('playerCounter', it => {
-  personal.card_pick = {}
   game.cardMove(it.card)
   game.textPanel(it.msg)
   game.counterPanel(it.rlt)
@@ -629,20 +655,19 @@ socket.on('playerAttack', it => {
   game.attackPanel(it.rlt)
 })
 
-socket.on('foeGiveUp', it => {
+socket.on('playerGiveUp', it => {
+  game.resetCardPick()
   game.textPanel(it.msg)
   game.attackPanel(it.rlt)
 })
 
 socket.on('playerConceal', it => {
-  personal.card_pick = {}
   game.textPanel(it.msg)
   game.cardMove(it.card)
   game.attackPanel(it.rlt)
 })
 
 socket.on('playerTracking', it => {
-  personal.card_pick = {}
   game.textPanel(it.msg)
   game.cardMove(it.card)
   game.attackPanel(it.rlt)
@@ -695,8 +720,8 @@ socket.on('effectTrigger', effect => {
 })
 
 socket.on('blockPhase', it => {
-  // show block panel
-  // show text
+  game.textPanel(it.msg)
+  game.blockPanel(it.rlt)
 })
 
 socket.on('damagePhase', it => {

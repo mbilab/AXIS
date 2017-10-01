@@ -74,6 +74,7 @@ Game.prototype.buildPlayer = function (client) {
   client.action_point = game.default.action_point
   client.atk_enchant = [] // card_ids
   client.buff_action = [] // card_ids
+  client.block_dmg = 0
   client.first_conceal = false
 
   client.deck_slot = {}
@@ -172,9 +173,10 @@ Game.prototype.control = function(personal, opponent, effect) {
 Game.prototype.damage = function(personal, opponent, effect) {
   let player = { personal: personal, opponent: opponent }
   let param = { damage: { personal: null, opponent: null } }
-  for (let target in effect)
+  for (let target in effect) {
+    player[target].block_dmg += effect[target]
     param.damage[target] = true
-
+  }
   return param
 }
 
@@ -393,8 +395,8 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
     opponent.emit('effectTrigger', param)
 
     /*
-    if (damage.personal == true) personal.emit('blockPhase', { msg: {phase: 'block phase'} })
-    if (damage.opponent == true) opponent.emit('blockPhase', { msg: {phase: 'block phase'} })
+    if (damage.personal == true) personal.emit('blockPhase', { msg: {phase: 'block phase'}, rlt: true })
+    if (damage.opponent == true) opponent.emit('blockPhase', { msg: {phase: 'block phase'}, rlt: true })
 
     room.game_phase = 'block'
     */
@@ -581,7 +583,6 @@ io.on('connection', client => {
           game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {type: null, id: null, last: null},
-          block_status: {},
           cards: {},
           card_id: 1,
           player_pointer: 0,
@@ -715,8 +716,8 @@ io.on('connection', client => {
     rlt.personal[action] = true
     rlt.opponent[action] = true
 
-    cb({ msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
-    opponent.emit('foeGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
+    client.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
+    opponent.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
 
     /*
     game.room[rid].atk_status.hit = (action === 'tracking')? false : true
@@ -763,9 +764,10 @@ io.on('connection', client => {
     if (effect_type !== room.counter_status.type) return cb({err: 'counter action type mismatch'})
     if (effect_object !== 'card' && effect_object !== counter_card.type.base) return cb({err: 'counter object type mismatch'})
 
-    let param = {}
-    param[card_pick[0]] = {from: card.field}
-    let rlt = cardMove(client, room.counter_status.last, param)
+   // card flip instead if its artifact
+      let param = {}
+      param[card_pick[0]] = {from: card.field}
+      let rlt = cardMove(client, room.counter_status.last, param)
 
     client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
     room.counter_status.last.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
