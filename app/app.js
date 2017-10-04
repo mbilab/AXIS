@@ -205,7 +205,7 @@ Game.prototype.cardMove = function (rlt) {
 
   let fix_field = {personal: {}, opponent: {}}
   for (let id in rlt) {
-    rlt[id].id = id
+    //rlt[id].id = id
     let pos = this.findCard(rlt[id])
     let card = game.player[rlt[id].curr_own][rlt[id].from][pos]
 

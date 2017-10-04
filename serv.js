@@ -395,10 +395,15 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
     opponent.emit('effectTrigger', param)
 
     /*
-    if (damage.personal == true) personal.emit('blockPhase', { msg: {phase: 'block phase'}, rlt: true })
-    if (damage.opponent == true) opponent.emit('blockPhase', { msg: {phase: 'block phase'}, rlt: true })
-
-    room.game_phase = 'block'
+    // block phase
+    for (let target in player) {
+      if (damage[target]) {
+        room.game_phase = 'block'
+        player[target].emit('blockPhase', {msg: {phase: 'block phase'}, rlt: true})
+        player[target].block_dmg = damage[target]
+        room.block_status.count ++
+      }
+    }
     */
   }
 }
@@ -583,6 +588,8 @@ io.on('connection', client => {
           game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {type: null, id: null, last: null},
+          block_status: {count: 0},
+          damage_status: {count: 0},
           cards: {},
           card_id: 1,
           player_pointer: 0,
@@ -741,13 +748,60 @@ io.on('connection', client => {
     */
   })
 
+  Game.prototype.exitBlkPhase = function (room) {
+    if (room.block_status.count != 0) return
+    for (let player of room.player) {
+      if (player.block_dmg != 0) {
+        room.game_phase = 'damage'
+        player.emit('damagePhase', { msg: {phase: 'damage phase'}, rlt: player.block_dmg })
+      }
+    }
+  }
+
+  Game.prototype.exitDmgPhase = function () {
+
+  }
+
   client.on('block', (it, cb) => {
+    let card_pick = Objecy.keys(it.card_pick)
+    if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
+
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
+    let card = room.cards[card_pick[0]]
+    let effect = game.default.add_card[card_name].effect
+
+    if (!effect.block) return cb({err: 'no block effect'})
+
+    let rlt = null
+    if (card.type.base === 'artifact') {
+      // card flip instead if its artifact
+    }
+    else {
+      let param = {}
+      param[card_pick[0]] = {from: card.field}
+      rlt = cardMove(client, opponent, param)
+    }
+
+    client.block_dmg = 0
+
+    cb({})
+    client.emit('playerBlock', { msg: {action: `use ${card.name} to block`}, card: rlt.personal, rlt: false })
+    opponent.emit('playerBlock', { msg: {action: `foe use ${card.name} to block`}, card: rlt.opponent })
+    exitBlkPhase(room)
+  })
+
+  client.on('receive', () => {
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
+
+    client.emit('damagePhase', { msg: {phase: 'damage phase'} })
 
   })
 
-  client.on('receive', (it, cb) => {
 
-  })
 
   client.on('counter', (it, cb) => {
     let card_pick = Object.keys(it.card_pick)
@@ -764,10 +818,20 @@ io.on('connection', client => {
     if (effect_type !== room.counter_status.type) return cb({err: 'counter action type mismatch'})
     if (effect_object !== 'card' && effect_object !== counter_card.type.base) return cb({err: 'counter object type mismatch'})
 
-   // card flip instead if its artifact
+    let rlt = {}
+    if (card.type.base === 'artifact') {
+      // card flip instead if its artifact
+      /*
+      card.overheat = true
+      card.energy -= 1
+      rlt[card_pick[0]] = {from: 'battle', curr_own: 'personal', trigger: true}
+      */
+    }
+    else {
       let param = {}
       param[card_pick[0]] = {from: card.field}
-      let rlt = cardMove(client, room.counter_status.last, param)
+      rlt = cardMove(client, room.counter_status.last, param)
+    }
 
     client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
     room.counter_status.last.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
