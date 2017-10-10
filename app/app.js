@@ -83,10 +83,16 @@ const Game = function () {
       give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
 
       counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
-      pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} }
+      pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
 
+      choose: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} }
       //block: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'block', func: this.player.personal.block, ext: {req: true} },
       //receive: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
+
+      //flip: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'flip', func: this.player.personal.flipLifeCard, ext: {req: true} },
+      //cover: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'cover', func: this.player.personal.coverLifeCard, ext: {req: true} },
+
+
     }
   }
   this.phaser = null
@@ -205,7 +211,7 @@ Game.prototype.cardMove = function (rlt) {
 
   let fix_field = {personal: {}, opponent: {}}
   for (let id in rlt) {
-    //rlt[id].id = id
+    rlt[id].id = id
     let pos = this.findCard(rlt[id])
     let card = game.player[rlt[id].curr_own][rlt[id].from][pos]
 
@@ -235,8 +241,7 @@ Game.prototype.checkCardEnergy = function (rlt) {
 
 Game.prototype.findCard = function (rlt) {
   for (let [index, elem] of game.player[rlt.curr_own][rlt.from].entries()) {
-    if(elem.id !== rlt.id) continue
-    return index
+    if(elem.id === rlt.id) return index
   }
 }
 
@@ -357,6 +362,7 @@ const Player = function (id, location) {
   this.card_pick = {}
   this.curr_deck = ''
   this.deck_slot = {} // total decks
+  this.eff_queue = []
 
   // game field
   this.altar = []
@@ -406,6 +412,43 @@ Player.prototype.counter = function () {
 
 Player.prototype.pass = function () {
   socket.emit('pass')
+}
+
+Player.prototype.effectChoose = function () {
+  let param = {card_pick: null}
+  Object.assign(param, personal.eff_queue[0])
+  param.card_pick = buildList(personal.card_pick)
+  if (personal.eff_queue.length == 1) param.last = true
+
+  socket.emit('effectChoose', param, it => {
+    if (it.err) return game.textPanel({cursor: it.err})
+
+    personal.eff_queue.shift()
+    if (!personal.eff_queue.length) game.page.game.choose.kill()
+    else game.textPanel({action: `${personal.eff_queue[0].name} ${personal.eff_queue[0].eff}`})
+  })
+}
+
+Player.prototype.effectLoop = function () {
+  if (personal.eff_queue.length) {
+    let choose_btn = game.page.game.choose
+    choose_btn.reset(choose_btn.x, choose_btn.y)
+    game.textPanel({action: `${personal.eff_queue[0].name} ${personal.eff_queue[0].eff}`})
+  }
+}
+
+Player.prototype.flipLifeCard = function () {
+  socket.emit('flipLifeCard', {card_pick: buildList(personal.card_pick)}, it => {
+    if (it.err) return game.textPanel({cursor: it.err})
+    game.page.game.flip.kill()
+  })
+}
+
+Player.prototype.coverLifeCard = function () {
+  socket.emit('coverLifeCard', {card_pick: buildList(personal.card_pick)}, it => {
+    if (it.err) return game.textPanel({cursor: it.err})
+    game.page.game.cover.kill()
+  })
 }
 
 Player.prototype.chooseCard = function (card) {
@@ -515,10 +558,11 @@ Player.prototype.signUp = function () {
 Player.prototype.useCard = function (card) {
   socket.emit('useCard', {id: card.id}, it => {
     if (it.err){
-      if (it.err === 'atk phase') personal.chooseCard(card)
+      if (it.err === 'choose') personal.chooseCard(card)
       else game.textPanel({cursor: it.err})
       return
     }
+    console.log(it.card)
     game.cardMove(it.card)
     game.textPanel(it.msg)
   })
@@ -719,14 +763,20 @@ socket.on('effectTrigger', effect => {
   console.log(effect)
 })
 
+socket.on('effectLoop', effect => {
+  personal.eff_queue.push(effect.rlt)
+  if (personal.eff_queue.length == 1) personal.effectLoop()
+})
+
 socket.on('blockPhase', it => {
   game.textPanel(it.msg)
   game.blockPanel(it.rlt)
 })
 
 socket.on('damagePhase', it => {
-
-
+  game.textPanel(it.msg)
+  let flip = game.page.game.flip
+  flip.reset(flip.x, flip.y)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////
