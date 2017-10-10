@@ -106,20 +106,6 @@ Game.prototype.textPanel = function (text) {
   if (text.cursor) game.text.cursor.setText(text.cursor)
 }
 
-Game.prototype.blockPanel = function (command) {
-  let block_btn = this.page.game.block
-  let receive_btn = this.page.game.receive
-
-  if (command == true) {
-    block_btn.reset(block_btn.x, block_btn.y)
-    receive_btn.reset(receive_btn.x, receive_btn.y)
-  }
-  else{
-    block_btn.kill()
-    receive_btn.kill()
-  }
-}
-
 // action = {pass: true, personal: true ...}
 Game.prototype.counterPanel = function (action) {
   let counter_btn = this.page.game.counter
@@ -395,13 +381,15 @@ Player.prototype.giveUp = function () {
 }
 
 Player.prototype.block = function () {
-  socket.emit('block', {card_pick: buildList(personal.card_pick)}, it => {
-    if (it.err) return game.textPanel({cursor: it.err})
-  })
+  personal.eff_queue[0].eff = 'block'
+  let choose_btn = game.page.game.choose
+  choose_btn.reset(choose_btn.x, choose_btn.y)
 }
 
 Player.prototype.receive = function () {
-  socket.emit('receive')
+  personal.eff_queue[0].eff = 'receive'
+  let choose_btn = game.page.game.choose
+  choose_btn.reset(choose_btn.x, choose_btn.y)
 }
 
 Player.prototype.counter = function () {
@@ -424,31 +412,34 @@ Player.prototype.effectChoose = function () {
     if (it.err) return game.textPanel({cursor: it.err})
 
     personal.eff_queue.shift()
-    if (!personal.eff_queue.length) game.page.game.choose.kill()
+    if (!personal.eff_queue.length) {
+      game.page.game.choose.kill()
+      game.textPanel({action: 'effect done'})
+    }
     else game.textPanel({action: `${personal.eff_queue[0].name} ${personal.eff_queue[0].eff}`})
   })
 }
 
 Player.prototype.effectLoop = function () {
   if (personal.eff_queue.length) {
+    /*
+    if (personal.eff_queue[0].eff === 'damage') {
+      let receive_btn = game.page.game.receive
+      let block_btn = game.page.game.block
+      block_btn.reset(block_btn.x, block_btn.y)
+      receive_btn.reset(receive_btn.x, receive_btn.y)
+    }
+    else {
+      let choose_btn = game.page.game.choose
+      choose_btn.reset(choose_btn.x, choose_btn.y)
+    }
+    game.textPanel({action: `${personal.eff_queue[0].name} ${personal.eff_queue[0].eff}`})
+    */
+
     let choose_btn = game.page.game.choose
     choose_btn.reset(choose_btn.x, choose_btn.y)
     game.textPanel({action: `${personal.eff_queue[0].name} ${personal.eff_queue[0].eff}`})
   }
-}
-
-Player.prototype.flipLifeCard = function () {
-  socket.emit('flipLifeCard', {card_pick: buildList(personal.card_pick)}, it => {
-    if (it.err) return game.textPanel({cursor: it.err})
-    game.page.game.flip.kill()
-  })
-}
-
-Player.prototype.coverLifeCard = function () {
-  socket.emit('coverLifeCard', {card_pick: buildList(personal.card_pick)}, it => {
-    if (it.err) return game.textPanel({cursor: it.err})
-    game.page.game.cover.kill()
-  })
 }
 
 Player.prototype.chooseCard = function (card) {
@@ -766,17 +757,6 @@ socket.on('effectTrigger', effect => {
 socket.on('effectLoop', effect => {
   personal.eff_queue.push(effect.rlt)
   if (personal.eff_queue.length == 1) personal.effectLoop()
-})
-
-socket.on('blockPhase', it => {
-  game.textPanel(it.msg)
-  game.blockPanel(it.rlt)
-})
-
-socket.on('damagePhase', it => {
-  game.textPanel(it.msg)
-  let flip = game.page.game.flip
-  flip.reset(flip.x, flip.y)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////

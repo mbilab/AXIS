@@ -94,7 +94,6 @@ Game.prototype.buildPlayer = function (client) {
   client.action_point = game.default.action_point
   client.atk_enchant = [] // card_ids
   client.buff_action = [] // card_ids
-  client.block_dmg = 0
   client.first_conceal = false
 
   client.deck_slot = {}
@@ -177,6 +176,16 @@ Game.prototype.enchantAttack = function (personal, opponent) {
 }
 
 // card effects
+Game.prototype.block = function () {
+  let player = { personal: personal, opponent: opponent }
+  let rlt = { damage: { personal: null, opponent: null } }
+  for (let target in effect) {
+    param.damage[target] = effect[target]
+  }
+  personal.emit('effectTrigger', rlt)
+  opponent.emit('effectTrigger', genFoeRlt(rlt))
+}
+
 Game.prototype.control = function(personal, opponent, param) {
   let player = { personal: personal, opponent: opponent }
   let effect = game.default.all_card[param.name].effect[param.eff]
@@ -190,17 +199,6 @@ Game.prototype.control = function(personal, opponent, param) {
   }
   personal.emit('effectTrigger', rlt)
   opponent.emit('effectTrigger', rlt)
-}
-
-Game.prototype.damage = function(personal, opponent, effect) {
-  let player = { personal: personal, opponent: opponent }
-  let rlt = { damage: { personal: null, opponent: null } }
-  for (let target in effect) {
-    //player[target].block_dmg += effect[target]
-    param.damage[target] = effect[target]
-  }
-  personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', genFoeRlt(rlt))
 }
 
 Game.prototype.destroy = function(personal, opponent, effect) {
@@ -422,20 +420,6 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   console.log(room.game_phase)
 }
 
-Game.prototype.exitBlkPhase = function (room) {
-  if (room.block_status.count != 0) return
-  for (let player of room.player) {
-    if (player.block_dmg != 0) {
-      room.game_phase = 'damage'
-      player.emit('damagePhase', { msg: {phase: 'damage phase', action: `choose ${player.block_dmg} card to flip`}, rlt: player.block_dmg })
-    }
-  }
-}
-
-Game.prototype.exitDmgPhase = function () {
-
-}
-
 // tools
 Game.prototype.idGenerate = function (length) {
   let id = ""
@@ -625,7 +609,6 @@ io.on('connection', client => {
           game_phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {type: null, id: null, last: null},
-          block_status: {count: 0},
           damage_status: {count: 0},
           effect_status: {count: 0},
           cards: {},
@@ -786,46 +769,6 @@ io.on('connection', client => {
     */
   })
 
-  client.on('block', (it, cb) => {
-    let card_pick = Objecy.keys(it.card_pick)
-    if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
-
-    let room = game.room[client._rid]
-    let curr = room.player_pointer
-    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
-    let card = room.cards[card_pick[0]]
-    let effect = game.default.add_card[card_name].effect
-
-    if (!effect.block) return cb({err: 'no block effect'})
-
-    let rlt = null
-    if (card.type.base === 'artifact') {
-      // card flip instead if its artifact
-    }
-    else {
-      let param = {}
-      param[card_pick[0]] = {from: card.field}
-      rlt = cardMove(client, opponent, param)
-    }
-
-    client.block_dmg = 0
-
-    cb({})
-    client.emit('playerBlock', { msg: {action: `use ${card.name} to block`}, card: rlt.personal, rlt: false })
-    opponent.emit('playerBlock', { msg: {action: `foe use ${card.name} to block`}, card: rlt.opponent })
-    exitBlkPhase(room)
-  })
-
-  client.on('receive', () => {
-    let room = game.room[client._rid]
-    let curr = room.player_pointer
-    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
-    room.damage_status.count ++
-    exitBlkPhase(room)
-  })
-
-
-
   client.on('counter', (it, cb) => {
     let card_pick = Object.keys(it.card_pick)
     if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
@@ -982,20 +925,6 @@ io.on('connection', client => {
 
     cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
     room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
-  })
-
-  client.on('flipLifeCard', (it, cb) => {
-    let room = game.room[client._rid]
-    let card_pick = Object.keys(it.card_pick)
-    if (card_pick.length != client.damage_block) return cb({err: 'wrong ammount of card pick'})
-    for (let id of card_pick)
-      if (!room.cards[id].cover) return cb ({err: 'card pick already flipped'})
-
-
-  })
-
-  client.on('coverLifeCard', (it, cb) => {
-
   })
 
   client.on('useCard', (it, cb) => {
