@@ -99,6 +99,7 @@ Game.prototype.buildPlayer = function (client) {
   client.action_point = game.default.action_point
   client.atk_enchant = [] // card_ids
   client.buff_action = [] // card_ids
+  client.dmg_blk = 0 // effect damage only
   client.first_conceal = false
 
   client.deck_slot = {}
@@ -311,6 +312,33 @@ Game.prototype.modify = function(personal, opponent, effect) {
 }
 
 Game.prototype.receive = function (personal, opponent, param) {
+  /*
+  let player = { personal: personal, opponent: opponent }
+  let room = this.room[personal._rid]
+  let dmg_taken = (room.game_phase === 'attack')? opponent.atk_damage : personal.dmg_blk
+  let card_pick = Object.keys(param.card_pick)
+  let rlt = { card: {receive: {}} }
+
+  if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
+
+  for (let id in card_pick) {
+    let card = room.cards[id]
+    if (card.cover == false) return {err: 'cant pick card is unveiled'}
+    card.cover = false
+    rlt.card.receive[id] = {cover: false}
+  }
+
+  personal.emit('effectTrigger', rlt)
+  opponent.emit('effectTrigger', rlt)
+
+  if (room.game_phase === 'attack') {
+    room.game_phase = 'normal'
+    room.atk_status.hit = false
+    room.atk_status.attacker = null
+    room.atk_status.defender = null
+  }
+  */
+
   let player = { personal: personal, opponent: opponent }
   let rlt = { card: {} }
   rlt.card['receive'] = {}
@@ -427,6 +455,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
       if (this.choose_eff[effect_name]) {
         for (let target in effect) {
+          if (effect_name === 'damage') player[target].dmg_blk += effect[target]
           player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: effect_name}})
           if (!room.effect_status[player[target]._pid]) {
             room.effect_status[player[target]._pid] = true
@@ -791,7 +820,7 @@ io.on('connection', client => {
     this.effectTrigger(player.attacker, player.defender, avail_effect)
 
     // damage phase
-    client.emit('damagePhase', {})
+    player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: effect_name}})
 
     // end phase
     game.room[rid].game_phase = 'normal'
@@ -867,7 +896,10 @@ io.on('connection', client => {
         }
       }
       else {
-
+        if (card.type.base === 'artifact') {
+          if (card.type.effect === 'enchant') room.counter_status.last.attack_enchant.push(room.counter_status.id)
+          //if (card.type.effect === 'trigger')
+        }
       }
     }
 
@@ -932,6 +964,7 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let curr = room.counter
     let card = room.cards[it.id]
+    if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})
 
     if (card.type.base === 'artifact') {
       if (card.overheat) return cb({err: 'artifact overheat'})

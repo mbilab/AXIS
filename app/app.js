@@ -623,6 +623,7 @@ const Card = function (init) {
 Card.prototype.click = function () {
   switch (this.field) {
     case 'altar':
+      //personal.triggerCard(this)
       break
 
     case 'battle':
@@ -712,6 +713,10 @@ socket.on('playerTracking', it => {
 socket.on('playerTrigger', it => {
   game.textPanel(it.msg)
   // drain card once if artifact
+  /*
+  if cardmove then cardmove
+  else turn card down once or use tags
+  */
   game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
   game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
