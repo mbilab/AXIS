@@ -168,10 +168,6 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
   return param
 }
 
-Game.prototype.checkCardEnergy = function (rid) {
-
-}
-
 Game.prototype.effectEnd = function (room) {
   if (room.game_phase === 'attack') {
     //damage phase
@@ -485,13 +481,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
     }
   }
 
-  console.log(room.effect_status)
-
-  if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) {
-    this.effectEnd(room)
-  }
-
-  console.log(room.game_phase)
+  if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) this.effectEnd(room)
 }
 
 // tools
@@ -951,9 +941,7 @@ io.on('connection', client => {
     if (it.last) {
       room.effect_status[client._pid] = false
       room.effect_status.count --
-      if (room.effect_status.count == 0) {
-        game.effectEnd(room)
-      }
+      if (room.effect_status.count == 0) game.effectEnd(room)
     }
   })
 
@@ -972,8 +960,8 @@ io.on('connection', client => {
 
       room.game_phase = 'counter'
       room.counter_status = {start: 'trigger', type: 'trigger', id: it.id, last: client}
-      client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {personal: {battle: it.id}} })
-      room.player[1-curr].emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {opponent: {battle: it.id}} })
+      client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
+      room.player[1-curr].emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
     }
     else {}
   })
@@ -984,8 +972,6 @@ io.on('connection', client => {
     if (room.game_phase !== 'normal') return cb({ err: `not allowed in ${room.game_phase} phase`})
     if (room.player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
 
-    //checkCardEnergy
-
     room.player_pointer = 1 - curr
     curr = room.player_pointer
 
@@ -993,6 +979,13 @@ io.on('connection', client => {
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
 
+    // put outdated card on field to grave
+    /*
+    for (let id in room.cards) {
+      let card = room.cards[id]
+      if (card.energy == 0) game.cardMove(client, room.player[curr])
+    }
+    */
 
     cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
     room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
