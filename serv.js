@@ -168,17 +168,29 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
   return param
 }
 
+Game.prototype.attackEnd = function (room) {
+  room.game_phase = 'normal'
+  room.atk_status.hit = false
+  room.atk_status.attacker = null
+  room.atk_status.defender = null
+  for (let player of room.player) {
+    let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
+    player.emit('normalphase', {msg: {phase: 'normal phase', action: rlt}})
+  }
+}
+
 Game.prototype.effectEnd = function (room) {
   if (room.game_phase === 'attack') {
     //damage phase
-    room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', eff: 'damage'}})
+    if(room.atk_status.hit) room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', eff: 'damage'}})
+    else this.attackEnd(room)
   }
   else {
     let curr = room.player_pointer
     room.game_phase = 'normal'
     for (let player of room.player) {
       let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
-      player.emit('normalPhase', {msg: {phase: 'normal phase', action: rlt}})
+      player.emit('normalphase', {msg: {phase: 'normal phase', action: rlt}})
     }
   }
 }
@@ -342,12 +354,6 @@ Game.prototype.receive = function (personal, opponent, param) {
   personal.emit('effectTrigger', rlt)
   opponent.emit('effectTrigger', rlt)
 
-  if (room.game_phase === 'attack') {
-    room.game_phase = 'normal'
-    room.atk_status.hit = false
-    room.atk_status.attacker = null
-    room.atk_status.defender = null
-  }
   */
 
   let player = { personal: personal, opponent: opponent }
@@ -671,6 +677,15 @@ io.on('connection', client => {
 
         game.room[rid] = {
           game_phase: 'normal', // >> normal / attack / counter / choose
+          /*
+          game_phase: {
+            curr   : 'normal',
+            normal : true,
+            attack : {judge: false, effect: false, damage: false},
+            counter: false,
+            effect : false
+          }
+          */
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {action: null, type: null, id: null, last: null},
           damage_status: {count: 0},
@@ -797,7 +812,7 @@ io.on('connection', client => {
     let curr = room.player_pointer
     let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
     let opponent = room.player[(action === 'tracking')? (1-curr) : curr]
-    room.game_phase = 'normal'
+    //room.game_phase = 'normal'
 
 
     let msg = {personal: '', opponent: ''}
@@ -811,7 +826,7 @@ io.on('connection', client => {
     client.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
     opponent.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
 
-    /*
+
     game.room[rid].atk_status.hit = (action === 'tracking')? false : true
 
     // effect phase
@@ -820,7 +835,7 @@ io.on('connection', client => {
       Object.assign(avail_effect, this.judge(player.attacker, player.defender, id))
 
     this.effectTrigger(player.attacker, player.defender, avail_effect)
-    */
+
   })
 
   client.on('counter', (it, cb) => {
@@ -939,9 +954,13 @@ io.on('connection', client => {
     cb({})
     //if (rlt.err) return cb(rlt)
     if (it.last) {
-      room.effect_status[client._pid] = false
-      room.effect_status.count --
-      if (room.effect_status.count == 0) game.effectEnd(room)
+      // if atk damage phase
+      if ((it.eff === 'receive' || it.eff === 'block') && room.game_phase === 'attack') game.attackEnd(room)
+      else {
+        room.effect_status[client._pid] = false
+        room.effect_status.count --
+        if (room.effect_status.count == 0) game.effectEnd(room)
+      }
     }
   })
 
