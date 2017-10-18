@@ -172,6 +172,21 @@ Game.prototype.checkCardEnergy = function (rid) {
 
 }
 
+Game.prototype.effectEnd = function (room) {
+  if (room.game_phase === 'attack') {
+    //damage phase
+    room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', eff: 'damage'}})
+  }
+  else {
+    let curr = room.player_pointer
+    room.game_phase = 'normal'
+    for (let player of room.player) {
+      let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
+      player.emit('normalPhase', {msg: {phase: 'normal phase', action: rlt}})
+    }
+  }
+}
+
 // personal >> who announce this attack
 Game.prototype.enchantAttack = function (personal, opponent) {
   let avail_effect = {}
@@ -445,7 +460,8 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   let curr = room.player_pointer
   let player = {personal: personal, opponent: opponent}
 
-  room.game_phase = 'effect'
+  // effect phase of attack enchant will count as attack phase
+  if(room.game_phase !== 'attack') room.game_phase = 'effect'
 
   for (let id in card_list) {
     let card_name = this.room[personal._rid].cards[id].name
@@ -472,11 +488,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   console.log(room.effect_status)
 
   if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) {
-    room.game_phase = 'normal'
-    for (let player of room.player) {
-      let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
-      player.emit('normalPhase', {msg: {phase: 'normal phase', action: rlt}})
-    }
+    this.effectEnd(room)
   }
 
   console.log(room.game_phase)
@@ -818,16 +830,6 @@ io.on('connection', client => {
       Object.assign(avail_effect, this.judge(player.attacker, player.defender, id))
 
     this.effectTrigger(player.attacker, player.defender, avail_effect)
-
-    // damage phase
-    player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: effect_name}})
-
-    // end phase
-    game.room[rid].game_phase = 'normal'
-    game.room[rid].atk_status.hit = false
-    game.room[rid].atk_status.attacker = null
-    game.room[rid].atk_status.defender = null
-
     */
   })
 
@@ -889,7 +891,7 @@ io.on('connection', client => {
       let card = room.cards[room.counter_status.id]
 
       // action varies by counter status first action
-      if (room.counter_status.action === 'use') {
+      if (room.counter_status.start === 'use') {
         if (card.field === 'grave') {
           let avail_effect = game.judge(last_counter, client, room.counter_status.id)
           game.effectTrigger(last_counter, client, avail_effect)
@@ -903,7 +905,7 @@ io.on('connection', client => {
       }
     }
 
-    room.counter_status = {action: null, type: null, id: null, last: null}
+    room.counter_status = {start: null, type: null, id: null, last: null}
   })
 
   // neutral
@@ -950,11 +952,7 @@ io.on('connection', client => {
       room.effect_status[client._pid] = false
       room.effect_status.count --
       if (room.effect_status.count == 0) {
-        room.game_phase = 'normal'
-        for (let player of room.player) {
-          let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
-          player.emit('normalPhase', {msg: {phase: 'normal phase', action: rlt}})
-        }
+        game.effectEnd(room)
       }
     }
   })
@@ -973,7 +971,7 @@ io.on('connection', client => {
       card.energy -= 1
 
       room.game_phase = 'counter'
-      room.counter_status = {action: 'trigger', type: 'trigger', id: it.id, last: client}
+      room.counter_status = {start: 'trigger', type: 'trigger', id: it.id, last: client}
       client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {personal: {battle: it.id}} })
       room.player[1-curr].emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {opponent: {battle: it.id}} })
     }
@@ -1047,7 +1045,7 @@ io.on('connection', client => {
     room.game_phase = 'counter'
     room.counter_status.last = client
     room.counter_status.type = 'use'
-    room.counter_status.action = 'use'
+    room.counter_status.start = 'use'
   })
 })
 
@@ -1061,4 +1059,4 @@ server.listen(opt.serv_port, function(){
   console.log(`listen on port ${opt.serv_port}`)
 })
 
-
+// vi:et:fdm=indent
