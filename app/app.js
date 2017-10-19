@@ -713,12 +713,12 @@ socket.on('playerTracking', it => {
 socket.on('playerTrigger', it => {
   game.textPanel(it.msg)
   // drain card once if artifact
-  /*
+
   //if cardmove then cardmove
   //else turn card down once or use tags
 
   game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].img.angle += 90
-  */
+
   game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
   game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
@@ -772,6 +772,10 @@ socket.on('effectTrigger', effect => {
 socket.on('effectLoop', effect => {
   personal.eff_queue.push(effect.rlt)
   if (personal.eff_queue.length == 1) personal.effectLoop()
+})
+
+socket.on('phaseShift', it => {
+  game.textPanel(it.msg)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////

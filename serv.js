@@ -490,24 +490,46 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) this.effectEnd(room)
 }
 
-// tools
-Game.prototype.idGenerate = function (length) {
-  let id = ""
-  let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  for(let i = 0; i < length; i++ )
-    id += possible.charAt(Math.floor(Math.random() * possible.length))
-  return id
-}
-
-Game.prototype.shuffle = function (card_list) {
-  let i = 0, j = 0, temp = null
-  for(i = card_list.length-1; i > 0; i -= 1){
-    j = Math.floor(Math.random()*(i + 1))
-    temp = card_list[i]
-    card_list[i] = card_list[j]
-    card_list[j] = temp
+// internal first then external phase
+Game.prototype.phaseShift = function (room, shift) {
+  let ext_curr = room.phase.curr
+  if (shift.internal) {
+    let int_curr = room.phase[ext_curr].curr
+    let int_next = room.phase[ext_curr][int_curr].next
+    room.phase[ext_curr][int_curr].base = false
+    room.phase[ext_curr][int_next].base = true
+    room.phase[ext_curr].curr = int_next
   }
-  return card_list
+  if (shift.external) {
+    let ext_next = shift.external
+    room.phase[ext_curr].base = false
+    room.phase[ext_next].base = true
+
+    if (ext_curr === 'attack') {
+      room.phase.attack.attr.hit = false
+      room.phase.attack.attr.attacker = null
+      room.phase.attack.attr.defender = null
+    }
+
+    if (ext_curr === 'counter') {
+      room.counter_status.start = null
+      room.counter_status.type = null
+      room.counter_status.id = null
+      room.counter_status.last = null
+    }
+
+    if (ext_curr === 'effect') {
+
+    }
+
+    room.phase.curr = ext_next
+  }
+
+  let phase = `${room.phase.curr}${(room.phase[room.phase.curr].curr)? ` ${room.phase[room.phase.curr].curr} ` : ' '}phase`
+  for (let player of room.player) {
+    let action = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
+    player.emit('phaseShift', {msg: {phase: phase, action: action}})
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -538,6 +560,25 @@ function genFoeRlt (param) {
     param[type].opponent = temp
   }
   return param
+}
+
+function idGenerate (length) {
+  let id = ""
+  let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+  for(let i = 0; i < length; i++ )
+    id += possible.charAt(Math.floor(Math.random() * possible.length))
+  return id
+}
+
+function shuffle (card_list) {
+  let i = 0, j = 0, temp = null
+  for(i = card_list.length-1; i > 0; i -= 1){
+    j = Math.floor(Math.random()*(i + 1))
+    temp = card_list[i]
+    card_list[i] = card_list[j]
+    card_list[j] = temp
+  }
+  return card_list
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -613,7 +654,7 @@ io.on('connection', client => {
   // personal interface
   client.on('login', (it, cb) => {
     let user = app.db.collection('user')
-    let pid = game.idGenerate(16)
+    let pid = idGenerate(16)
     client._pid = pid
     game.pool[pid] = client
 
@@ -653,7 +694,7 @@ io.on('connection', client => {
     user.find({account: client._account}).toArray((err, rlt) => {
 
       // build deck
-      deck = game.shuffle(rlt[0].deck_slot[it.curr_deck].card_list)
+      deck = shuffle(rlt[0].deck_slot[it.curr_deck].card_list)
       for(let card_name of deck){
         let curr_card = game.default.all_card[card_name]
         let init = {
@@ -669,7 +710,7 @@ io.on('connection', client => {
 
       // find opponent
       if(game.queue.length){
-        let rid = game.idGenerate(16)
+        let rid = idGenerate(16)
         let opponent = game.queue.shift()
         opponent._rid = rid
         client._rid = rid
@@ -678,17 +719,49 @@ io.on('connection', client => {
         game.room[rid] = {
           game_phase: 'normal', // >> normal / attack / counter / choose
           /*
-          game_phase: {
-            curr   : 'normal',
-            normal : true,
-            attack : {judge: false, effect: false, damage: false},
-            counter: false,
-            effect : false
+          phase: {
+            curr    : 'normal',
+            normal  : {
+              base  : true,
+              curr  : 'start',
+              start : {base: true, next: 'action'},
+              action: {base: false, next: 'end'},
+              end   : {base: false, next: 'start'}
+            },
+            attack : {
+              base  : false,
+              curr  : 'judge',
+              next  : 'normal',
+              judge : {base: true, next: 'effect'},
+              effect: {base: false, next: 'damage'},
+              damage: {base: false, next: 'judge'}
+              attr  : {
+                hit     : false,
+                attacker: null,
+                defender: null
+              }
+            },
+            counter: {
+              base: false,
+              next: 'normal',
+              attr: {
+                action: null,
+                type  : null,
+                id    : null,
+                last  : null
+              }
+            },
+            effect : {
+              base: false,
+              next: 'normal'
+              attr: {
+                count: 0
+              }
+            }
           }
           */
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {action: null, type: null, id: null, last: null},
-          damage_status: {count: 0},
           effect_status: {count: 0},
           cards: {},
           card_id: 1,
@@ -880,7 +953,6 @@ io.on('connection', client => {
     let counter = (client == room.player[curr])? true : false
     let last_counter = room.counter_status.last
 
-    room.game_phase = 'normal'
 
     if (counter == true) {
       let param = {}
@@ -910,6 +982,7 @@ io.on('connection', client => {
       }
     }
 
+    room.game_phase = 'normal'
     room.counter_status = {start: null, type: null, id: null, last: null}
   })
 
