@@ -209,7 +209,6 @@ Game.prototype.cardMove = function (rlt) {
 //           action:   // when equip, cast ...
 //         }
 //       }
-
   let fix_field = {personal: {}, opponent: {}}
   for (let id in rlt) {
     rlt[id].id = id
@@ -223,6 +222,7 @@ Game.prototype.cardMove = function (rlt) {
     card.name = rlt[id].name
     card.img.loadTexture(card.name)
     card.img.alpha = 1
+    card.img.angle = 0
 
     // move
     game.player[rlt[id].new_own][rlt[id].to].push(card)
@@ -473,7 +473,7 @@ Player.prototype.drawCard = function () {
 // for player trigger a card on field/ enchant an attack
 Player.prototype.triggerCard = function (card) {
   socket.emit('triggerCard', {id: card.id}, it => {
-    if (it.err) return game.text.setText(it.err)
+    if (it.err) return game.textPanel({cursor: it.err})
   })
 }
 
@@ -481,6 +481,7 @@ Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
     if (it.err) return game.textPanel({cursor: it.err})
     game.textPanel(it.msg)
+    if (Object.keys(it.card)) game.cardMove(it.card)
     game.resetCardPick()
   })
 }
@@ -627,7 +628,7 @@ Card.prototype.click = function () {
       break
 
     case 'battle':
-      //personal.triggerCard(this)
+      personal.triggerCard(this)
       break
 
     case 'grave' :
@@ -719,8 +720,10 @@ socket.on('playerTrigger', it => {
 
   game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].img.angle += 90
 
-  game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
-  game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
+  if (it.card.curr_own === 'opponent') {
+    game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
+    game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
+  }
 })
 
 socket.on('foeDrawCard', it => {

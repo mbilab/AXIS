@@ -90,9 +90,9 @@ const Game = function(){
   this.room = {}
 }
 
-// main
+/////////////////////////////////////////////////////////////////////////////////
+// !-- build objects
 Game.prototype.buildPlayer = function (client) {
-  // attribute
   client.hp = this.default.life_max
   client.atk_damage = game.default.atk_damage
   client.atk_phase = game.default.atk_phase
@@ -110,6 +110,9 @@ Game.prototype.buildPlayer = function (client) {
   client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
   client.curr_deck = []
 }
+
+/////////////////////////////////////////////////////////////////////////////////
+// !-- card adjusting
 
 /*
 param = {
@@ -165,31 +168,42 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
     Object.assign(param.opponent[id], rlt[id])
   }
+
   return param
 }
 
+/////////////////////////////////////////////////////////////////////////////////
+// !-- changing phase
 Game.prototype.attackEnd = function (room) {
-
-  game.phaseShift(room, {next: 'normal'})
+  room.phase = 'normal'
   room.atk_status.hit = false
   room.atk_status.attacker = null
   room.atk_status.defender = null
+  for (let player of room.player) {
+    let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
+    player.emit('phaseShift', {msg: {phase: 'normal phase', action: rlt}})
+  }
 }
 
 Game.prototype.effectEnd = function (room) {
-  if (room.phase.attack) {
-    //damage phase
+  if (room.phase === 'attack') {
     if (room.atk_status.hit) room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', eff: 'damage'}})
     else this.attackEnd(room)
   }
   else {
     let curr = room.player_pointer
-    game.phaseShift(room, {next: 'normal'})
+    room.phase = 'normal'
+    for (let player of room.player) {
+      let rlt = (player == room.player[curr]) ? 'your turn' : 'opponent turn'
+      player.emit('phaseShift', {msg: {phase: 'normal phase', action: rlt}})
+    }
   }
 }
 
-// personal >> who announce this attack
+/////////////////////////////////////////////////////////////////////////////////
+// !-- effect apply
 Game.prototype.enchantAttack = function (personal, opponent) {
+  // personal >> who announce this attack
   let avail_effect = {}
   for (let id in personal.atk_enchant)
     Object.assign(avail_effect, this.judge(personal, opponent, id))
@@ -197,7 +211,95 @@ Game.prototype.enchantAttack = function (personal, opponent) {
   this.effectTrigger(personal, opponent, avail_effect)
 }
 
-// card effects
+Game.prototype.effectTrigger = function (personal, opponent, card_list) {
+  // card_list = {
+  //   card_id_1: [effect1, effect2 ...],
+  //   card_id_2 ...
+  // }
+  //
+  // effect = { effect: { target: { field: { type: value } } } }
+  let room = this.room[personal._rid]
+  let curr = room.player_pointer
+  let player = {personal: personal, opponent: opponent}
+
+  // effect phase of attack enchant will count as attack phase
+  if(room.phase !== 'attack') room.phase = 'effect'
+  for (let player of room.player) {
+    player.emit('phaseShift', {msg: {phase: `${room.phase} phase`}})
+  }
+
+  for (let id in card_list) {
+    let card_name = this.room[personal._rid].cards[id].name
+    for (let avail_effect of card_list[id]) {
+      let effect_name = avail_effect.split('_')[0]
+      let effect = this.default.all_card[card_name].effect[avail_effect]
+
+      if (this.choose_eff[effect_name]) {
+        for (let target in effect) {
+          if (effect_name === 'damage') player[target].dmg_blk += effect[target]
+          player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: effect_name}})
+          if (!room.effect_status[player[target]._pid]) {
+            room.effect_status[player[target]._pid] = true
+            room.effect_status.count ++
+          }
+        }
+      }
+      else {
+        game[effect_name](personal, opponent, effect)
+      }
+    }
+  }
+
+  if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) this.effectEnd(room)
+}
+
+Game.prototype.judge = function (personal, opponent, card_id) {
+  let player = {personal: personal, opponent: opponent}
+  let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
+  let avail_effect = {}
+  avail_effect[card_id] = []
+  // judge: { effect: { target: { condition: { compare: value } } } }
+
+  for (let effect in judge) {
+    // for effects don't need to judge
+    if(!Object.keys(judge[effect]).length){
+      avail_effect[card_id].push(effect)
+      continue
+    }
+    // for effects with judges
+    else {
+      for (let target in judge.effect) {
+        for (let condition in judge.effect.target) {
+          let curr_val = null
+
+          switch (condition) {
+            case 'hit':
+              if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
+              break
+
+            case 'hp':
+              curr_val = player[target].hp
+              break
+
+            case 'handcard':
+              curr_val = player[target].card_ammount.hand
+              break
+
+            default:break
+          }
+
+          if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
+        }
+      }
+    }
+
+  }
+
+  return avail_effect
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+// !-- card effects
 Game.prototype.bleed = function (personal, opponent, param) {
   let player = { personal: personal, opponent: opponent }
   let effect = game.default.all_card[param.name].effect[param.eff]
@@ -399,101 +501,7 @@ Game.prototype.steal = function(personal, opponent, param) {
   opponent.emit('effectTrigger', rlt)
 }
 
-Game.prototype.judge = function (personal, opponent, card_id) {
-  let player = {personal: personal, opponent: opponent}
-  let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
-  let avail_effect = {}
-  avail_effect[card_id] = []
-  // judge: { effect: { target: { condition: { compare: value } } } }
 
-  for (let effect in judge) {
-    // for effects don't need to judge
-    if(!Object.keys(judge[effect]).length){
-      avail_effect[card_id].push(effect)
-      continue
-    }
-    // for effects with judges
-    else {
-      for (let target in judge.effect) {
-        for (let condition in judge.effect.target) {
-          let curr_val = null
-
-          switch (condition) {
-            case 'hit':
-              if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
-              break
-
-            case 'hp':
-              curr_val = player[target].hp
-              break
-
-            case 'handcard':
-              curr_val = player[target].card_ammount.hand
-              break
-
-            default:break
-          }
-
-          if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
-        }
-      }
-    }
-
-  }
-
-  return avail_effect
-}
-
-Game.prototype.effectTrigger = function (personal, opponent, card_list) {
-  // card_list = {
-  //   card_id_1: [effect1, effect2 ...],
-  //   card_id_2 ...
-  // }
-  //
-  // effect = { effect: { target: { field: { type: value } } } }
-  let room = this.room[personal._rid]
-  let curr = room.player_pointer
-  let player = {personal: personal, opponent: opponent}
-
-  // effect phase of attack enchant will count as attack phase
-  if(!room.phase.attack) game.phaseShift(room, {next: 'effect'})
-
-  for (let id in card_list) {
-    let card_name = this.room[personal._rid].cards[id].name
-    for (let avail_effect of card_list[id]) {
-      let effect_name = avail_effect.split('_')[0]
-      let effect = this.default.all_card[card_name].effect[avail_effect]
-
-      if (this.choose_eff[effect_name]) {
-        for (let target in effect) {
-          if (effect_name === 'damage') player[target].dmg_blk += effect[target]
-          player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: effect_name}})
-
-          if (!room.effect_status[player[target]._pid]) {
-            room.effect_status[player[target]._pid] = true
-            room.effect_status.count ++
-          }
-        }
-      }
-      else {
-        game[effect_name](personal, opponent, effect)
-      }
-    }
-  }
-
-  if (!room.effect_status[personal._pid] && !room.effect_status[opponent._pid]) this.effectEnd(room)
-}
-
-Game.prototype.phaseShift = function (room, shift) {
-  let phase = room.phase
-  phase[phase.curr] = false
-  phase[shift.next] = true
-  phase.curr = shift.next
-
-  for (let player of room.player) {
-    player.emit('phaseShift', {msg: {phase: `${phase.curr} phase`}})
-  }
-}
 /////////////////////////////////////////////////////////////////////////////////
 
 // utility
@@ -580,7 +588,8 @@ function randomDeck () {
 
 io.on('connection', client => {
 
-  // init settings
+  ///////////////////////////////////////////////////////////////////////////////
+  // !-- init settings
   MongoClient.connect(opt.url, (err, _db) => {
     if(err) throw err
     app.db = _db
@@ -594,6 +603,14 @@ io.on('connection', client => {
     cb(app.file.preload)
   })
 
+  client.on('init', cb => {
+    game.buildPlayer(client)
+    console.log('player built')
+    cb({})
+  })
+
+  ///////////////////////////////////////////////////////////////////////////////
+  // !-- connection
   client.on('disconnect', () => {
     let rid = client._rid
     let pid = client._pid
@@ -623,13 +640,6 @@ io.on('connection', client => {
       if(game.queue[i]._pid === pid) return game.queue.splice(i,1)
   })
 
-  // once open web page
-  client.on('init', cb => {
-    game.buildPlayer(client)
-    console.log('player built')
-    cb({})
-  })
-
   client.on('leaveMatch', cb => {
     let rid = client._rid
     console.log(`${client._pid} leave`)
@@ -644,7 +654,8 @@ io.on('connection', client => {
     return
   })
 
-  // personal interface
+  ///////////////////////////////////////////////////////////////////////////////
+  // !-- personal interface
   client.on('login', (it, cb) => {
     let user = app.db.collection('user')
     let pid = idGenerate(16)
@@ -710,14 +721,7 @@ io.on('connection', client => {
         delete game.pool[client._pid]
 
         game.room[rid] = {
-          //phase: 'normal',
-          phase: {
-            curr: 'normal',
-            normal: true,
-            attack: false,
-            effect: false,
-            counter: false
-          },
+          phase: 'normal', // >> normal / attack / counter / choose
           atk_status: {hit: false, attacker: null, defender: null},
           counter_status: {action: null, type: null, id: null, last: null},
           effect_status: {count: 0},
@@ -783,27 +787,29 @@ io.on('connection', client => {
     })
   })
 
-  // in game
+  ///////////////////////////////////////////////////////////////////////////////
+  // !-- in game
 
-  // battle
+  // ----------------------------------------------------------------------------
+  // !-- attack
   client.on('attack', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
-    if (!room.phase.normal) return cb( { err: `not allowed in ${room.phase.curr} phase`} )
+    if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent'} )
     if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
     if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
 
-    game.phaseShift(room, {next: 'attack'})
+    room.phase = 'attack'
     room.atk_status.attacker = client
     room.atk_status.defender = room.player[1-curr]
     client.action_point -= 1
     client.atk_phase -= 1
 
     room.player[1-curr].first_conceal = true
-    client.emit('playerAttack', { msg: {action: 'attack... waiting opponent'}, rlt: {personal: true, attack: true} })
-    room.player[1-curr].emit('playerAttack', { msg: {action: 'foe attack'}, rlt: {opponent: true, attack: true} })
+    client.emit('playerAttack', { msg: {phase: 'attack phase', action: 'attack... waiting opponent'}, rlt: {personal: true, attack: true} })
+    room.player[1-curr].emit('playerAttack', { msg: {phase: 'attack phase', action: 'foe attack'}, rlt: {opponent: true, attack: true} })
   })
 
   client.on('conceal', (it, cb) => {
@@ -843,8 +849,7 @@ io.on('connection', client => {
     let curr = room.player_pointer
     let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
     let opponent = room.player[(action === 'tracking')? (1-curr) : curr]
-
-    game.phaseShift(room, {next: 'normal'})
+    room.phase = 'normal'
 
     let msg = {personal: '', opponent: ''}
     msg.personal = (action === 'conceal')? 'be hit... waiting opponent' : 'attack miss... your turn'
@@ -854,8 +859,8 @@ io.on('connection', client => {
     rlt.personal[action] = true
     rlt.opponent[action] = true
 
-    client.emit('playerGiveUp', { msg: {action: msg.personal, cursor: ' '}, rlt: rlt.personal })
-    opponent.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
+    client.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
+    opponent.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
 
 
     room.atk_status.hit = (action === 'tracking')? false : true
@@ -870,6 +875,8 @@ io.on('connection', client => {
     */
   })
 
+  // ----------------------------------------------------------------------------
+  // !-- counter
   client.on('counter', (it, cb) => {
     let card_pick = Object.keys(it.card_pick)
     if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
@@ -917,14 +924,13 @@ io.on('connection', client => {
       let param = {}
       param[room.counter_status.id] = {from: room.cards[room.counter_status.id].field}
       let rlt = game.cardMove(client, last_counter, param)
-
-      game.phaseShift(room, {next: 'normal'})
-      client.emit('playerPass', { msg: {action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
-      room.counter_status.last.emit('playerPass', { msg: {action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent, rlt: {pass: true, opponent: true} })
+      room.phase = 'normal'
+      client.emit('playerPass', { msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
+      room.counter_status.last.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent, rlt: {pass: true, opponent: true} })
     }
     else {
-      client.emit('playerPass', { msg: {action: 'counter failed... waiting opponent', cursor: ' '}, rlt: {pass: true, personal: true} })
-      room.counter_status.last.emit('playerPass', { msg: {action: 'action recover... your turn', cursor: ' '}, rlt: {pass: true, opponent: true} })
+      client.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter failed... waiting opponent', cursor: ' '}, rlt: {pass: true, personal: true} })
+      room.counter_status.last.emit('playerPass', { msg: {phase: 'normal phase', action: 'action recover... your turn', cursor: ' '}, rlt: {pass: true, opponent: true} })
       let card = room.cards[room.counter_status.id]
 
       // action varies by counter status first action
@@ -933,26 +939,29 @@ io.on('connection', client => {
           let avail_effect = game.judge(last_counter, client, room.counter_status.id)
           game.effectTrigger(last_counter, client, avail_effect)
         }
-        else
-          game.phaseShift(room, {next: 'normal'})
+        else room.phase = 'normal'
       }
       else {
-        if (card.type.base === 'artifact') {
+        room.phase = 'normal'
+        /*if (card.type.base === 'artifact') {
           if (card.type.effect === 'enchant') room.counter_status.last.attack_enchant.push(room.counter_status.id)
           //if (card.type.effect === 'trigger')
-        }
+        }*/
       }
     }
 
     room.counter_status = {start: null, type: null, id: null, last: null}
   })
 
-  // neutral
+  // ----------------------------------------------------------------------------
+  // !-- action
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
 
-    if (!room.phase.normal) return cb( { err: `not allowed in ${room.phase.curr} phase`} )
+    console.log(room.phase)
+
+    if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
@@ -977,79 +986,15 @@ io.on('connection', client => {
     }
   })
 
-  client.on('effectChoose', (it, cb) => {
-    let room = game.room[client._rid]
-    let curr = room.player_pointer
-    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
-    //let rlt = game[it.eff](client, opponent, it)
-    game[it.eff](client, opponent, it)
-    cb({})
-    //if (rlt.err) return cb(rlt)
-    if (it.last) {
-      // if atk damage phase
-      if ((it.eff === 'receive' || it.eff === 'block') && room.phase.attack) game.attackEnd(room)
-      else {
-        room.effect_status[client._pid] = false
-        room.effect_status.count --
-        if (room.effect_status.count == 0) game.effectEnd(room)
-      }
-    }
-  })
-
-  client.on('triggerCard', (it, cb) => {
-    // action varies based on its type
-    let room = game.room[client._rid]
-    let curr = room.counter
-    let card = room.cards[it.id]
-    if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})
-
-    if (card.type.base === 'artifact') {
-      if (card.overheat) return cb({err: 'artifact overheat'})
-      if (card.energy == 0) return cb({err: 'energy lacking'})
-      card.overheat = true
-      card.energy -= 1
-
-      game.phaseShift(room, {next: 'counter'})
-      room.counter_status = {start: 'trigger', type: 'trigger', id: it.id, last: client}
-      client.emit('playerTrigger', { msg: {action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
-      room.player[1-curr].emit('playerTrigger', { msg: {action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
-    }
-    else {}
-  })
-
-  client.on('endTurn', cb => {
-    let room = game.room[client._rid]
-    let curr = room.player_pointer
-
-    if (!room.phase.normal) return cb({ err: `not allowed in ${room.phase.curr} phase`})
-    if (room.player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
-
-    room.player_pointer = 1 - curr
-    curr = room.player_pointer
-
-    client.action_point = game.default.action_point
-    client.atk_damage = game.default.atk_damage
-    client.atk_phase = game.default.atk_phase
-
-    // put outdated card on field to grave
-    /*
-    for (let id in room.cards) {
-      let card = room.cards[id]
-      if (card.energy == 0) game.cardMove(client, room.player[curr])
-    }
-    */
-
-    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
-    room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
-  })
-
   client.on('useCard', (it, cb) => {
     let room = game.room[client._rid]
     let curr = room.player_pointer
     let card = room.cards[it.id]
 
-    if (game.phase_rule.use.choose[room.phase.curr]) return cb( { err: 'choose'} )
-    if (!game.phase_rule.use.normal[room.phase.curr]) return cb( { err: `not allowed in ${room.phase.curr} phase`} )
+    console.log(room.phase)
+
+    if (game.phase_rule.use.choose[room.phase]) return cb( { err: 'choose'} )
+    if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.player[curr]._pid !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
     if (client.action_point <= 0 && card.type.base !== 'item') return cb( {err: 'not enough action point'} )
@@ -1082,18 +1027,88 @@ io.on('connection', client => {
 
     let rlt = game.cardMove(client, room.player[1-curr], param)
     let msg = `${param[it.id].action} ${card.name}`
-    cb({ msg: {action: msg}, card: rlt.personal })
-    room.player[1-curr].emit('foeUseCard', { msg: {action: `foe ${msg}`}, card: rlt.opponent })
+    cb({ msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
+    room.player[1-curr].emit('foeUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent })
 
-    game.phaseShift(room, {next: 'counter'})
+    room.phase = 'counter'
     room.counter_status.last = client
     room.counter_status.type = 'use'
     room.counter_status.start = 'use'
   })
+
+  client.on('triggerCard', (it, cb) => {
+    // action varies based on its type
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    let card = room.cards[it.id]
+    if (room.phase !== 'normal') return cb({err: `not allowed in ${room.phase} phase`})
+    if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})
+    if (room.player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
+
+    if (card.type.base === 'artifact') {
+      if (card.overheat) return cb({err: 'artifact overheat'})
+      if (card.energy == 0) return cb({err: 'energy lacking'})
+      card.overheat = true
+      card.energy -= 1
+
+      room.phase = 'counter'
+      room.counter_status = {start: 'trigger', type: 'trigger', id: it.id, last: client}
+      client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
+      room.player[1-curr].emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
+    }
+    else {}
+  })
+
+  client.on('endTurn', cb => {
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
+    if (room.player[curr]._pid !== client._pid) return cb({err: 'waiting for opponent'})
+
+    room.player_pointer = 1 - curr
+    curr = room.player_pointer
+
+    client.action_point = game.default.action_point
+    client.atk_damage = game.default.atk_damage
+    client.atk_phase = game.default.atk_phase
+
+    // put outdated card on field to grave
+    let param = {}
+    for (let id in room.cards) {
+      let card = room.cards[id]
+      if (card.energy == 0 && card.field === 'battle') param[id] = {from: card.field}
+      if (card.overheat) card.overheat = false
+    }
+    let rlt = (Object.keys(param).length)? game.cardMove(client, room.player[curr], param) : {}
+
+    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '}, card: rlt })
+    room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '}, card: rlt})
+  })
+
+  // ----------------------------------------------------------------------------
+  // !-- choosing
+  client.on('effectChoose', (it, cb) => {
+    let room = game.room[client._rid]
+    let curr = room.player_pointer
+    let opponent = room.player[(client == room.player[curr])? (1-curr) : (curr)]
+    //let rlt = game[it.eff](client, opponent, it)
+    game[it.eff](client, opponent, it)
+    cb({})
+    //if (rlt.err) return cb(rlt)
+    if (it.last) {
+      if ((it.eff === 'receive' || it.eff === 'block') && room.phase === 'attack')
+        game.attackEnd(room)
+      else {
+        room.effect_status[client._pid] = false
+        room.effect_status.count --
+        if (room.effect_status.count == 0) game.effectEnd(room)
+      }
+    }
+  })
+
 })
 
 /////////////////////////////////////////////////////////////////////////////////
-
 // server init
 
 const game = new Game()
