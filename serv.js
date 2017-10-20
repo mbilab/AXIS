@@ -581,6 +581,37 @@ function shuffle (card_list) {
   return card_list
 }
 
+function randomDeck () {
+  let card = {
+    artifact: [],
+    spell: [],
+    item: [],
+    vanish: []
+  }
+  let deck = []
+
+  for (let card_name in game.default.all_card) {
+    for (let type in card)
+      if (game.default.all_card[card_name].type.base === type) {
+        card[type].push(card_name)
+        break
+      }
+  }
+
+  for(let type in card){
+    if(type !== 'vanish'){
+      let random = (shuffle(card[type])).slice(0, game.default[`${type}_max`])
+      deck = deck.concat(random)
+    }
+    else
+      for(let i = 0; i < game.default[`${type}_max`]; i++)
+        deck.push(card.vanish[0])
+  }
+
+  return deck
+}
+
+
 /////////////////////////////////////////////////////////////////////////////////
 
 // socket server
@@ -671,7 +702,7 @@ io.on('connection', client => {
 
   client.on('randomDeck', (it, cb) => {
     console.log(`${client._account} build new deck_${it.slot}`)
-    let newDeck = game.randomDeck()
+    let newDeck = randomDeck()
     let user = app.db.collection('user')
     user.find({account: client._account}).toArray((err, rlt) => {
       let deck = rlt[0].deck_slot
@@ -900,7 +931,7 @@ io.on('connection', client => {
     opponent.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
 
 
-    game.room[rid].atk_status.hit = (action === 'tracking')? false : true
+    room.atk_status.hit = (action === 'tracking')? false : true
 
     // effect phase
     let avail_effect = {}
