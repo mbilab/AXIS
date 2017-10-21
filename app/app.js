@@ -25,8 +25,8 @@ const Game = function () {
 	    width: 64
 	  },
     player: {
-      personal_y : {deck: 110, battle: 330, grave: 220, hand: 220, life: 110},
-      opponent_y : {deck: 758, battle: 538, grave: 648, hand: 648, life: 758}
+      personal_y : {deck: 110, battle: 285, grave: 175, hand: 175, life: 65},
+      opponent_y : {deck: 758, battle: 493, grave: 603, hand: 603, life: 713}
     },
     scale: 768*(opt.screen.width/opt.screen.height)/1366
   }
@@ -251,7 +251,7 @@ Game.prototype.fixCardPos = function (rlt) {
   for (let target in rlt){
     for (let field in rlt[target]) {
       for (let i = 0; i < game.player[target][field].length; i++) {
-        let x = (field === 'grave')? this.default.game.width*(1 - 1/13): (this.default.game.width/2) - this.default.card.width*1.25 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
+        let x = (field === 'grave')? this.default.game.width*(1 - 1/13): (this.default.game.width/2) - this.default.card.width*0.75 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
         game.player[target][field][i].img.reset(x, game.player[target][`${field}_yloc`])
       }
     }
@@ -619,6 +619,7 @@ const Card = function (init) {
   this.img = game.phaser.add.sprite(game.default.game.width * (1 - 1/13), personal.deck_yloc, this.cover ? 'cardback' : init.name)
   this.img.inputEnabled = init.input
   this.img.events.onInputDown.add(this.click, this)
+  this.img.anchor.setTo(0.5, 0.5)
 }
 
 Card.prototype.click = function () {
