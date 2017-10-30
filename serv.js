@@ -196,7 +196,10 @@ Game.prototype.attackEnd = function (room) {
 
 Game.prototype.effectEnd = function (room) {
   if (room.phase === 'attack') {
-    if (room.atk_status.hit) room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', eff: 'damage'}})
+    if (room.atk_status.hit) {
+      room.atk_status.defender.eff_queue.attack = {damage: true}
+      room.atk_status.defender.emit('effectLoop', {rlt: {name: 'attack', id: 'attack', eff: 'damage'}})
+    }
     else this.attackEnd(room)
   }
   else {
@@ -210,14 +213,6 @@ Game.prototype.effectEnd = function (room) {
 
 /////////////////////////////////////////////////////////////////////////////////
 // !-- effect apply
-Game.prototype.enchantAttack = function (personal, opponent) {
-  // personal >> who announce this attack
-  let avail_effect = {}
-  for (let id in personal.atk_enchant)
-    Object.assign(avail_effect, this.judge(personal, opponent, id))
-
-  this.effectTrigger(personal, opponent, avail_effect)
-}
 
 Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   // card_list = {
@@ -862,7 +857,7 @@ io.on('connection', client => {
   client.on('giveUp', cb => {
     let room = game.room[client._rid]
     let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
-    room.phase = 'normal'
+    //room.phase = 'normal'
 
     let msg = {personal: '', opponent: ''}
     msg.personal = (action === 'conceal')? 'be hit... waiting opponent' : 'attack miss... your turn'
@@ -872,22 +867,19 @@ io.on('connection', client => {
     rlt.personal[action] = true
     rlt.opponent[action] = true
 
-    client.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
-    client._foe.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
-    //client.emit('playerGiveUp', { msg: {action: msg.personal, cursor: ' '}, rlt: rlt.personal })
-    //client._foe.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
-
-
+    //client.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.personal, cursor: ' '}, rlt: rlt.personal })
+    //client._foe.emit('playerGiveUp', { msg: {phase: 'normal phase', action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
+    client.emit('playerGiveUp', { msg: {action: msg.personal, cursor: ' '}, rlt: rlt.personal })
+    client._foe.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
     room.atk_status.hit = (action === 'tracking')? false : true
 
     // effect phase
-    /*
     let avail_effect = {}
-    for (let id in personal.atk_enchant)
-      Object.assign(avail_effect, this.judge(player.attacker, player.defender, id))
+    for (let id of client.atk_enchant)
+      Object.assign(avail_effect, game.judge(room.atk_status.attacker, room.atk_status.defender, id))
 
-    this.effectTrigger(player.attacker, player.defender, avail_effect)
-    */
+    game.effectTrigger(room.atk_status.attacker, room.atk_status.defender, avail_effect)
+
   })
 
   // ----------------------------------------------------------------------------
@@ -1091,8 +1083,9 @@ io.on('connection', client => {
   // !-- choosing
   client.on('effectChoose', (it, cb) => {
     let room = game.room[client._rid]
+    let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
     //let rlt = game[it.eff](client, opponent, it)
-    game[it.eff.split('_')[0]](client, client._foe, it)
+    game[effect](client, client._foe, it)
     cb({})
     //if (rlt.err) return cb(rlt)
 
@@ -1100,7 +1093,7 @@ io.on('connection', client => {
     if (!Object.keys(client.eff_queue[it.id]).length) delete client.eff_queue[it.id]
 
     if (!Object.keys(client.eff_queue).length && !Object.keys(client._foe.eff_queue).length) {
-      if ((it.eff === 'receive' || it.eff === 'block') && room.phase === 'attack') game.attackEnd(room)
+      if (it.decision && room.phase === 'attack') game.attackEnd(room)
       else game.effectEnd(room)
     }
   })

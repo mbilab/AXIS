@@ -396,13 +396,13 @@ Player.prototype.giveUp = function () {
 }
 
 Player.prototype.block = function () {
-  personal.eff_queue[0].eff = 'block'
+  personal.eff_queue[0].decision = 'block'
   game.blockPanel({block: true})
   personal.effectChoose()
 }
 
 Player.prototype.receive = function () {
-  personal.eff_queue[0].eff = 'receive'
+  personal.eff_queue[0].decision = 'receive'
   game.blockPanel({receive: true})
   personal.effectChoose()
 }
@@ -437,7 +437,7 @@ Player.prototype.effectChoose = function () {
 
 Player.prototype.effectLoop = function () {
   if (personal.eff_queue.length) {
-    if (personal.eff_queue[0].eff === 'damage') game.blockPanel({damage: true})
+    if (personal.eff_queue[0].eff.split('_')[0] === 'damage') game.blockPanel({damage: true})
     else {
       let choose_btn = game.page.game.choose
       choose_btn.reset(choose_btn.x, choose_btn.y)
