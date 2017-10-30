@@ -251,7 +251,7 @@ Game.prototype.fixCardPos = function (rlt) {
   for (let target in rlt){
     for (let field in rlt[target]) {
       for (let i = 0; i < game.player[target][field].length; i++) {
-        let x = (field === 'grave')? this.default.game.width*(1 - 1/13): (this.default.game.width/2) - this.default.card.width*0.75 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
+        let x = (field === 'grave')? this.default.game.width*(1 - 1/13) + this.default.card.width*0.5: (this.default.game.width/2) - this.default.card.width*0.75 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
         game.player[target][field][i].img.reset(x, game.player[target][`${field}_yloc`])
       }
     }
@@ -481,7 +481,7 @@ Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
     if (it.err) return game.textPanel({cursor: it.err})
     game.textPanel(it.msg)
-    if (Object.keys(it.card)) game.cardMove(it.card)
+    if (Object.keys(it.card).length) game.cardMove(it.card)
     game.resetCardPick()
   })
 }
@@ -749,7 +749,7 @@ socket.on('interrupt', it => {
 })
 
 socket.on('turnStart', it => {
-  //game.checkCardEnergy(it.card_list)
+  if (Object.keys(it.card).length)  game.cardMove(it.card)
   game.textPanel(it.msg)
 })
 

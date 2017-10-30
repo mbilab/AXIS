@@ -101,7 +101,6 @@ Game.prototype.buildPlayer = function (client) {
   client.buff_action = [] // card_ids
   client.dmg_blk = 0 // effect damage only
   client.first_conceal = false
-
   client.deck_slot = {}
   client.deck_max = game.default.deck_max
   client.hand_max = game.default.hand_max
@@ -1079,10 +1078,10 @@ io.on('connection', client => {
       if (card.energy == 0 && card.field === 'battle') param[id] = {from: card.field}
       if (card.overheat) card.overheat = false
     }
-    let rlt = (Object.keys(param).length)? game.cardMove(client, room.player[curr], param) : {}
-
-    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '}, card: rlt })
-    room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '}, card: rlt})
+    let rlt = {personal: {}, opponent: {}}
+    if(Object.keys(param).length) rlt = game.cardMove(client, room.player[curr], param)
+    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '}, card: rlt.personal })
+    room.player[curr].emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '}, card: rlt.opponent})
   })
 
   // ----------------------------------------------------------------------------
