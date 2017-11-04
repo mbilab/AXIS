@@ -60,14 +60,6 @@ const Game = function(){
     hand_max    : 7,
     life_max    : 6
   }
-  /*
-  this.action_rule = {
-    attack  : {end: true, pass: true, giveup: true},
-    counter : {counter: true, use: true, trigger: true},
-    conceal : {attack: true, tracking: true},
-    tracking: {conceal: true}
-  }
-  */
   this.phase_rule = {
     // normal action
     draw   : {},
@@ -106,7 +98,7 @@ Game.prototype.buildPlayer = function (client) {
   client.atk_phase = game.default.atk_phase
   client.action_point = game.default.action_point
   client.atk_enchant = [] // card_ids
-  client.buff_action = [] // card_ids
+  client.aura = [] // card_ids
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
   client.dmg_blk = 0 // effect damage only
   client.first_conceal = false
@@ -114,7 +106,6 @@ Game.prototype.buildPlayer = function (client) {
   client.deck_max = game.default.deck_max
   client.hand_max = game.default.hand_max
   client.life_max = game.default.life_max
-
 
   client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
   client.curr_deck = []
@@ -244,7 +235,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
         }
       }
       else
-        game[effect_name](personal, opponent, effect)
+        game[effect_name](personal, effect)
     }
   }
 
@@ -266,8 +257,8 @@ Game.prototype.judge = function (personal, opponent, card_id) {
     }
     // for effects with judges
     else {
-      for (let target in judge.effect) {
-        for (let condition in judge.effect.target) {
+      for (let target in judge[effect]) {
+        for (let condition in judge[effect][target]) {
           let curr_val = null
 
           switch (condition) {
@@ -286,7 +277,8 @@ Game.prototype.judge = function (personal, opponent, card_id) {
             default:break
           }
 
-          if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
+          if (condition !== 'hit')
+            if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
         }
       }
     }
@@ -298,27 +290,24 @@ Game.prototype.judge = function (personal, opponent, card_id) {
 
 /////////////////////////////////////////////////////////////////////////////////
 // !-- card effects
-Game.prototype.bleed = function (personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.bleed = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
     rlt.card['bleed'] = {}
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.block = function (personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.block = function (personal, param) {
   let rlt = { card: {} }
   rlt.card['block'] = {}
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.control = function(personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.control = function(personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -329,11 +318,10 @@ Game.prototype.control = function(personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.destroy = function(personal, opponent, effect) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.destroy = function(personal, effect) {
   let rlt = { card: {} }
   for (let target in effect) {
     for (let object in effect[target]) {
@@ -343,11 +331,10 @@ Game.prototype.destroy = function(personal, opponent, effect) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.discard = function(personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.discard = function(personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -356,11 +343,10 @@ Game.prototype.discard = function(personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.drain = function (personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.drain = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -371,11 +357,10 @@ Game.prototype.drain = function (personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.draw = function(personal, opponent, effect) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.draw = function(personal, effect) {
   let rlt = { card: {} }
   for (let target in effect) {
     for (let object in effect[target]) {
@@ -385,11 +370,10 @@ Game.prototype.draw = function(personal, opponent, effect) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.equip = function(personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.equip = function(personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -400,22 +384,20 @@ Game.prototype.equip = function(personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.heal = function (personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.heal = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
     rlt.card['heal'] = {}
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.modify = function(personal, opponent, effect) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.modify = function(personal, effect) {
   let rlt = { attr: { personal: {}, opponent: {} } }
   for (let target in effect) {
     for (let object in effect[target]) {
@@ -424,10 +406,10 @@ Game.prototype.modify = function(personal, opponent, effect) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', genFoeRlt(rlt))
+  personal._foe.emit('effectTrigger', genFoeRlt(rlt))
 }
 
-Game.prototype.receive = function (personal, opponent, param) {
+Game.prototype.receive = function (personal, param) {
   /*
   let player = { personal: personal, opponent: opponent }
   let room = this.room[personal._rid]
@@ -449,15 +431,13 @@ Game.prototype.receive = function (personal, opponent, param) {
 
   */
 
-  let player = { personal: personal, opponent: opponent }
   let rlt = { card: {} }
   rlt.card['receive'] = {}
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.retrieve = function(personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.retrieve = function(personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -468,11 +448,10 @@ Game.prototype.retrieve = function(personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
-Game.prototype.set = function(personal, opponent, effect) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.set = function(personal, effect) {
   let rlt = { attr: { personal: {}, opponent: {} } }
   for (let target in effect) {
     for (let object in effect[target]) {
@@ -481,11 +460,10 @@ Game.prototype.set = function(personal, opponent, effect) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', genFoeRlt(rlt))
+  personal._foe.emit('effectTrigger', genFoeRlt(rlt))
 }
 
-Game.prototype.steal = function(personal, opponent, param) {
-  let player = { personal: personal, opponent: opponent }
+Game.prototype.steal = function(personal, param) {
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -496,7 +474,7 @@ Game.prototype.steal = function(personal, opponent, param) {
     }
   }
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', rlt)
 }
 
 
@@ -578,7 +556,6 @@ function randomDeck () {
 
   return deck
 }
-
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -872,11 +849,14 @@ io.on('connection', client => {
     client.emit('playerGiveUp', { msg: {action: msg.personal, cursor: ' '}, rlt: rlt.personal })
     client._foe.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
     room.atk_status.hit = (action === 'tracking')? false : true
+    console.log(room.atk_status.hit)
 
     // effect phase
     let avail_effect = {}
-    for (let id of client.atk_enchant)
+    for (let id of client._foe.atk_enchant)
       Object.assign(avail_effect, game.judge(room.atk_status.attacker, room.atk_status.defender, id))
+
+    console.log(avail_effect)
 
     game.effectTrigger(room.atk_status.attacker, room.atk_status.defender, avail_effect)
 
@@ -1085,7 +1065,7 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
     //let rlt = game[it.eff](client, opponent, it)
-    game[effect](client, client._foe, it)
+    game[effect](client, it)
     cb({})
     //if (rlt.err) return cb(rlt)
 
