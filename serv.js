@@ -298,6 +298,7 @@ Game.prototype.bleed = function (personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.block = function (personal, param) {
@@ -305,6 +306,7 @@ Game.prototype.block = function (personal, param) {
   rlt.card['block'] = {}
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.control = function(personal, param) {
@@ -319,6 +321,7 @@ Game.prototype.control = function(personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.destroy = function(personal, effect) {
@@ -332,6 +335,7 @@ Game.prototype.destroy = function(personal, effect) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.discard = function(personal, param) {
@@ -344,6 +348,7 @@ Game.prototype.discard = function(personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.drain = function (personal, param) {
@@ -358,6 +363,7 @@ Game.prototype.drain = function (personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.draw = function(personal, effect) {
@@ -371,6 +377,7 @@ Game.prototype.draw = function(personal, effect) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.equip = function(personal, param) {
@@ -385,6 +392,7 @@ Game.prototype.equip = function(personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.heal = function (personal, param) {
@@ -395,46 +403,50 @@ Game.prototype.heal = function (personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.modify = function(personal, effect) {
+  let player = {personal: personal, opponent: personal._foe}
   let rlt = { attr: { personal: {}, opponent: {} } }
   for (let target in effect) {
     for (let object in effect[target]) {
-      //player[target][object] = effect[target][object]
+      player[target][object] += effect[target][object]
       rlt.attr[target][object] = effect[target][object]
     }
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+  return {}
 }
 
 Game.prototype.receive = function (personal, param) {
-  /*
-  let player = { personal: personal, opponent: opponent }
   let room = this.room[personal._rid]
-  let dmg_taken = (room.phase === 'attack')? opponent.atk_damage : personal.dmg_blk
+  let dmg_taken = (param.id === 'attack')? (personal._foe.atk_damage) : (personal.dmg_blk)
   let card_pick = Object.keys(param.card_pick)
-  let rlt = { card: {receive: {}} }
+  let rlt = { card: {receive: {personal: {}, opponent: {}}} }
 
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
 
-  for (let id in card_pick) {
+  for (let id of card_pick) {
     let card = room.cards[id]
+    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover == false) return {err: 'cant pick card is unveiled'}
     card.cover = false
-    rlt.card.receive[id] = {cover: false}
+    rlt.card.receive.personal[id] = card.name
   }
 
   personal.emit('effectTrigger', rlt)
-  opponent.emit('effectTrigger', rlt)
-
-  */
-
-  let rlt = { card: {} }
-  rlt.card['receive'] = {}
-  personal.emit('effectTrigger', rlt)
+  Object.assign(rlt.card, genFoeRlt(rlt.card))
   personal._foe.emit('effectTrigger', rlt)
+
+  return {}
+
+  //let rlt = { card: {} }
+  //rlt.card['receive'] = {}
+  //personal.emit('effectTrigger', rlt)
+  //personal._foe.emit('effectTrigger', rlt)
 }
 
 Game.prototype.retrieve = function(personal, param) {
@@ -449,6 +461,7 @@ Game.prototype.retrieve = function(personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 Game.prototype.set = function(personal, effect) {
@@ -461,6 +474,7 @@ Game.prototype.set = function(personal, effect) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+  return {}
 }
 
 Game.prototype.steal = function(personal, param) {
@@ -475,6 +489,7 @@ Game.prototype.steal = function(personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
 }
 
 
@@ -969,7 +984,15 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
-    console.log(room.phase)
+    //console.log(room.phase)
+
+
+    if (card.field === 'life') {
+      if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+      if (room.phase === 'normal') return cb( { err: `${card.name}`} )
+    }
+
+
 
     if (game.phase_rule.use.choose[room.phase]) return cb( { err: 'choose'} )
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1032,7 +1055,9 @@ io.on('connection', client => {
       client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
       client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
     }
-    else {}
+    else {
+
+    }
   })
 
   client.on('endTurn', cb => {
@@ -1064,10 +1089,11 @@ io.on('connection', client => {
   client.on('effectChoose', (it, cb) => {
     let room = game.room[client._rid]
     let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
-    //let rlt = game[it.eff](client, opponent, it)
-    game[effect](client, it)
-    cb({})
-    //if (rlt.err) return cb(rlt)
+    let rlt = game[effect](client, it)
+    if (rlt.err) return cb(rlt)
+    else cb({})
+    //game[effect](client, it)
+    //cb({})
 
     delete client.eff_queue[it.id][it.eff]
     if (!Object.keys(client.eff_queue[it.id]).length) delete client.eff_queue[it.id]

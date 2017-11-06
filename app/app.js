@@ -397,13 +397,11 @@ Player.prototype.giveUp = function () {
 
 Player.prototype.block = function () {
   personal.eff_queue[0].decision = 'block'
-  game.blockPanel({block: true})
   personal.effectChoose()
 }
 
 Player.prototype.receive = function () {
   personal.eff_queue[0].decision = 'receive'
-  game.blockPanel({receive: true})
   personal.effectChoose()
 }
 
@@ -426,7 +424,9 @@ Player.prototype.effectChoose = function () {
   socket.emit('effectChoose', param, it => {
     if (it.err) return game.textPanel({cursor: it.err})
 
+    if (param.eff === 'damage') game.blockPanel({done: true})
     personal.eff_queue.shift()
+    game.resetCardPick()
     if (!personal.eff_queue.length) {
       game.page.game.choose.kill()
       game.textPanel({action: 'effect done'})
@@ -622,6 +622,18 @@ const Card = function (init) {
   this.img.anchor.setTo(0.5, 0.5)
 }
 
+Card.prototype.flip = function (name) {
+  if (this.cover && name !== 'cardback') {
+    this.cover = false
+    this.name = name
+    this.img.loadTexture(name)
+  }
+  else {
+    this.cover = true
+    this.img.loadTexture('cardback')
+  }
+}
+
 Card.prototype.click = function () {
   switch (this.field) {
     case 'altar':
@@ -640,7 +652,8 @@ Card.prototype.click = function () {
       break
 
     case 'life'	 :
-      game.textPanel({cursor: this.name})
+      //game.textPanel({cursor: this.name})
+      personal.useCard(this)
       break
 
     default			 : break
@@ -762,14 +775,25 @@ socket.on('effectTrigger', effect => {
     stat: { personal: {}, opponent: {} }
   }
   */
-  /*
+
+
   // attr
 
   // card
-
+  for (let type in effect.card) {
+    if (type === 'receive' || type === 'heal') {
+      let target = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
+      for (let id in effect.card[type][target]) {
+        let pos = game.findCard({id: id, curr_own: target, from: 'life'})
+        game.player[target].life[pos].flip(effect.card[type][target][id])
+      }
+    }
+  }
   // stat
 
-  */
+
+
+
   console.log(effect)
 })
 
