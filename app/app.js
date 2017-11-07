@@ -781,7 +781,7 @@ socket.on('effectTrigger', effect => {
 
   // card
   for (let type in effect.card) {
-    if (type === 'receive' || type === 'heal') {
+    if (type === 'receive' || type === 'heal' || type === 'bleed') {
       let target = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
       for (let id in effect.card[type][target]) {
         let pos = game.findCard({id: id, curr_own: target, from: 'life'})

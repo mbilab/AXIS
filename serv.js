@@ -291,12 +291,24 @@ Game.prototype.judge = function (personal, opponent, card_id) {
 /////////////////////////////////////////////////////////////////////////////////
 // !-- card effects
 Game.prototype.bleed = function (personal, param) {
+  let room = this.room[personal._rid]
   let effect = game.default.all_card[param.name].effect[param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    rlt.card['bleed'] = {}
+  let card_pick = Object.keys(param.card_pick)
+  let rlt = { card: {bleed: {personal: {}, opponent: {}}} }
+  let bleed = effect[Object.keys(effect)[0]]
+  if (card_pick.length != bleed) return {err: 'error length of card pick'}
+
+  for (let id of card_pick) {
+    let card = room.cards[id]
+    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card.field !== 'life') return {err: 'can only choose life field card'}
+    if (!card.cover) return {err: 'cant pick card is unveiled'}
+    card.cover = false
+    rlt.card.bleed.personal[id] = card.name
   }
+
   personal.emit('effectTrigger', rlt)
+  Object.assign(rlt.card, genFoeRlt(rlt.card))
   personal._foe.emit('effectTrigger', rlt)
   return {}
 }
@@ -396,12 +408,25 @@ Game.prototype.equip = function(personal, param) {
 }
 
 Game.prototype.heal = function (personal, param) {
+  let room = this.room[personal._rid]
   let effect = game.default.all_card[param.name].effect[param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    rlt.card['heal'] = {}
+  let card_pick = Object.keys(param.card_pick)
+  let rlt = { card: {heal: {personal: {}, opponent: {}}} }
+  let heal = (personal.life_max - effect[Object.keys(effect)[0]] < personal.hp)? (personal.life_max - personal.hp) : effect[Object.keys(effect)[0]]
+  if (card_pick.length != heal) return {err: 'error length of card pick'}
+  if (heal == 0) return {}
+
+  for (let id of card_pick) {
+    let card = room.cards[id]
+    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card.field !== 'life') return {err: 'can only choose life field card'}
+    if (card.cover) return {err: 'cant pick card is cover'}
+    card.cover = false
+    rlt.card.heal.personal[id] = card.name
   }
+
   personal.emit('effectTrigger', rlt)
+  Object.assign(rlt.card, genFoeRlt(rlt.card))
   personal._foe.emit('effectTrigger', rlt)
   return {}
 }
@@ -432,21 +457,17 @@ Game.prototype.receive = function (personal, param) {
     let card = room.cards[id]
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
-    if (card.cover == false) return {err: 'cant pick card is unveiled'}
+    if (!card.cover) return {err: 'cant pick card is unveiled'}
     card.cover = false
     rlt.card.receive.personal[id] = card.name
   }
 
+  personal.hp -= dmg_taken
   personal.emit('effectTrigger', rlt)
   Object.assign(rlt.card, genFoeRlt(rlt.card))
   personal._foe.emit('effectTrigger', rlt)
 
   return {}
-
-  //let rlt = { card: {} }
-  //rlt.card['receive'] = {}
-  //personal.emit('effectTrigger', rlt)
-  //personal._foe.emit('effectTrigger', rlt)
 }
 
 Game.prototype.retrieve = function(personal, param) {
