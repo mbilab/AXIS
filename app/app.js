@@ -89,11 +89,6 @@ const Game = function () {
 
       block: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'block', func: this.player.personal.block, ext: {req: true} },
       receive: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
-
-      //flip: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'flip', func: this.player.personal.flipLifeCard, ext: {req: true} },
-      //cover: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'cover', func: this.player.personal.coverLifeCard, ext: {req: true} },
-
-
     }
   }
   this.phaser = null
@@ -234,10 +229,6 @@ Game.prototype.cardMove = function (rlt) {
     fix_field[rlt[id].new_own][rlt[id].to] = true
   }
   this.fixCardPos(fix_field)
-}
-
-Game.prototype.checkCardEnergy = function (rlt) {
-  this.cardMove(rlt)
 }
 
 Game.prototype.findCard = function (rlt) {
@@ -466,7 +457,7 @@ Player.prototype.drawCard = function () {
     personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
     game.fixCardPos({ personal: {hand: true} })
 
-    if (it.deck_empty) personal.deck.kill()
+    if (it.deck_empty) game.page.game.personal_deck.kill()
   })
 }
 
@@ -550,6 +541,16 @@ Player.prototype.signUp = function () {
 }
 
 Player.prototype.useCard = function (card) {
+
+  socket.emit('checkUse', {id: card.id}, it => {
+    if (it.err) {
+      if (it.err === 'choose') personal.chooseCard(card)
+      else game.textPanel({cursor: it.err})
+      return
+    }
+  })
+
+  /*
   socket.emit('useCard', {id: card.id}, it => {
     if (it.err){
       if (it.err === 'choose') personal.chooseCard(card)
@@ -560,6 +561,7 @@ Player.prototype.useCard = function (card) {
     game.cardMove(it.card)
     game.textPanel(it.msg)
   })
+  */
 }
 
 const Deck = function (init) {
@@ -744,12 +746,22 @@ socket.on('foeDrawCard', it => {
   game.textPanel(it.msg)
   opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
   game.fixCardPos({opponent: {hand: true}})
-  if (it.deck_empty) opponent.deck.kill()
+  if (it.deck_empty) game.page.game.opponent_deck.kill()
+})
+
+socket.on('plyUseCard', it => {
+  //console.log(it)
+  game.cardMove(it.card)
+  game.textPanel(it.msg)
+  if (it.foe) {
+    game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
+    game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
+  }
 })
 
 socket.on('foeUseCard', it => {
-  game.cardMove(it.card)
-  game.textPanel(it.msg)
+  game.cardmove(it.card)
+  game.textpanel(it.msg)
   game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
   game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })

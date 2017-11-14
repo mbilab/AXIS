@@ -100,6 +100,7 @@ Game.prototype.buildPlayer = function (client) {
   client.atk_enchant = [] // card_ids
   client.aura = [] // card_ids
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
+  client.card_pause = {} // card needs another card to effect
   client.dmg_blk = 0 // effect damage only
   client.first_conceal = false
   client.deck_slot = {}
@@ -997,23 +998,87 @@ io.on('connection', client => {
       cb({msg: {action: `draw ${param.name}`}, card: param})
       delete param.name
       client._foe.emit('foeDrawCard', {msg: {action: 'foe draw card'}, card: param})
-      return
+      break
     }
   })
+
+  client.on('checkUse', (it, cb) => {
+    let room = game.room[client._rid]
+    let card = room.cards[it.id]
+
+    if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+    if (card.cover && card.field === 'life') return cb({err: card.name}) // !-- kill when hover card done
+    if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
+    if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
+    if (!Object.keys(client.card_pause).length) {
+      if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
+      if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
+    }
+    else
+      if(card.field === 'life') return cb( {err: 'its not a handcard'} )
+
+    if (card.field === 'hand') {
+      if (Object.keys(client.card_pause).length) game.useCard(client, {swap: it.id})
+      else game.useCard(client, {use: it.id})
+    }
+    if (card.field === 'life') {
+      client.card_pause[it.id] = true
+      cb({err: 'choose handcard to replace'})
+    }
+  })
+
+  Game.prototype.useCard = function (client, list) {
+    let room = game.room[client._rid]
+    let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
+    let swap_id = (list.swap)? (list.swap) : (null)
+
+    room.counter_status.id = use_id
+
+    let param = {}
+    param[use_id] = {}
+    switch (room.cards[use_id].type.base) {
+      case 'artifact':
+        client.action_point -= 1
+        param[use_id].to = 'battle'
+        param[use_id].action = 'equip'
+        break
+      case 'item'		 :
+        param[use_id].to = 'grave'
+        param[use_id].action = 'use'
+        break
+      case 'spell'   :
+        client.action_point -= 1
+        param[use_id].to = 'grave'
+        param[use_id].action = 'cast'
+        break
+      default        : break
+    }
+
+    if (list.swap) {
+      param[list.swap] = {}
+      param[list.swap].to = 'life'
+    }
+
+    let rlt = game.cardMove(client, client._foe, param)
+    let msg = `${param[use_id].action} ${room.cards[use_id].name}${(list.swap)? ` by ${room.cards[list.swap].name}` : ''}`
+    client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
+    client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
+
+    room.phase = 'counter'
+    room.counter_status.type = 'use'
+    room.counter_status.start = 'use'
+    client.card_pause = {}
+  }
 
   client.on('useCard', (it, cb) => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
     //console.log(room.phase)
-
-
     if (card.field === 'life') {
       if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
       if (room.phase === 'normal') return cb( { err: `${card.name}`} )
     }
-
-
 
     if (game.phase_rule.use.choose[room.phase]) return cb( { err: 'choose'} )
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
