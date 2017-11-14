@@ -422,7 +422,7 @@ Game.prototype.heal = function (personal, param) {
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
-    card.cover = false
+    card.cover = true
     rlt.card.heal.personal[id] = card.name
   }
 
@@ -522,15 +522,15 @@ function operation (curr_val, condition) {
   let operator = Object.keys(condition)[0]
   switch (operator) {
     case 'more':
-      return (curr_val > condition.operator)? true : false
+      return (curr_val > condition[operator])? true : false
     case 'goe':
-      return (curr_val >= condition.operator)? true : false
+      return (curr_val >= condition[operator])? true : false
     case 'less':
-      return (curr_val < condition.operator)? true : false
+      return (curr_val < condition[operator])? true : false
     case 'loe':
-      return (curr_val <= condition.operator)? true : false
+      return (curr_val <= condition[operator])? true : false
     case 'eql':
-      return (curr_val == condition.operator)? true : false
+      return (curr_val == condition[operator])? true : false
 
     default: break
   }
@@ -1006,6 +1006,8 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
+    console.log(client.card_pause)
+
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (card.cover && card.field === 'life') return cb({err: card.name}) // !-- kill when hover card done
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1013,6 +1015,7 @@ io.on('connection', client => {
     if (!Object.keys(client.card_pause).length) {
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
       if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
+      if (card.field === 'life' && client.card_ammount.hand == 0) return cb( {err: 'no handcard to replace'} )
     }
     else
       if(card.field === 'life') return cb( {err: 'its not a handcard'} )
@@ -1021,9 +1024,11 @@ io.on('connection', client => {
       if (Object.keys(client.card_pause).length) game.useCard(client, {swap: it.id})
       else game.useCard(client, {use: it.id})
     }
-    if (card.field === 'life') {
-      client.card_pause[it.id] = true
-      cb({err: 'choose handcard to replace'})
+    else {
+      if (card.field === 'life') {
+        client.card_pause[it.id] = true
+        cb({err: 'choose handcard to replace'})
+      }
     }
   })
 
@@ -1032,6 +1037,7 @@ io.on('connection', client => {
     let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
     let swap_id = (list.swap)? (list.swap) : (null)
 
+    client.card_pause = {}
     room.counter_status.id = use_id
 
     let param = {}
@@ -1067,7 +1073,6 @@ io.on('connection', client => {
     room.phase = 'counter'
     room.counter_status.type = 'use'
     room.counter_status.start = 'use'
-    client.card_pause = {}
   }
 
   client.on('useCard', (it, cb) => {
