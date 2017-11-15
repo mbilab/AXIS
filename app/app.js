@@ -415,7 +415,7 @@ Player.prototype.effectChoose = function () {
   socket.emit('effectChoose', param, it => {
     if (it.err) return game.textPanel({cursor: it.err})
 
-    if (param.eff === 'damage') game.blockPanel({done: true})
+    if (param.eff.split('_')[0] === 'damage') game.blockPanel({done: true})
     personal.eff_queue.shift()
     game.resetCardPick()
     if (!personal.eff_queue.length) {
