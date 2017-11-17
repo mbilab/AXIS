@@ -77,16 +77,20 @@ const Game = function () {
       end_turn: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 - 44/this.default.scale, img: 'endTurn', func: this.player.personal.endTurn},
       leave: {type: 'button', x: 0, y: this.default.game.height - 43, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby'} },
 
+      // normal action
       attack: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'attack', func: this.player.personal.attack},
       conceal: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
       tracking: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
       give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
 
+      // counter card
       counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
       pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
 
+      // effect
       choose: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} },
 
+      // block dmg
       block: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'block', func: this.player.personal.block, ext: {req: true} },
       receive: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
     }
@@ -371,15 +375,25 @@ Player.prototype.attack = function () {
 }
 
 Player.prototype.conceal = function () {
-  socket.emit('conceal', {card_pick: buildList(personal.card_pick)}, it => {
+
+  socket.emit('useVanish', {card_pick: buildList(personal.card_pick), conceal: true}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
+
+  //socket.emit('conceal', {card_pick: buildList(personal.card_pick), conceal: true}, it => {
+  //  if(it.err) return game.textPanel({cursor: it.err})
+  //})
 }
 
 Player.prototype.tracking = function () {
-  socket.emit('tracking', {card_pick: buildList(personal.card_pick)}, it => {
+
+  socket.emit('useVanish', {card_pick: buildList(personal.card_pick), tracking: true}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
+
+  //socket.emit('tracking', {card_pick: buildList(personal.card_pick), tracking: true}, it => {
+  //  if(it.err) return game.textPanel({cursor: it.err})
+  //})
 }
 
 Player.prototype.giveUp = function () {
@@ -450,14 +464,14 @@ Player.prototype.chooseCard = function (card) {
 
 Player.prototype.drawCard = function () {
   socket.emit('drawCard', it => {
-
+    console.log(it)
     if (it.err) return game.textPanel({cursor: it.err})
     game.textPanel(it.msg)
 
     personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
     game.fixCardPos({ personal: {hand: true} })
 
-    if (it.deck_empty) game.page.game.personal_deck.kill()
+    if (it.card.deck_empty) game.page.game.personal_deck.kill()
   })
 }
 
@@ -549,19 +563,6 @@ Player.prototype.useCard = function (card) {
       return
     }
   })
-
-  /*
-  socket.emit('useCard', {id: card.id}, it => {
-    if (it.err){
-      if (it.err === 'choose') personal.chooseCard(card)
-      else game.textPanel({cursor: it.err})
-      return
-    }
-    console.log(it.card)
-    game.cardMove(it.card)
-    game.textPanel(it.msg)
-  })
-  */
 }
 
 const Deck = function (init) {
@@ -712,6 +713,12 @@ socket.on('playerAttack', it => {
 socket.on('playerGiveUp', it => {
   game.resetCardPick()
   game.textPanel(it.msg)
+  game.attackPanel(it.rlt)
+})
+
+socket.on('plyUseVanish', it => {
+  game.textPanel(it.msg)
+  game.cardMove(it.card)
   game.attackPanel(it.rlt)
 })
 
