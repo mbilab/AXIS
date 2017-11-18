@@ -1012,6 +1012,7 @@ io.on('connection', client => {
     client.emit('playerGiveUp', { msg: {action: msg.personal, cursor: ' '}, rlt: rlt.personal })
     client._foe.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
     room.atk_status.hit = (action === 'tracking')? false : true
+    client.first_conceal = false
     console.log(room.atk_status.hit)
 
     // effect phase
