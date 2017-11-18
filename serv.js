@@ -142,8 +142,6 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
   let player = {personal: personal, opponent: opponent}
   let param = {personal: {}, opponent: {}}
 
-  console.log(personal._pid, ' ', opponent._pid)
-
   for (let id in rlt) {
     let card = game.room[personal._rid].cards[id]
 
@@ -177,7 +175,6 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
     Object.assign(param.opponent[id], rlt[id])
   }
-
   return param
 }
 
@@ -371,6 +368,7 @@ Game.prototype.bleed = function (personal, param) {
 Game.prototype.block = function (personal, param) {
   let rlt = { card: {} }
   rlt.card['block'] = {}
+  personal.dmg_blk = 0
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
   return {}
@@ -526,6 +524,7 @@ Game.prototype.receive = function (personal, param) {
     rlt.card.receive.personal[id] = card.name
   }
 
+  personal.dmg_blk = 0
   personal.hp -= dmg_taken
   personal.emit('effectTrigger', rlt)
   Object.assign(rlt.card, genFoeRlt(rlt.card))
@@ -911,11 +910,11 @@ io.on('connection', client => {
       let card = room.cards[id]
       if (card.cover) return cb({err: 'please choose unveiled card'})
       if (card.field === 'life') {
-        if (card.name === 'vanish') type.life_use[id] = {to: 'grave'}
+        if (card.name === 'vanish') type.life_use[id] = {}
         else return cb({err: 'please choose vanish'})
       }
       else {
-        if (card.name === 'vanish') type.hand_use[id] = {to: 'grave'}
+        if (card.name === 'vanish') type.hand_use[id] = {}
         else type.hand_swap[id] = {to: 'life'}
       }
     }
@@ -934,8 +933,12 @@ io.on('connection', client => {
         break
 
       case 2:
-        if (client.first_conceal) if (life_use != 1 || hand_swap != 1) return cb({err: '3'})
-        else if (hand_use != 2) return cb({err: '4'})
+        if (client.first_conceal) {
+          if (life_use != 1 || hand_swap != 1) return cb({err: '3'})
+        }
+        else {
+          if (hand_use != 2) return cb({err: '4'})
+        }
         break
 
       case 3:
@@ -952,10 +955,10 @@ io.on('connection', client => {
         return cb({err: '9'})
         break
     }
-
+    //console.log('err')
     client.first_conceal = false
 
-    let param = Object.assign(type.hand_use, type.hand_swap, type.life_swap)
+    let param = Object.assign(type.hand_use, type.hand_swap, type.life_use)
     let rlt = game.cardMove(client, client._foe, param)
     let panel = {}
     panel[action] = true

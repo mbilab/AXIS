@@ -753,7 +753,7 @@ socket.on('foeDrawCard', it => {
   game.textPanel(it.msg)
   opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
   game.fixCardPos({opponent: {hand: true}})
-  if (it.deck_empty) game.page.game.opponent_deck.kill()
+  if (it.card.deck_empty) game.page.game.opponent_deck.kill()
 })
 
 socket.on('plyUseCard', it => {
