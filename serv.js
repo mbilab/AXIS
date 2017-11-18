@@ -476,6 +476,10 @@ Game.prototype.heal = function (personal, param) {
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
+  }
+
+  for (let id of card_pick) {
+    let card = room.cards[id]
     card.cover = true
     rlt.card.heal.personal[id] = card.name
   }
@@ -506,13 +510,18 @@ Game.prototype.receive = function (personal, param) {
   let card_pick = Object.keys(param.card_pick)
   let rlt = { card: {receive: {personal: {}, opponent: {}}} }
 
+  // err check
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
-
   for (let id of card_pick) {
     let card = room.cards[id]
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
+  }
+
+  // change attr
+  for (let id of card_pick) {
+    let card = room.cards[id]
     card.cover = false
     rlt.card.receive.personal[id] = card.name
   }
@@ -915,37 +924,36 @@ io.on('connection', client => {
     let hand_use = Object.keys(type.hand_use).length
     let hand_swap = Object.keys(type.hand_swap).length
 
-    console.log(life_use)
-    console.log(hand_use)
-    console.log(hand_swap)
+    console.log(`lifeuse:${life_use} handuse:${hand_use} handswap:${hand_swap}`)
+    console.log(`${action} ${client.first_conceal}`)
 
     switch (card_pick.length) {
       case 1:
-        if (!client.first_conceal) return cb({err: 'card pick error'})
-        if (hand_use != 1) return cb({err: 'card pick error'})
+        if (!client.first_conceal) return cb({err: '1'})
+        if (hand_use != 1) return cb({err: '2'})
         break
 
       case 2:
-        if (client.first_conceal) if (life_use != 1 || hand_swap != 1) return cb({err: 'card pick error'})
-        else if (hand_use != 2) return cb({err: 'card pick error'})
+        if (client.first_conceal) if (life_use != 1 || hand_swap != 1) return cb({err: '3'})
+        else if (hand_use != 2) return cb({err: '4'})
         break
 
       case 3:
-        if (client.first_conceal) return cb({err: 'card pick error'})
-        if (hand_use != 1 || hand_swap != 1 || life_use != 1) return cb({err: 'card pick error'})
+        if (client.first_conceal) return cb({err: '5'})
+        if (hand_use != 1 || hand_swap != 1 || life_use != 1) return cb({err: '6'})
         break
 
       case 4:
-        if (client.first_conceal) return cb({err: 'card pick error'})
-        if (life_use != 2 || hand_swap != 2) return cb({err: 'card pick error'})
+        if (client.first_conceal) return cb({err: '7'})
+        if (life_use != 2 || hand_swap != 2) return cb({err: '8'})
         break
 
       default:
-        return cb({err: 'error length of card pick'})
+        return cb({err: '9'})
         break
     }
 
-    if (client.first_conceal) client.first_conceal = false
+    client.first_conceal = false
 
     let param = Object.assign(type.hand_use, type.hand_swap, type.life_swap)
     let rlt = game.cardMove(client, client._foe, param)
