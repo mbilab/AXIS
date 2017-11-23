@@ -22,23 +22,29 @@ const Game = function () {
     },
     card: {
       height: 91,
-	    width: 64
-	  },
+	    width: 64,
+	    describe: {}
+    },
     player: {
-      personal_y : {deck: 110, battle: 285, grave: 175, hand: 175, life: 65},
-      opponent_y : {deck: 758, battle: 493, grave: 603, hand: 603, life: 713}
+      personal: {
+        x: { altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0  },
+        y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 175, life: 65 }
+      },
+      opponent: {
+        x: { altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0  },
+        y: { altar: 603, battle: 493, deck: 713, grave: 603, hand: 603, life: 713 }
+      }
     },
     scale: 768*(opt.screen.width/opt.screen.height)/1366
   }
 
-  for (let field in this.default.player.personal_y) {
-    this.default.player.personal_y[field] = this.default.game.height - this.default.player.personal_y[field] / this.default.scale
-    this.default.player.opponent_y[field] = this.default.game.height - this.default.player.opponent_y[field] / this.default.scale
+  for (let field in this.default.player.personal.y) {
+    this.default.player.personal.y[field] = this.default.game.height - this.default.player.personal.y[field] / this.default.scale
+    this.default.player.opponent.y[field] = this.default.game.height - this.default.player.opponent.y[field] / this.default.scale
   }
-
   this.player = {
-    personal: new Player('personal', this.default.player.personal_y),
-    opponent: new Player('opponent', this.default.player.opponent_y)
+    personal: new Player(),
+    opponent: new Player()
   }
 
   this.page = {
@@ -72,27 +78,29 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13), y: this.default.player.personal_y.deck, img: 'cardback', func: this.player.personal.drawCard },
-      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13), y: this.default.player.opponent_y.deck, img: 'cardback', func: null },
-      end_turn: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 - 44/this.default.scale, img: 'endTurn', func: this.player.personal.endTurn},
-      leave: {type: 'button', x: 0, y: this.default.game.height - 43, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby'} },
+      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
+      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
+      personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
+      opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
+      end_turn: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
+      leave: {type: 'button', x: 0 + 44, y: this.default.game.height - 43 + 21, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby'} },
 
       // normal action
-      attack: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'attack', func: this.player.personal.attack},
-      conceal: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
-      tracking: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 11/this.default.scale, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
-      give_up: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 11/this.default.scale, img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
+      attack: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
+      conceal: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
+      tracking: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
+      give_up: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21 , img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
 
       // counter card
-      counter: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
-      pass: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
+      counter: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
+      pass: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
 
       // effect
-      choose: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} },
+      choose: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} },
 
       // block dmg
-      block: {type: 'button', x: this.default.game.width - 121, y: this.default.game.height/2 + 66/this.default.scale, img: 'block', func: this.player.personal.block, ext: {req: true} },
-      receive: {type: 'button', x: this.default.game.width - 220, y: this.default.game.height/2 + 66/this.default.scale, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
+      block: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'block', func: this.player.personal.block, ext: {req: true} },
+      receive: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
     }
   }
   this.phaser = null
@@ -217,11 +225,14 @@ Game.prototype.cardMove = function (rlt) {
     // adjust card attribute
     card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
     card.field = rlt[id].to
-    if(rlt[id].to === 'grave') card.cover = false
     card.name = rlt[id].name
     card.img.loadTexture(card.name)
     card.img.alpha = 1
     card.img.angle = 0
+    if(rlt[id].to === 'grave') {
+      card.cover = false
+      card.img.kill()
+    }
 
     // move
     game.player[rlt[id].new_own][rlt[id].to].push(card)
@@ -245,9 +256,32 @@ Game.prototype.findCard = function (rlt) {
 Game.prototype.fixCardPos = function (rlt) {
   for (let target in rlt){
     for (let field in rlt[target]) {
-      for (let i = 0; i < game.player[target][field].length; i++) {
-        let x = (field === 'grave')? this.default.game.width*(1 - 1/13) + this.default.card.width*0.5: (this.default.game.width/2) - this.default.card.width*0.75 - this.default.card.width/2 - (this.default.card.width*3/5)*(game.player[target][field].length - 1) + (this.default.card.width*6/5)*i
-        game.player[target][field][i].img.reset(x, game.player[target][`${field}_yloc`])
+      /*
+      if (field === 'grave') {
+        let grave = game.player[target].grave
+        this.page.game[`${target}_grave`].loadTexture(grave[grave.length - 1].name)
+        break
+      }
+      if (field === 'life') {
+
+        break
+      }
+
+
+
+      */
+
+
+      let tg_field = this.player[target][field]
+      if (field === 'grave') {
+        this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
+      }
+      else {
+        let init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1)
+        for (let i = 0; i < tg_field.length; i ++) {
+          let x = init_x + this.default.card.width*6/5*i
+          game.player[target][field][i].img.reset(x, game.default.player[target].y[`${field}`])
+        }
       }
     }
   }
@@ -264,6 +298,7 @@ Game.prototype.pageInit = function () {
           this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img, elem.func, this)
           if (elem.ext) Object.assign(this.page[page_name][elem_name], elem.ext)
           this.page[page_name][elem_name].kill()
+          if (page_name === 'game') this.page[page_name][elem_name].anchor.setTo(0.5, 0.5)
         }
       }
     }
@@ -286,14 +321,10 @@ Game.prototype.pageInit = function () {
   }
 
   // add cards in game page
-  for(let field of ['altar', 'battle', 'grave', 'hand', 'life']){
+  for(let field of ['altar', 'battle', 'hand', 'life']){
     this.page.game[`personal_${field}`] = personal[field]
     this.page.game[`opponent_${field}`] = opponent[field]
   }
-
-  this.page.game.personal_deck.kill()
-  this.page.game.opponent_deck.kill()
-
   this.changePage({next: 'start'})
 }
 
@@ -351,9 +382,7 @@ Game.prototype.showTexture = function (btn) {
   }
 }
 
-// init = id: , field_yloc:{hand: ,life: ...}
-const Player = function (id, location) {
-  for (let field in location) this[`${field}_yloc`] = location[field]
+const Player = function () {
   // attribute
   this.card_pick = {}
   this.curr_deck = ''
@@ -375,25 +404,15 @@ Player.prototype.attack = function () {
 }
 
 Player.prototype.conceal = function () {
-
   socket.emit('useVanish', {card_pick: buildList(personal.card_pick), conceal: true}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
-
-  //socket.emit('conceal', {card_pick: buildList(personal.card_pick), conceal: true}, it => {
-  //  if(it.err) return game.textPanel({cursor: it.err})
-  //})
 }
 
 Player.prototype.tracking = function () {
-
   socket.emit('useVanish', {card_pick: buildList(personal.card_pick), tracking: true}, it => {
     if(it.err) return game.textPanel({cursor: it.err})
   })
-
-  //socket.emit('tracking', {card_pick: buildList(personal.card_pick), tracking: true}, it => {
-  //  if(it.err) return game.textPanel({cursor: it.err})
-  //})
 }
 
 Player.prototype.giveUp = function () {
@@ -619,10 +638,19 @@ const Card = function (init) {
   this.name = init.name
   this.id = init.id
   this.field = init.field
-  this.img = game.phaser.add.sprite(game.default.game.width * (1 - 1/13), personal.deck_yloc, this.cover ? 'cardback' : init.name)
+  this.img = game.phaser.add.sprite(0, 0, this.cover ? 'cardback' : init.name)
   this.img.inputEnabled = init.input
   this.img.events.onInputDown.add(this.click, this)
   this.img.anchor.setTo(0.5, 0.5)
+  /*
+  this.describe = game.phaser.add.text(this.img.x, this.img.y + this.default.card.height, game.card,  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
+  this.img.events.onInputOver.add(function(){
+    this.describe.reset(this.describe.x, this.describe.y)
+  }, this)
+  this.img.events.onInputOut.add(function(){
+    this.describe.kill()
+  }, this)
+  */
 }
 
 Card.prototype.flip = function (name) {
@@ -721,19 +749,6 @@ socket.on('plyUseVanish', it => {
   game.cardMove(it.card)
   game.attackPanel(it.rlt)
 })
-
-socket.on('playerConceal', it => {
-  game.textPanel(it.msg)
-  game.cardMove(it.card)
-  game.attackPanel(it.rlt)
-})
-
-socket.on('playerTracking', it => {
-  game.textPanel(it.msg)
-  game.cardMove(it.card)
-  game.attackPanel(it.rlt)
-})
-
 socket.on('playerTrigger', it => {
   game.textPanel(it.msg)
   // drain card once if artifact
