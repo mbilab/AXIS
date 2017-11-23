@@ -27,21 +27,20 @@ const Game = function () {
     },
     player: {
       personal: {
-        x: { altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0  },
-        y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 175, life: 65 }
+        y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 65, life: 65}
       },
       opponent: {
-        x: { altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0  },
-        y: { altar: 603, battle: 493, deck: 713, grave: 603, hand: 603, life: 713 }
+        y: { altar: 603, battle: 493, deck: 713, grave: 603, hand: 713, life: 713}
       }
     },
     scale: 768*(opt.screen.width/opt.screen.height)/1366
   }
 
   for (let field in this.default.player.personal.y) {
-    this.default.player.personal.y[field] = this.default.game.height - this.default.player.personal.y[field] / this.default.scale
-    this.default.player.opponent.y[field] = this.default.game.height - this.default.player.opponent.y[field] / this.default.scale
+      this.default.player.personal.y[field] = this.default.game.height - this.default.player.personal.y[field] / this.default.scale
+      this.default.player.opponent.y[field] = this.default.game.height - this.default.player.opponent.y[field] / this.default.scale
   }
+
   this.player = {
     personal: new Player(),
     opponent: new Player()
@@ -256,32 +255,27 @@ Game.prototype.findCard = function (rlt) {
 Game.prototype.fixCardPos = function (rlt) {
   for (let target in rlt){
     for (let field in rlt[target]) {
-      /*
-      if (field === 'grave') {
-        let grave = game.player[target].grave
-        this.page.game[`${target}_grave`].loadTexture(grave[grave.length - 1].name)
-        break
-      }
-      if (field === 'life') {
-
-        break
-      }
-
-
-
-      */
-
-
       let tg_field = this.player[target][field]
-      if (field === 'grave') {
-        this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
-      }
-      else {
-        let init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1)
-        for (let i = 0; i < tg_field.length; i ++) {
-          let x = init_x + this.default.card.width*6/5*i
-          game.player[target][field][i].img.reset(x, game.default.player[target].y[`${field}`])
-        }
+      let init_x = 0
+      switch (field) {
+        case 'grave':
+          this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
+          break
+        case 'life':
+          init_x = 21 + this.default.card.width/2
+          for (let [idx, card] of tg_field.entries()) {
+            let x = init_x + this.default.card.width*6/5*Math.floor(idx/2)
+            let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
+            card.img.reset(x, y)
+          }
+          break
+        default:
+          init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1) + this.default.card.width*6/5
+          for (let [idx, card] of tg_field.entries()) {
+            let x = init_x + this.default.card.width*6/5*idx
+            card.img.reset(x, game.default.player[target].y[`${field}`])
+          }
+          break
       }
     }
   }
@@ -857,7 +851,7 @@ socket.emit('preload', res => {
       game.phaser.add.sprite(0, 0, 'background')
       //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
-      let text_yscale = { phase: -44, action: 11, cursor: 66 }
+      let text_yscale = { phase: -75, action: -20, cursor: 35 }
       game.text_group = game.phaser.add.group()
       for (let type in game.text) {
         game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
