@@ -104,13 +104,17 @@ Game.prototype.buildPlayer = function (client) {
   client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
 
   // effect
-  client.atk_enchant = [] // card_ids
+  //client.atk_enchant = [] // card_ids
+  client.atk_enchant = {}
   client.aura = [] // card_ids
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
   client.dmg_blk = 0 // effect damage only
 
   // choose
   client.card_pause = {} // card needs another card to effect
+
+  client.use_card = {}
+  client.counter_card = {}
 
   // vanish
   client.first_conceal = false
@@ -217,7 +221,8 @@ Game.prototype.useCard = function (client, list) {
   let swap_id = (list.swap)? (list.swap) : (null)
 
   client.card_pause = {}
-  room.counter_status.id = use_id
+  //room.counter_status.use_id = use_id
+  room.counter_status.use_id[use_id] = true
 
   let param = {}
   param[use_id] = {}
@@ -227,15 +232,19 @@ Game.prototype.useCard = function (client, list) {
       param[use_id].to = 'battle'
       param[use_id].action = 'equip'
       break
+
     case 'item'		 :
       param[use_id].to = 'grave'
       param[use_id].action = 'use'
       break
+
     case 'spell'   :
       client.action_point -= 1
-      param[use_id].to = 'grave'
       param[use_id].action = 'cast'
+      if (room.cards[use_id].type.effect === 'instant') param[use_id].to = 'grave'
+      //else param[use_id].to = 'altar'
       break
+
     default        : break
   }
 
@@ -294,18 +303,23 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
   if (!Object.keys(personal.eff_queue).length && !Object.keys(opponent.eff_queue).length) this.effectEnd(room)
 }
 
-Game.prototype.judge = function (personal, opponent, card_id) {
+Game.prototype.judge = function (personal, opponent, card_list/*card_id*/) {
+  let room = this.room[personal._rid]
   let player = {personal: personal, opponent: opponent}
-  let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
   let avail_effect = {}
-  avail_effect[card_id] = []
+
+  //let judge = this.default.all_card[this.room[personal._rid].cards[card_id].name].judge
+  //avail_effect[card_id] = []
   // judge: { effect: { target: { condition: { compare: value } } } }
+  for (let id in card_list) {
+  let judge = this.default.all_card[room.cards[id].name].judge
+  avail_effect[id] = []
 
   for (let effect in judge) {
     // for effects don't need to judge
     if(!Object.keys(judge[effect]).length){
-      avail_effect[card_id].push(effect)
-      continue
+      if (effect === 'counter') continue
+      avail_effect[id].push(effect)
     }
     // for effects with judges
     else {
@@ -315,7 +329,7 @@ Game.prototype.judge = function (personal, opponent, card_id) {
 
           switch (condition) {
             case 'hit':
-              if (this.room[personal._rid].atk_status.hit) avail_effect[card_id].push(effect)
+              if (room.atk_status.hit) avail_effect[id].push(effect)
               break
 
             case 'hp':
@@ -330,12 +344,15 @@ Game.prototype.judge = function (personal, opponent, card_id) {
           }
 
           if (condition !== 'hit')
-            if(operation(curr_val, judge[effect][target][condition])) avail_effect[card_id].push(effect)
+            if(operation(curr_val, judge[effect][target][condition])) avail_effect[id].push(effect)
         }
       }
     }
 
   }
+
+  }
+
 
   return avail_effect
 }
@@ -809,7 +826,8 @@ io.on('connection', client => {
           }
           */
           atk_status: {hit: false, attacker: null, defender: null},
-          counter_status: {action: null, type: null, id: null, last: null},
+          //counter_status: {action: null, type: null, use_id: null, counter_id: null},
+          counter_status: {action: null, type: null, use_id: {}, counter_id: {}},
           effect_status: {count: 0},
           cards: {},
           card_id: 1,
@@ -888,7 +906,6 @@ io.on('connection', client => {
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
     if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
 
-    //client.last_act = 'attack'
     room.phase = 'attack'
     room.atk_status.attacker = client
     room.atk_status.defender = client._foe
@@ -928,34 +945,33 @@ io.on('connection', client => {
 
     switch (card_pick.length) {
       case 1:
-        if (!client.first_conceal) return cb({err: '1'})
-        if (hand_use != 1) return cb({err: '2'})
+        if (!client.first_conceal) return cb({err: 'not in first conceal'})
+        if (hand_use != 1) return cb({err: 'error card pick'})
         break
 
       case 2:
         if (client.first_conceal) {
-          if (life_use != 1 || hand_swap != 1) return cb({err: '3'})
+          if (life_use != 1 || hand_swap != 1) return cb({err: 'error card pick'})
         }
         else {
-          if (hand_use != 2) return cb({err: '4'})
+          if (hand_use != 2) return cb({err: 'error card pick'})
         }
         break
 
       case 3:
-        if (client.first_conceal) return cb({err: '5'})
-        if (hand_use != 1 || hand_swap != 1 || life_use != 1) return cb({err: '6'})
+        if (client.first_conceal) return cb({err: 'in first conceal'})
+        if (hand_use != 1 || hand_swap != 1 || life_use != 1) return cb({err: 'error card pick'})
         break
 
       case 4:
-        if (client.first_conceal) return cb({err: '7'})
-        if (life_use != 2 || hand_swap != 2) return cb({err: '8'})
+        if (client.first_conceal) return cb({err: 'in first conceal'})
+        if (life_use != 2 || hand_swap != 2) return cb({err: 'error card pick'})
         break
 
       default:
-        return cb({err: '9'})
+        return cb({err: 'error length of card pick'})
         break
     }
-    //console.log('err')
     client.first_conceal = false
 
     let param = Object.assign(type.hand_use, type.hand_swap, type.life_use)
@@ -965,36 +981,6 @@ io.on('connection', client => {
 
     client.emit(`plyUseVanish`, { msg: {action: `${action}... waiting opponent`}, card: rlt.personal, rlt: Object.assign({personal: true}, panel) })
     client._foe.emit(`plyUseVanish`, { msg: {action: `foe ${action}`}, card: rlt.opponent, rlt: Object.assign({opponent: true}, panel) })
-  })
-
-  client.on('conceal', (it, cb) => {
-    let room = game.room[client._rid]
-    let card_pick = Object.keys(it.card_pick)
-
-    if(client.first_conceal){
-      if (card_pick.length != 1) return cb( {err: 'choose exact 1 card'} )
-      if ('vanish' !== room.cards[card_pick[0]].name) return cb( {err: 'please choose vanish'} )
-      client.first_conceal = false
-    }
-    else{
-      if (card_pick.length != 2) return cb( {err: 'choose exact 2 cards'} )
-      if ('vanish' !== room.cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
-    }
-
-    let rlt = game.cardMove(client, client._foe, it.card_pick)
-    client.emit('playerConceal', { msg: {action: 'conceal... waiting opponent'}, card: rlt.personal, rlt: {personal: true, conceal: true} })
-    client._foe.emit('playerConceal', { msg: {action: 'foe conceal'}, card: rlt.opponent, rlt: {opponent: true, conceal: true} })
-  })
-
-  client.on('tracking', (it, cb) => {
-    let room = game.room[client._rid]
-    let card_pick = Object.keys(it.card_pick)
-    if (card_pick.length != 2) return cb( {err: 'choose exact 2 cards'} )
-    if ('vanish' !== room.cards[card_pick[(0||1)]].name) return cb( {err: 'please choose vanish'} )
-
-    let rlt = game.cardMove(client, client._foe, it.card_pick)
-    client.emit('playerTracking', { msg: {action: 'tracking... waiting opponent'}, card: rlt.personal, rlt: {personal: true, tracking: true} })
-    client._foe.emit('playerTracking', { msg: {action: 'foe tracking'}, card: rlt.opponent, rlt: {opponent: true, tracking: true} })
   })
 
   client.on('giveUp', cb => {
@@ -1016,13 +1002,17 @@ io.on('connection', client => {
     console.log(room.atk_status.hit)
 
     // effect phase
+    /*
     let avail_effect = {}
     for (let id of client._foe.atk_enchant)
       Object.assign(avail_effect, game.judge(room.atk_status.attacker, room.atk_status.defender, id))
+    */
+    let avail_effect = game.judge(client._foe, client, client._foe.atk_enchant )
 
     console.log(avail_effect)
 
-    game.effectTrigger(room.atk_status.attacker, room.atk_status.defender, avail_effect)
+    //game.effectTrigger(room.atk_status.attacker, room.atk_status.defender, avail_effect)
+    game.effectTrigger(client._foe, client, avail_effect)
 
   })
 
@@ -1035,11 +1025,11 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[card_pick[0]]
     let effect = game.default.all_card[card.name].effect
-    let effect_type = Object.keys(effect.counter.opponent)[0]
-    let effect_object = Object.keys(effect.counter.opponent[effect_type])[0]
-    let counter_card = room.cards[room.counter_status.id]
-
     if (!effect.counter) return cb({err: 'no counter effect'})
+
+    let effect_type = Object.keys(effect.counter)[0]
+    let effect_object = Object.keys(effect.counter[effect_type])[0]
+    let counter_card = room.cards[(Object.keys(room.counter_status.counter_id)[0].length)? Object.keys(room.counter_status.counter_id)[0] : Object.keys(room.counter_status.use_id)[0]]
     if (effect_type !== room.counter_status.type) return cb({err: 'counter action type mismatch'})
     if (effect_object !== 'card' && effect_object !== counter_card.type.base) return cb({err: 'counter object type mismatch'})
 
@@ -1056,6 +1046,7 @@ io.on('connection', client => {
       let param = {}
       param[card_pick[0]] = {from: card.field}
       rlt = cardMove(client, client._foe, param)
+      room.counter_status.counter_id = card_pick[0]
     }
 
     client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
@@ -1068,9 +1059,13 @@ io.on('connection', client => {
     let counter = (client == room.player[room.curr_ply])? true : false
 
     if (counter == true) {
-      let param = {}
-      param[room.counter_status.id] = {from: room.cards[room.counter_status.id].field}
+      //let param = {}
+      //param[room.counter_status.use_id] = {from: room.cards[room.counter_status.use_id].field}
+      //let rlt = game.cardMove(client, client._foe, param)
+      let param = room.counter_status.use_id
+      param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
       let rlt = game.cardMove(client, client._foe, param)
+
       room.phase = 'normal'
       client.emit('playerPass', { msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
       client._foe.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent, rlt: {pass: true, opponent: true} })
@@ -1078,12 +1073,18 @@ io.on('connection', client => {
     else {
       client.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter failed... waiting opponent', cursor: ' '}, rlt: {pass: true, personal: true} })
       client._foe.emit('playerPass', { msg: {phase: 'normal phase', action: 'action recover... your turn', cursor: ' '}, rlt: {pass: true, opponent: true} })
-      let card = room.cards[room.counter_status.id]
+      //let card = room.cards[room.counter_status.use_id]
+      let card = room.cards[Object.keys(room.counter_status.use_id)[0]]
 
       // action varies by counter status first action
       if (room.counter_status.start === 'use') {
         if (card.field === 'grave') {
-          let avail_effect = game.judge(client._foe, client, room.counter_status.id)
+          //let avail_effect = game.judge(client._foe, client, room.counter_status.use_id)
+          //let param = {}
+          //param[room.counter_status.use_id] = true
+          //let avail_effect = game.judge(client._foe, client, param)
+          let avail_effect = game.judge(client._foe, client, room.counter_status.use_id)
+
           game.effectTrigger(client._foe, client, avail_effect)
         }
         else room.phase = 'normal'
@@ -1091,13 +1092,16 @@ io.on('connection', client => {
       else {
         room.phase = 'normal'
         if (card.type.base === 'artifact') {
-          if (card.type.effect === 'enchant') client._foe.atk_enchant.push(room.counter_status.id)
+          //if (card.type.effect === 'enchant') client._foe.atk_enchant.push(room.counter_status.use_id)
+          //if (card.type.effect === 'enchant') client._foe.atk_enchant[room.counter_status.use_id] = true
+          if (card.type.effect === 'enchant') Object.assign(client._foe.atk_enchant, room.counter_status.use_id)
           //if (card.type.effect === 'trigger')
         }
       }
     }
 
-    room.counter_status = {start: null, type: null, id: null, last: null}
+    //room.counter_status = {start: null, type: null, use_id: null, counter_id: null}
+    room.counter_status = {start: null, type: null, use_id: {}, counter_id: {}}
   })
 
   // ----------------------------------------------------------------------------
@@ -1176,7 +1180,9 @@ io.on('connection', client => {
       card.energy -= 1
 
       room.phase = 'counter'
-      room.counter_status = {start: 'trigger', type: 'trigger', id: it.id}
+      //room.counter_status = {start: 'trigger', type: 'trigger', use_id: it.id, counter_id: null}
+      room.counter_status = {start: 'trigger', type: 'trigger', use_id: {}, counter_id: {}}
+      room.counter_status.use_id[it.id] = true
       client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
       client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
     }
@@ -1194,7 +1200,8 @@ io.on('connection', client => {
     client.action_point = game.default.action_point
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
-    client.atk_enchant = []
+    //client.atk_enchant = []
+    client.atk_enchant = {}
 
     // put outdated card on field to grave
     let param = {}
