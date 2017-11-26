@@ -340,6 +340,8 @@ Game.prototype.resetPlayer = function () {
     }
     opponent[field] = []
   }
+  this.page.game.personal_grave.loadTexture('emptySlot')
+  this.page.game.opponent_grave.loadTexture('emptySlot')
 }
 
 Game.prototype.shiftInputForm = function (elem, place) {
@@ -491,7 +493,10 @@ Player.prototype.drawCard = function () {
 // for player trigger a card on field/ enchant an attack
 Player.prototype.triggerCard = function (card) {
   socket.emit('triggerCard', {id: card.id}, it => {
-    if (it.err) return game.textPanel({cursor: it.err})
+    if (it.err) {
+      if (it.err === 'choose') personal.chooseCard(card)
+      else return game.textPanel({cursor: it.err})
+    }
   })
 }
 
@@ -662,7 +667,7 @@ Card.prototype.flip = function (name) {
 Card.prototype.click = function () {
   switch (this.field) {
     case 'altar':
-      //personal.triggerCard(this)
+      personal.triggerCard(this)
       break
 
     case 'battle':
@@ -722,6 +727,7 @@ socket.on('playerPass', it => {
 })
 
 socket.on('playerCounter', it => {
+  game.resetCardPick()
   game.cardMove(it.card)
   game.textPanel(it.msg)
   game.counterPanel(it.rlt)
