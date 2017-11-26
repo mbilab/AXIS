@@ -722,6 +722,7 @@ socket.on('buildLife', it => {
 
 socket.on('playerPass', it => {
   game.resetCardPick()
+  game.cardMove(it.card)
   game.textPanel(it.msg)
   game.counterPanel(it.rlt)
 })
@@ -772,7 +773,6 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('plyUseCard', it => {
-  //console.log(it)
   game.cardMove(it.card)
   game.textPanel(it.msg)
   if (it.foe) {
@@ -802,15 +802,6 @@ socket.on('turnStart', it => {
 
 // card effects
 socket.on('effectTrigger', effect => {
-  /*
-  effect = {
-    card: {},
-    attr: { personal: {}, opponent: {} },
-    stat: { personal: {}, opponent: {} }
-  }
-  */
-
-
   // attr
 
   // card
@@ -824,9 +815,6 @@ socket.on('effectTrigger', effect => {
     }
   }
   // stat
-
-
-
 
   console.log(effect)
 })
