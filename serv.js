@@ -186,6 +186,8 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
 Game.prototype.attackEnd = function (room) {
   room.phase = 'normal'
   room.atk_status.hit = false
+  room.atk_status.attacker.atk_damage = this.default.atk_damage
+  room.atk_status.attacker.atk_enchant = {}
   room.atk_status.attacker = null
   room.atk_status.defender = null
   for (let pid in room.player) {
@@ -511,7 +513,7 @@ Game.prototype.modify = function(personal, effect) {
 
 Game.prototype.receive = function (personal, param) {
   let room = this.room[personal._rid]
-  let dmg_taken = (param.id === 'attack')? (personal._foe.atk_damage) : (personal.dmg_blk)
+  let dmg_taken = (param.id === 'attack')? ((personal._foe.atk_damage < 0)? 0 : personal._foe.atk_damage) : (personal.dmg_blk)
   let card_pick = Object.keys(param.card_pick)
   let rlt = { card: {receive: {personal: {}, opponent: {}}} }
 
@@ -802,7 +804,7 @@ io.on('connection', client => {
 
         game.room[rid] = {
           phase: 'normal', // >> normal / attack / counter / choose
-          atk_status: {hit: false, attacker: null, defender: null},
+          atk_status: {first_atk: true, hit: false, attacker: null, defender: null},
           counter_status: {action: null, type: null, use_id: {}, counter_id: {}},
           effect_status: {count: 0},
           cards: {},
@@ -878,9 +880,15 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent'} )
-    if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
-    if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
+    //if (client.action_point < 1) return cb( {err: 'not enough action point'} )
+    //if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
+    if (room.atk_status.first_atk) {
+      if (client.action_point < 1) return cb( {err: 'not enough action point'} )
+      room.atk_status.first_atk = false
+    }
+    else
+      if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
 
     room.phase = 'attack'
     room.atk_status.attacker = client
@@ -915,9 +923,6 @@ io.on('connection', client => {
     let life_use = Object.keys(type.life_use).length
     let hand_use = Object.keys(type.hand_use).length
     let hand_swap = Object.keys(type.hand_swap).length
-
-    console.log(`lifeuse:${life_use} handuse:${hand_use} handswap:${hand_swap}`)
-    console.log(`${action} ${client.first_conceal}`)
 
     switch (card_pick.length) {
       case 1:
@@ -975,7 +980,6 @@ io.on('connection', client => {
     client._foe.emit('playerGiveUp', { msg: {action: msg.opponent, cursor: ' '}, rlt: rlt.opponent })
     room.atk_status.hit = (action === 'tracking')? false : true
     client.first_conceal = false
-    console.log(room.atk_status.hit)
 
     // effect phase
     let avail_effect = game.judge(client._foe, client, client._foe.atk_enchant )
@@ -1027,8 +1031,6 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let counter = (client == room.player[room.curr_ply])? true : false
 
-    console.log(counter)
-
     if (counter == true) {
       let param = room.counter_status.use_id
       param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
@@ -1056,7 +1058,10 @@ io.on('connection', client => {
         room.phase = 'normal'
         if (card.type.base === 'artifact') {
           if (card.type.effect === 'enchant') Object.assign(client._foe.atk_enchant, room.counter_status.use_id)
-          //if (card.type.effect === 'trigger')
+          if (card.type.effect === 'trigger') {
+            let avail_effect = game.judge(client._foe, client, Object.assign(room.counter_status.use_id, room.counter_status.counter_id) )
+            game.effectTrigger(client._foe, client, avail_effect)
+          }
         }
       }
     }
@@ -1156,6 +1161,7 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
+    room.atk_status.first_atk = false
     room.curr_ply = client._foe._pid
     client.action_point = game.default.action_point
     client.atk_damage = game.default.atk_damage
