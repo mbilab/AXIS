@@ -112,9 +112,6 @@ Game.prototype.buildPlayer = function (client) {
   // choose
   client.card_pause = {} // card needs another card to effect
 
-  client.use_card = {}
-  client.counter_card = {}
-
   // vanish
   client.first_conceal = false
 
@@ -689,7 +686,7 @@ io.on('connection', client => {
   client.on('init', cb => {
     game.buildPlayer(client)
     console.log('player built')
-    cb({})
+    cb(game.default.all_card)
   })
 
   ///////////////////////////////////////////////////////////////////////////////

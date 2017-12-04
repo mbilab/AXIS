@@ -105,6 +105,7 @@ const Game = function () {
   this.phaser = null
   this.text = {phase: null, action: null, cursor: null}
   this.text_group = null
+  this.card_eff = {}
 }
 
 Game.prototype.textPanel = function (text) {
@@ -851,7 +852,11 @@ socket.emit('preload', res => {
         game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
         game.text_group.add(game.text[type])
       }
-      socket.emit('init', it => { game.pageInit() })
+      socket.emit('init', it => {
+        for (let name in it) it[name] = it[name].text
+        game.card_eff = it
+        game.pageInit()
+      })
     },
     preload: () => {
       for (let type in res)
