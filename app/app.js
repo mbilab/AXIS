@@ -226,6 +226,7 @@ Game.prototype.cardMove = function (rlt) {
     card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
     card.field = rlt[id].to
     card.name = rlt[id].name
+    card.owner = rlt[id].new_own
     card.img.loadTexture(card.name)
     card.img.alpha = 1
     card.img.angle = 0
@@ -484,7 +485,8 @@ Player.prototype.drawCard = function () {
     if (it.err) return game.textPanel({cursor: it.err})
     game.textPanel(it.msg)
 
-    personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
+    //personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
+    personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, owner: 'personal', field: 'hand'}) )
     game.fixCardPos({ personal: {hand: true} })
 
     if (it.card.deck_empty) game.page.game.personal_deck.kill()
@@ -639,18 +641,21 @@ const Card = function (init) {
   this.id = init.id
   this.field = init.field
   this.img = game.phaser.add.sprite(0, 0, this.cover ? 'cardback' : init.name)
-  this.img.inputEnabled = init.input
-  this.img.events.onInputDown.add(this.click, this)
+  //this.img.inputEnabled = init.input
+  //this.img.events.onInputDown.add(this.click, this)
   this.img.anchor.setTo(0.5, 0.5)
-  /*
-  this.describe = game.phaser.add.text(this.img.x, this.img.y + this.default.card.height, game.card,  { font: "20px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.5)'})
-  this.img.events.onInputOver.add(function(){
-    this.describe.reset(this.describe.x, this.describe.y)
+  this.owner = init.owner
+
+  this.img.inputEnabled = true
+  this.img.events.onInputDown.add( function(){
+    if (this.owner === 'personal') this.click()
   }, this)
-  this.img.events.onInputOut.add(function(){
-    this.describe.kill()
+  this.img.events.onInputOver.add( function(){
+    console.log(this.owner)
   }, this)
-  */
+  this.img.events.onInputOut.add( function(){
+    console.log('OUT')
+  }, this)
 }
 
 Card.prototype.flip = function (name) {
@@ -713,7 +718,8 @@ socket.on('buildLife', it => {
     for(let card of it.card_list[target]){
       let name = (card.name)? card.name : 'cardback'
       let input = (target === 'personal')? true : false
-      game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
+      //game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
+      game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', owner: target}))
     }
   }
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})
@@ -768,7 +774,8 @@ socket.on('playerTrigger', it => {
 
 socket.on('foeDrawCard', it => {
   game.textPanel(it.msg)
-  opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
+  //opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
+  opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, owner: 'opponent', field: 'hand'}))
   game.fixCardPos({opponent: {hand: true}})
   if (it.card.deck_empty) game.page.game.opponent_deck.kill()
 })
