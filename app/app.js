@@ -25,6 +25,12 @@ const Game = function () {
 	    width: 64,
 	    describe: {}
     },
+    text: {
+      phase: -75,
+      action: -20,
+      cursor: 35,
+      effect: { personal: -405, opponent: 255 }
+    },
     player: {
       personal: {
         y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 65, life: 65}
@@ -103,8 +109,8 @@ const Game = function () {
     }
   }
   this.phaser = null
-  this.text = {phase: null, action: null, cursor: null}
-  this.text_group = null
+  this.text = {phase: null, action: null, cursor: null, effect: {personal: null, opponent: null}}
+  //this.text_group = null
   this.card_eff = {}
 }
 
@@ -853,11 +859,17 @@ socket.emit('preload', res => {
       game.phaser.add.sprite(0, 0, 'background')
       //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
-      let text_yscale = { phase: -75, action: -20, cursor: 35 }
-      game.text_group = game.phaser.add.group()
+      //let text_yscale = { phase: -75, action: -20, cursor: 35, self_eff: , opp_eff: }
+      //game.text_group = game.phaser.add.group()
       for (let type in game.text) {
+        /*
         game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
         game.text_group.add(game.text[type])
+        */
+        if (type !== 'effect') game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + game.text[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+        else
+          for (let target in game.text[type])
+            game.text[type][target] = game.phaser.add.text(21, game.default.game.height/2 + game.text[type][target]/game.default.scale, '', { font: "26px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.9)'})
       }
       socket.emit('init', it => {
         for (let name in it) it[name] = it[name].text
