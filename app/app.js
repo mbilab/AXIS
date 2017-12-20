@@ -866,10 +866,10 @@ socket.emit('preload', res => {
         game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
         game.text_group.add(game.text[type])
         */
-        if (type !== 'effect') game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + game.text[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
+        if (type !== 'effect') game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + game.default.text[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
         else
           for (let target in game.text[type])
-            game.text[type][target] = game.phaser.add.text(21, game.default.game.height/2 + game.text[type][target]/game.default.scale, '', { font: "26px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.9)'})
+            game.text[type][target] = game.phaser.add.text(21, game.default.game.height/2 + game.default.text[type][target]/game.default.scale, '', { font: "26px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.9)'})
       }
       socket.emit('init', it => {
         for (let name in it) it[name] = it[name].text
