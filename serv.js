@@ -1101,7 +1101,7 @@ io.on('connection', client => {
     let card = room.cards[it.id]
 
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
-    if (card.cover && card.field === 'life') return cb({err: card.name}) // !-- kill when hover card done
+    if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
 
