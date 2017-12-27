@@ -29,7 +29,7 @@ const Game = function () {
       phase: -75,
       action: -20,
       cursor: 35,
-      effect: { personal: -405, opponent: 255 }
+      effect: { personal: -365, opponent: 235 }
     },
     player: {
       personal: {
@@ -110,14 +110,18 @@ const Game = function () {
   }
   this.phaser = null
   this.text = {phase: null, action: null, cursor: null, effect: {personal: null, opponent: null}}
-  //this.text_group = null
-  this.card_eff = {}
+  this.card_eff = {empty: '', cardback: 'covered'}
 }
 
 Game.prototype.textPanel = function (text) {
   if (text.phase) game.text.phase.setText(text.phase)
   if (text.action) game.text.action.setText(text.action)
   if (text.cursor) game.text.cursor.setText(text.cursor)
+  if (text.effect) {
+    let target = Object.keys(text.effect)[0]
+    let name = text.effect[target]
+    game.text.effect[target].setText(game.card_eff[name])
+  }
 }
 
 Game.prototype.blockPanel = function (action) {
@@ -652,15 +656,25 @@ const Card = function (init) {
   this.img.anchor.setTo(0.5, 0.5)
   this.owner = init.owner
 
+  this.text = null
+
   this.img.inputEnabled = true
   this.img.events.onInputDown.add( function(){
     if (this.owner === 'personal') this.click()
   }, this)
   this.img.events.onInputOver.add( function(){
-    console.log(this.owner)
+    let x = 21
+    let y = game.default.game.height/2 + game.default.text.effect.personal/game.default.scale
+    this.text = game.phaser.add.text(x, y, game.card_eff[this.name], { font: "26px Arial", fill: '#000000', backgroundColor: 'rgba(255,255,255,0.9)'})
+    //let param = {}
+    //param[this.owner] = this.name
+    //game.textPanel({effect: param})
   }, this)
   this.img.events.onInputOut.add( function(){
-    console.log('OUT')
+    this.text.destroy()
+    //let param = {}
+    //param[this.owner] = 'empty'
+    //game.textPanel({effect: param})
   }, this)
 }
 
@@ -859,13 +873,7 @@ socket.emit('preload', res => {
       game.phaser.add.sprite(0, 0, 'background')
       //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
-      //let text_yscale = { phase: -75, action: -20, cursor: 35, self_eff: , opp_eff: }
-      //game.text_group = game.phaser.add.group()
       for (let type in game.text) {
-        /*
-        game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + text_yscale[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
-        game.text_group.add(game.text[type])
-        */
         if (type !== 'effect') game.text[type] = game.phaser.add.text(21, game.default.game.height/2 + game.default.text[type]/game.default.scale, '', {font: '26px Arial', fill:'#ffffff', align: 'left'})
         else
           for (let target in game.text[type])
@@ -873,7 +881,8 @@ socket.emit('preload', res => {
       }
       socket.emit('init', it => {
         for (let name in it) it[name] = it[name].text
-        game.card_eff = it
+        //game.card_eff = it
+        Object.assign(game.card_eff, it)
         game.pageInit()
       })
     },
