@@ -584,7 +584,6 @@ Player.prototype.signUp = function () {
 }
 
 Player.prototype.useCard = function (card) {
-
   socket.emit('checkUse', {id: card.id}, it => {
     if (it.err) {
       if (it.err === 'choose') personal.chooseCard(card)
@@ -654,17 +653,18 @@ const Card = function (init) {
   this.img.anchor.setTo(0.5, 0.5)
   this.owner = init.owner
 
-  this.text = null
-
   this.img.inputEnabled = true
   this.img.events.onInputDown.add( function(){
     if (this.owner === 'personal') this.click()
   }, this)
   this.img.events.onInputOver.add( function(){
     game.textPanel({effect: this.name})
+    game.phaser.input.mouse._last_over_scroll = this
+    game.phaser.input.mouse.mouseWheelCallback = this.overScroll
   }, this)
   this.img.events.onInputOut.add( function(){
     game.textPanel({effect: 'empty'})
+    game.phaser.input.mouse.mouseWheelCallback = null
   }, this)
 }
 
@@ -678,6 +678,15 @@ Card.prototype.flip = function (name) {
     this.cover = true
     this.img.loadTexture('cardback')
   }
+}
+
+Card.prototype.overScroll = function () {
+  //console.log(event)
+  last = game.phaser.input.mouse._last_over_scroll
+  if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP)
+    console.log(`show ${last.name}`)
+  else
+    console.log(`hide ${last.name}`)
 }
 
 Card.prototype.click = function () {
@@ -728,7 +737,6 @@ socket.on('buildLife', it => {
     for(let card of it.card_list[target]){
       let name = (card.name)? card.name : 'cardback'
       let input = (target === 'personal')? true : false
-      //game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', input: input}))
       game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', owner: target}))
     }
   }
@@ -784,7 +792,6 @@ socket.on('playerTrigger', it => {
 
 socket.on('foeDrawCard', it => {
   game.textPanel(it.msg)
-  //opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, input: false, field: 'hand'}))
   opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, owner: 'opponent', field: 'hand'}))
   game.fixCardPos({opponent: {hand: true}})
   if (it.card.deck_empty) game.page.game.opponent_deck.kill()
@@ -859,9 +866,7 @@ socket.emit('preload', res => {
       let top = (100*(1 - game.default.game.width/opt.screen.width)/2).toString()+'%'
       let left = (100*(1 - game.default.game.height/opt.screen.height)/2).toString()+'%'
       $('#game').css({top: top, left: left})
-
       game.phaser.add.sprite(0, 0, 'background')
-      //app.time.events.loop(Phaser.Timer.SECOND, game.updateCounter, this)
 
       // init text
       game.text_group = game.phaser.add.group()
@@ -881,7 +886,6 @@ socket.emit('preload', res => {
       // page init
       socket.emit('init', it => {
         for (let name in it) it[name] = it[name].text
-        //game.card_eff = it
         Object.assign(game.card_eff, it)
         game.pageInit()
       })
