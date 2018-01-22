@@ -231,7 +231,8 @@ Game.prototype.cardMove = function (rlt) {
     let card = game.player[rlt[id].curr_own][rlt[id].from][pos]
 
     // adjust card attribute
-    card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
+    //card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
+    card.img.inputEnabled = (rlt[id].to === 'grave')? false: true
     card.field = rlt[id].to
     card.name = rlt[id].name
     card.owner = rlt[id].new_own
@@ -276,14 +277,16 @@ Game.prototype.fixCardPos = function (rlt) {
           for (let [idx, card] of tg_field.entries()) {
             let x = init_x + this.default.card.width*6/5*Math.floor(idx/2)
             let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
-            card.img.reset(x, y)
+            //card.img.reset(x, y)
+            card.body.reset(x, y)
           }
           break
         default:
           init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1) + this.default.card.width*6/5
           for (let [idx, card] of tg_field.entries()) {
             let x = init_x + this.default.card.width*6/5*idx
-            card.img.reset(x, game.default.player[target].y[`${field}`])
+            //card.img.reset(x, game.default.player[target].y[`${field}`])
+            card.body.reset(x, game.default.player[target].y[`${field}`])
           }
           break
       }
@@ -647,13 +650,17 @@ const Card = function (init) {
   this.name = init.name
   this.id = init.id
   this.field = init.field
-  this.img = game.phaser.add.sprite(0, 0, this.cover ? 'cardback' : init.name)
-  //this.img.inputEnabled = init.input
-  //this.img.events.onInputDown.add(this.click, this)
-  this.img.anchor.setTo(0.5, 0.5)
+  this.socket = {}
+  this.curr_skt = 0
   this.owner = init.owner
 
+  this.body = game.phaser.add.sprite(0, 0, null)
+  this.body.anchor.setTo(0.5, 0.5)
+
+  this.img = game.phaser.add.sprite(0, 0, this.cover ? 'cardback' : init.name)
+  this.img.anchor.setTo(0.5, 0.5)
   this.img.inputEnabled = true
+
   this.img.events.onInputDown.add( function(){
     if (this.owner === 'personal') this.click()
   }, this)
@@ -666,6 +673,12 @@ const Card = function (init) {
     game.textPanel({effect: 'empty'})
     game.phaser.input.mouse.mouseWheelCallback = null
   }, this)
+  this.body.addChild(this.img)
+
+  this.frame = game.phaser.add.sprite(0, 0, 'frame')
+  this.frame.visible = false
+  this.frame.anchor.setTo(0.5, 0.5)
+  this.body.addChild(this.frame)
 }
 
 Card.prototype.flip = function (name) {
@@ -681,12 +694,26 @@ Card.prototype.flip = function (name) {
 }
 
 Card.prototype.overScroll = function () {
-  //console.log(event)
   last = game.phaser.input.mouse._last_over_scroll
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP)
     console.log(`show ${last.name}`)
   else
     console.log(`hide ${last.name}`)
+
+  /*
+  card_id = Object.keys(last.socket)
+  if (!card_id.length) return console.log('empty')
+  if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
+    last.socket[card_id[last.curr_skt - 1]].kill()
+    last.socket[card_id[last.curr_skt]].reset(last.img.x, last.img.y - game.default.card.height)
+    if (curr_skt == card_id.length - 1) last.curr_skt = 0
+    else last.curr_skt ++
+  }
+  else {
+    last.socket[card_id[last.curr_skt - 1]].kill()
+    last.curr_skt = 0
+  }
+  */
 }
 
 Card.prototype.click = function () {
@@ -697,6 +724,9 @@ Card.prototype.click = function () {
 
     case 'battle':
       personal.triggerCard(this)
+      break
+
+    case 'socket':
       break
 
     case 'grave' :
@@ -782,7 +812,8 @@ socket.on('playerTrigger', it => {
   //if cardmove then cardmove
   //else turn card down once or use tags
 
-  game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].img.angle += 90
+  //game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].img.angle += 90
+  game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
 
   if (it.card.curr_own === 'opponent') {
     game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
