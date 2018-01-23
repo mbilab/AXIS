@@ -220,9 +220,9 @@ Game.prototype.cardMove = function (rlt) {
 //           new_own:
 //           to:
 //
-//           cover:
 //           name:
 //           action:   // when equip, cast ...
+//           on:       // card (id) choose to socket, when to == socket
 //         }
 //       }
   let fix_field = {personal: {}, opponent: {}}
@@ -245,9 +245,16 @@ Game.prototype.cardMove = function (rlt) {
     //if (rlt[id].to === 'grave') card.cover = false
     if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.img.kill()
 
+    if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
+      let param = {curr_own: 'personal', from: 'battle', id: rlt[id].on}
+      let on = personal.battle[this.findCard(param)]
+      card.bond = (rlt[id].to === 'socket')? on : (null)
+      if (rlt[id].to === 'socket')? on.socket[card.id] = card
+      else delete on.socket[card.id]
+    }
+
     // move
     game.player[rlt[id].new_own][rlt[id].to].push(card)
-    //card.img.destroy()
     game.player[rlt[id].curr_own][rlt[id].from].splice(pos, 1)
 
     // field to fix
@@ -406,6 +413,7 @@ const Player = function () {
   this.grave = []
   this.hand = []
   this.life = []
+  this.socket = []
 }
 
 Player.prototype.attack = function () {
@@ -654,6 +662,7 @@ const Card = function (init) {
   this.field = init.field
   this.socket = {}
   this.curr_skt = 0
+  this.bond = null
   this.owner = init.owner
 
   this.body = game.phaser.add.sprite(0, 0, null)
@@ -684,14 +693,11 @@ const Card = function (init) {
 }
 
 Card.prototype.flip = function (name) {
-
-
   if (this.img.key !== 'cardback') this.img.loadTexture('cardback')
   else {
     this.name = name
     this.img.loadTexture(name)
   }
-
 }
 
 Card.prototype.overScroll = function () {
@@ -705,7 +711,7 @@ Card.prototype.overScroll = function () {
   card_id = Object.keys(last.socket)
   if (!card_id.length) return console.log('empty')
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    last
+    last.
     if (curr_skt == card_id.length - 1) last.curr_skt = 0
     else last.curr_skt ++
   }
