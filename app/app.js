@@ -11,7 +11,7 @@ const opt = {
 
 const Game = function () {
   this.curr_page = 'start'
-  this.default = { //-! extract height and width
+  this.default = {
     game: {
       height: 700,
       width: 1366
@@ -220,6 +220,7 @@ Game.prototype.cardMove = function (rlt) {
 //           new_own:
 //           to:
 //
+//           cover:
 //           name:
 //           action:   // when equip, cast ...
 //         }
@@ -236,13 +237,13 @@ Game.prototype.cardMove = function (rlt) {
     card.field = rlt[id].to
     card.name = rlt[id].name
     card.owner = rlt[id].new_own
+    //card.cover = rlt[id].cover
     card.img.loadTexture(card.name)
     card.img.alpha = 1
     card.img.angle = 0
-    if(rlt[id].to === 'grave') {
-      card.cover = false
-      card.img.kill()
-    }
+    card.frame.visible = false
+    //if (rlt[id].to === 'grave') card.cover = false
+    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.img.kill()
 
     // move
     game.player[rlt[id].new_own][rlt[id].to].push(card)
@@ -281,6 +282,7 @@ Game.prototype.fixCardPos = function (rlt) {
             card.body.reset(x, y)
           }
           break
+        case 'socket': break
         default:
           init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1) + this.default.card.width*6/5
           for (let [idx, card] of tg_field.entries()) {
@@ -646,7 +648,7 @@ Deck.prototype.randomDeck = function () {
 }
 
 const Card = function (init) {
-  this.cover = init.cover
+  //this.cover = init.cover
   this.name = init.name
   this.id = init.id
   this.field = init.field
@@ -657,7 +659,7 @@ const Card = function (init) {
   this.body = game.phaser.add.sprite(0, 0, null)
   this.body.anchor.setTo(0.5, 0.5)
 
-  this.img = game.phaser.add.sprite(0, 0, this.cover ? 'cardback' : init.name)
+  this.img = game.phaser.add.sprite(0, 0, init.cover ? 'cardback' : init.name)
   this.img.anchor.setTo(0.5, 0.5)
   this.img.inputEnabled = true
 
@@ -682,15 +684,14 @@ const Card = function (init) {
 }
 
 Card.prototype.flip = function (name) {
-  if (this.cover && name !== 'cardback') {
-    this.cover = false
+
+
+  if (this.img.key !== 'cardback') this.img.loadTexture('cardback')
+  else {
     this.name = name
     this.img.loadTexture(name)
   }
-  else {
-    this.cover = true
-    this.img.loadTexture('cardback')
-  }
+
 }
 
 Card.prototype.overScroll = function () {
@@ -704,13 +705,11 @@ Card.prototype.overScroll = function () {
   card_id = Object.keys(last.socket)
   if (!card_id.length) return console.log('empty')
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    last.socket[card_id[last.curr_skt - 1]].kill()
-    last.socket[card_id[last.curr_skt]].reset(last.img.x, last.img.y - game.default.card.height)
+    last
     if (curr_skt == card_id.length - 1) last.curr_skt = 0
     else last.curr_skt ++
   }
   else {
-    last.socket[card_id[last.curr_skt - 1]].kill()
     last.curr_skt = 0
   }
   */
@@ -727,6 +726,7 @@ Card.prototype.click = function () {
       break
 
     case 'socket':
+      personal.chooseCard(this)
       break
 
     case 'grave' :

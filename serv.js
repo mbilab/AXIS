@@ -37,7 +37,10 @@ const Card = function(init){
   this.name = init.name
   this.type = init.type
   this.energy = (this.type.base === 'artifact')? 2: 1
-  if(this.type.base === 'artifact') this.overheat = false
+  if (this.type.base === 'artifact') {
+    this.overheat = false
+    this.socket = {}
+  }
   this.field = init.field
   this.cover = true
   this.owner = init.owner
