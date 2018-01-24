@@ -249,7 +249,7 @@ Game.prototype.cardMove = function (rlt) {
       let param = {curr_own: 'personal', from: 'battle', id: rlt[id].on}
       let on = personal.battle[this.findCard(param)]
       card.bond = (rlt[id].to === 'socket')? on : (null)
-      if (rlt[id].to === 'socket')? on.socket[card.id] = card
+      if (rlt[id].to === 'socket') on.socket[card.id] = card.img
       else delete on.socket[card.id]
     }
 
@@ -701,24 +701,30 @@ Card.prototype.flip = function (name) {
 }
 
 Card.prototype.overScroll = function () {
-  last = game.phaser.input.mouse._last_over_scroll
+  let last = game.phaser.input.mouse._last_over_scroll
+  /*
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP)
     console.log(`show ${last.name}`)
   else
     console.log(`hide ${last.name}`)
 
-  /*
+  */
   card_id = Object.keys(last.socket)
   if (!card_id.length) return console.log('empty')
+
+  let last_skt = (!last.curr_skt)? card_id.length - 1 : last.curr_skt - 1
+  last.socket[card_id[last_skt]].kill()
+
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    last.
+    let curr = last.socket[card_id[last.curr_skt]]
+    curr.reset(last.img.x, last.img.y)
+    curr.angle = last.img.angle
+    game.phaser.world.bringToTop(curr)
+
     if (curr_skt == card_id.length - 1) last.curr_skt = 0
     else last.curr_skt ++
   }
-  else {
-    last.curr_skt = 0
-  }
-  */
+  else last.curr_skt = 0
 }
 
 Card.prototype.click = function () {
@@ -751,7 +757,7 @@ Card.prototype.click = function () {
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
 
 // utility
 
