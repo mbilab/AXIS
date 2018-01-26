@@ -218,6 +218,10 @@ Game.prototype.effectEnd = function (room) {
 
 Game.prototype.useCard = function (client, list) {
   let room = game.room[client._rid]
+
+  //let skt_id = (list.socket)? (list.socket) : (null)
+
+
   let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
   let swap_id = (list.swap)? (list.swap) : (null)
 
@@ -1104,9 +1108,9 @@ io.on('connection', client => {
     let card = room.cards[it.id]
 
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+    if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
-    if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
 
     if (!Object.keys(client.card_pause).length) {
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
@@ -1116,17 +1120,31 @@ io.on('connection', client => {
     else
       if(card.field === 'life') return cb( {err: 'its not a handcard'} )
 
-    if (card.field === 'hand') {
-      room.phase = 'normal'
-      if (Object.keys(client.card_pause).length) game.useCard(client, {swap: it.id})
-      else game.useCard(client, {use: it.id})
-    }
-    else {
-      if (card.field === 'life') {
+    switch(card.field){
+      case 'hand':
+        room.phase = 'normal'
+        let cid = Object.keys(client.card_pause)
+        let tg = (cid.length)? room.cards[cid[0]] : (card)
+        if (tg.type.effect === 'mosaic') {
+          room.phase = 'socket'
+          let tp = (cid.length)? 'swap' : 'use'
+          if (cid.length) client.card_pause[cid[0]] = 'use'
+          client.card_pause[card.id] = tp
+          return cb({err: 'choose artifact to place on'})
+        }
+        else {
+          let param = (cid.length)? {swap: it.id} : {use: it.id}
+          game.useCard(client, param)
+        }
+        break
+
+      case 'life':
         room.phase = 'choose'
         client.card_pause[it.id] = true
         cb({err: 'choose handcard to replace'})
-      }
+        break
+
+      default: break
     }
   })
 
@@ -1134,10 +1152,15 @@ io.on('connection', client => {
     // action varies based on its type
     let room = game.room[client._rid]
     let card = room.cards[it.id]
+
     if (room.phase === 'counter') return cb({err: 'choose'})
+    if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
+    if (room.phase === 'socket') {
+      if (card.type.base !== 'artifact') return cb({err: 'can only socket on artifact'})
+      game.useCard(client, {socket: it.id})
+    }
     if (room.phase !== 'normal') return cb({err: `not allowed in ${room.phase} phase`})
     if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})
-    if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
     if (card.type.base === 'artifact') {
       if (card.overheat) return cb({err: 'artifact overheat'})
