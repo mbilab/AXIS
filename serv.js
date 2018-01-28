@@ -106,6 +106,9 @@ Game.prototype.buildPlayer = function (client) {
   client.life_max = game.default.life_max
   client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
 
+  // action
+  client.curr_act = 'none'
+
   // effect
   client.atk_enchant = {}
   client.aura = [] // card_ids
@@ -186,6 +189,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
 Game.prototype.attackEnd = function (room) {
   room.phase = 'normal'
   room.atk_status.hit = false
+
   room.atk_status.attacker.atk_damage = this.default.atk_damage
   room.atk_status.attacker.atk_enchant = {}
   room.atk_status.attacker = null
@@ -216,14 +220,17 @@ Game.prototype.effectEnd = function (room) {
 //////////////////////////////////////////////////////////////////////////////////
 // !-- action
 
-Game.prototype.useCard = function (client, list) {
+Game.prototype.useCard = function (client) {
   let room = game.room[client._rid]
 
   //let skt_id = (list.socket)? (list.socket) : (null)
 
+  let use_id = client.card_pause.use
+  let swp_id = client.card_pause.swap
+  let skt_id = client.card_pause.socket
 
-  let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
-  let swap_id = (list.swap)? (list.swap) : (null)
+  //let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
+  //let swap_id = (list.swap)? (list.swap) : (null)
 
   client.card_pause = {}
   room.counter_status.use_id[use_id] = true
@@ -238,8 +245,10 @@ Game.prototype.useCard = function (client, list) {
       break
 
     case 'item'		 :
-      param[use_id].to = 'grave'
-      param[use_id].action = 'use'
+      let to = (skt_id != null)? 'socket' : 'grave'
+      let act = (skt_id != null)? 'socket' : 'use'
+      param[use_id].to = to
+      param[use_id].action = act
       break
 
     case 'spell'   :
@@ -252,13 +261,20 @@ Game.prototype.useCard = function (client, list) {
     default        : break
   }
 
+  if (swp_id != null) {
+    param[swp_id] = {to: 'life'}
+    //param[swp_id].to = 'life'
+  }
+
+
+  /*
   if (list.swap) {
     param[list.swap] = {}
     param[list.swap].to = 'life'
   }
-
+  */
   let rlt = game.cardMove(client, client._foe, param)
-  let msg = `${param[use_id].action} ${room.cards[use_id].name}${(list.swap)? ` by ${room.cards[list.swap].name}` : ''}`
+  let msg = `${param[use_id].action} ${room.cards[use_id].name}${(swp_id != null)? ` by ${room.cards[swp_id].name}` : ''}`
   client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
   client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
 
@@ -807,8 +823,8 @@ io.on('connection', client => {
         delete game.pool[client._pid]
 
         game.room[rid] = {
-          phase: 'normal', // >> normal / attack / counter / choose
-          atk_status: {first_atk: true, hit: false, attacker: null, defender: null},
+          phase: 'normal', // >> normal / attack / counter / choose / effect / socket
+          atk_status: {first_atk: true, hit: false, attacker: null, defender: null, curr: null},
           counter_status: {action: null, type: null, use_id: {}, counter_id: {}},
           effect_status: {count: 0},
           cards: {},
@@ -882,6 +898,7 @@ io.on('connection', client => {
   // !-- attack
   client.on('attack', cb => {
     let room = game.room[client._rid]
+    if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent'} )
     if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
@@ -897,6 +914,7 @@ io.on('connection', client => {
     room.phase = 'attack'
     room.atk_status.attacker = client
     room.atk_status.defender = client._foe
+    room.atk_status.curr = room.atk_status.defender
     client.action_point -= 1
     client.atk_phase -= 1
 
@@ -907,7 +925,16 @@ io.on('connection', client => {
 
   client.on('useVanish', (it, cb) => {
     let room = game.room[client._rid]
+    if (typeof cb !== 'function') return
+    if (room.phase !== 'attack') return
+    if (client != room.atk_status.curr) return
+
     let card_pick = Object.keys(it.card_pick)
+    for (let id of card_pick) {
+      let card = room.cards[id]
+      if (card == null) return
+    }
+
     let type = {life_use: {}, hand_use: {}, hand_swap: {}}
     let action = (it.conceal)? 'conceal' : 'tracking'
 
@@ -966,12 +993,16 @@ io.on('connection', client => {
 
     client.emit(`plyUseVanish`, { msg: {action: `${action}... waiting opponent`}, card: rlt.personal, rlt: Object.assign({personal: true}, panel) })
     client._foe.emit(`plyUseVanish`, { msg: {action: `foe ${action}`}, card: rlt.opponent, rlt: Object.assign({opponent: true}, panel) })
+
+    room.atk_status.curr = (client == room.atk_status.attacker)? (room.atk_status.defender) : (room.atk_status.attacker)
   })
 
   client.on('giveUp', cb => {
     let room = game.room[client._rid]
-    let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
+    if (typeof cb !== 'function') return
+    if (room.phase !== 'attack') return
 
+    let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
     let msg = {personal: '', opponent: ''}
     msg.personal = (action === 'conceal')? 'be hit... waiting opponent' : 'attack miss... your turn'
     msg.opponent = (action === 'conceal')? 'attack hits... your turn' : 'dodge attack... waiting opponent'
@@ -993,11 +1024,16 @@ io.on('connection', client => {
   // ----------------------------------------------------------------------------
   // !-- counter
   client.on('counter', (it, cb) => {
+    let room = game.room[client._rid]
+    if (typeof cb !== 'function') return
+    if (room.phase !== 'counter') return
+
     let card_pick = Object.keys(it.card_pick)
     if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
 
-    let room = game.room[client._rid]
     let card = room.cards[card_pick[0]]
+    if (card == null) return
+
     let effect = game.default.all_card[card.name].effect
     if (!effect.counter) return cb({err: 'no counter effect'})
 
@@ -1033,6 +1069,7 @@ io.on('connection', client => {
 
   client.on('pass', () => {
     let room = game.room[client._rid]
+    if (room.phase !== 'counter') return
     let counter = (client == room.player[room.curr_ply])? true : false
 
     if (counter == true) {
@@ -1078,6 +1115,8 @@ io.on('connection', client => {
   // !-- action
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
+
+    if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
@@ -1107,6 +1146,9 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
+    if (typeof cb !== 'function') return
+    if (card == null) return
+
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
@@ -1122,25 +1164,22 @@ io.on('connection', client => {
 
     switch(card.field){
       case 'hand':
-        room.phase = 'normal'
-        let cid = Object.keys(client.card_pause)
-        let tg = (cid.length)? room.cards[cid[0]] : (card)
+        let tg = (client.card_pause.use)? room.cards[client.card_pause.use] : (card)
+        let tp = (client.card_pause.use)? 'swap' : 'use'
+        client.card_pause[tp] = it.id
         if (tg.type.effect === 'mosaic') {
           room.phase = 'socket'
-          let tp = (cid.length)? 'swap' : 'use'
-          if (cid.length) client.card_pause[cid[0]] = 'use'
-          client.card_pause[card.id] = tp
           return cb({err: 'choose artifact to place on'})
         }
         else {
-          let param = (cid.length)? {swap: it.id} : {use: it.id}
-          game.useCard(client, param)
+          //room.phase = 'normal'
+          game.useCard(client)
         }
         break
 
       case 'life':
         room.phase = 'choose'
-        client.card_pause[it.id] = true
+        client.card_pause['use'] = it.id
         cb({err: 'choose handcard to replace'})
         break
 
@@ -1153,11 +1192,14 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
+    if (typeof cb !== 'function') return
+    if (card == null) return
     if (room.phase === 'counter') return cb({err: 'choose'})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
     if (room.phase === 'socket') {
       if (card.type.base !== 'artifact') return cb({err: 'can only socket on artifact'})
-      game.useCard(client, {socket: it.id})
+      client.card_pause['socket'] = it.id
+      game.useCard(client)
     }
     if (room.phase !== 'normal') return cb({err: `not allowed in ${room.phase} phase`})
     if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})
@@ -1181,10 +1223,11 @@ io.on('connection', client => {
 
   client.on('endTurn', cb => {
     let room = game.room[client._rid]
+    if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
-    room.atk_status.first_atk = false
+    room.atk_status.first_atk = true
     room.curr_ply = client._foe._pid
     client.action_point = game.default.action_point
     client.atk_damage = game.default.atk_damage
@@ -1208,7 +1251,23 @@ io.on('connection', client => {
   // !-- choosing
   client.on('effectChoose', (it, cb) => {
     let room = game.room[client._rid]
+    if (typeof cb !== 'function') return
+    if (room.phase !== 'attack' && room.phase !== 'effect') return
+
     let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
+
+    // if can't find effect name return
+    if (!game[effect]) return
+    // if eff_id is not in client.eff_queue return
+    if (!client.eff_queue[it.id]) return
+    // if it.eff doesn't exist in client.eff_queue.your_id return
+    if (!client.eff_queue[it.id][it.eff]) return
+    // check card_pick
+    for (let id of it.card_pick) {
+      let card = room.cards[id]
+      if (card == null) return
+    }
+
     let rlt = game[effect](client, it)
     if (rlt.err) return cb(rlt)
     else cb({})
