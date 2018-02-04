@@ -88,6 +88,11 @@ const Game = function(){
     retrieve: true,
     steal   : true
   }
+  this.eff_target = { // record effect target card is opponent
+    control: true,
+    destroy: true,
+    steal  : true
+  }
   this.pool = {}
   this.queue = []
   this.room = {}
@@ -164,6 +169,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
       else
         card.energy = 1
     }
+    if (rlt[id].skt) game.room[personal._rid].cards[rlt[id].skt].socket[id] = true
 
     // move card
     rlt[id].from = card.field
@@ -224,14 +230,13 @@ Game.prototype.useCard = function (client) {
   let room = game.room[client._rid]
 
   //let skt_id = (list.socket)? (list.socket) : (null)
-
-  let use_id = (client.card_pause.return)? client.card_pause.return : (client.card_pause.use)
+  let rtn_id = client.card_pause.return
+  let use_id = (rtn_id != null)? rtn_id : (client.card_pause.use)
   let swp_id = client.card_pause.swap
   let skt_id = client.card_pause.socket
 
   //let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
   //let swap_id = (list.swap)? (list.swap) : (null)
-
   client.card_pause = {}
   room.counter_status.use_id[use_id] = true
 
@@ -245,10 +250,11 @@ Game.prototype.useCard = function (client) {
       break
 
     case 'item'		 :
-      let to = (skt_id != null)? 'socket' : ((client.card_pause.return)? 'hand' : 'grave')
+      let to = (skt_id != null)? 'socket' : ((rtn_id != null)? 'hand' : 'grave')
       let act = (skt_id != null)? 'socket' : 'use'
       param[use_id].to = to
       param[use_id].action = act
+      if (skt_id != null) param[use_id].skt = skt_id
       break
 
     case 'spell'   :
@@ -266,7 +272,6 @@ Game.prototype.useCard = function (client) {
     //param[swp_id].to = 'life'
   }
 
-
   /*
   if (list.swap) {
     param[list.swap] = {}
@@ -278,10 +283,12 @@ Game.prototype.useCard = function (client) {
   client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
   client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
 
-  room.phase = 'counter'
-  room.counter_status.type = 'use'
-  room.counter_status.start = 'use'
-  room.counter_status.last_ply = client
+  if (rtn_id == null) {
+    room.phase = 'counter'
+    room.counter_status.type = 'use'
+    room.counter_status.start = 'use'
+    room.counter_status.last_ply = client
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -934,6 +941,7 @@ io.on('connection', client => {
     for (let id of card_pick) {
       let card = room.cards[id]
       if (card == null) return
+      if (card.curr_own != client._pid) return
     }
 
     let type = {life_use: {}, hand_use: {}, hand_swap: {}}
@@ -1035,6 +1043,7 @@ io.on('connection', client => {
 
     let card = room.cards[card_pick[0]]
     if (card == null) return
+    if (card.curr_own != client._pid) return
 
     let effect = game.default.all_card[card.name].effect
     if (!effect.counter) return cb({err: 'no counter effect'})
@@ -1154,11 +1163,12 @@ io.on('connection', client => {
 
     if (typeof cb !== 'function') return
     if (card == null) return
+    if (card.curr_own != client._pid) return
 
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
-    if (card.field === 'battle' && card.type.effect === 'mosaic') {
+    if (card.field === 'socket') {
       if (room.phase === 'counter') return cb( {err: 'choose'} )
       if (room.phase === 'normal') {
         client.card_pause.return = it.id
@@ -1206,6 +1216,7 @@ io.on('connection', client => {
     let card = room.cards[it.id]
     if (typeof cb !== 'function') return
     if (card == null) return
+    if (card.curr_own != client._pid) return
 
     if (room.phase === 'counter') return cb({err: 'choose'})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
@@ -1292,6 +1303,7 @@ io.on('connection', client => {
     for (let id of it.card_pick) {
       let card = room.cards[id]
       if (card == null) return
+      if (card.curr_own != client._pid && !game.eff_target[effect]) return
     }
 
     let rlt = game[effect](client, it)
