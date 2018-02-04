@@ -281,6 +281,7 @@ Game.prototype.useCard = function (client) {
   room.phase = 'counter'
   room.counter_status.type = 'use'
   room.counter_status.start = 'use'
+  room.counter_status.last_ply = client
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -825,7 +826,7 @@ io.on('connection', client => {
         game.room[rid] = {
           phase: 'normal', // >> normal / attack / counter / choose / effect / socket
           atk_status: {first_atk: true, hit: false, attacker: null, defender: null, curr: null},
-          counter_status: {action: null, type: null, use_id: {}, counter_id: {}},
+          counter_status: {start: null, type: null, use_id: {}, counter_id: {}, last_ply: null},
           effect_status: {count: 0},
           cards: {},
           card_id: 1,
@@ -1027,6 +1028,7 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     if (typeof cb !== 'function') return
     if (room.phase !== 'counter') return
+    if (client == room.counter_status.last_ply) return
 
     let card_pick = Object.keys(it.card_pick)
     if (card_pick.length !== 1) return cb({err: 'only allow 1 counter card a time'})
@@ -1065,11 +1067,15 @@ io.on('connection', client => {
     client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
     client._foe.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
     room.counter_status.type = 'trigger'
+    room.counter_status.last_ply = client
   })
 
   client.on('pass', () => {
     let room = game.room[client._rid]
     if (room.phase !== 'counter') return
+    if (client == room.last_ply) return
+
+
     let counter = (client == room.player[room.curr_ply])? true : false
 
     if (counter == true) {
@@ -1108,7 +1114,7 @@ io.on('connection', client => {
     }
 
     //room.counter_status = {start: null, type: null, use_id: null, counter_id: null}
-    room.counter_status = {start: null, type: null, use_id: {}, counter_id: {}}
+    room.counter_status = {start: null, type: null, use_id: {}, counter_id: {}, last_ply: null}
   })
 
   // ----------------------------------------------------------------------------
@@ -1149,6 +1155,7 @@ io.on('connection', client => {
     if (typeof cb !== 'function') return
     if (card == null) return
 
+    if (room.phase === 'counter' && card.field === 'battle') return cb( {err: 'choose'} )
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
@@ -1179,7 +1186,7 @@ io.on('connection', client => {
 
       case 'life':
         room.phase = 'choose'
-        client.card_pause['use'] = it.id
+        client.card_pause.use = it.id
         cb({err: 'choose handcard to replace'})
         break
 
@@ -1191,9 +1198,9 @@ io.on('connection', client => {
     // action varies based on its type
     let room = game.room[client._rid]
     let card = room.cards[it.id]
-
     if (typeof cb !== 'function') return
     if (card == null) return
+
     if (room.phase === 'counter') return cb({err: 'choose'})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
     if (room.phase === 'socket') {
@@ -1217,7 +1224,20 @@ io.on('connection', client => {
       client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
     }
     else {
+      if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effecr === 'trigger')) {
+        room.phase = 'effect'
 
+        // send to grave
+        let param = {}
+        param[it.id] = {to: 'grave'}
+        let rlt = game.cardMove(client, client._foe, param)
+        client.emit('plyUseCard', { msg: {phase: 'effect phase', action: `trigger ${card.name}`}, card: rlt.personal })
+        client._foe.emit('plyUseCard', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent })
+
+        // effect trigger
+        let avail_effect = game.judge(client._foe, client, Object.assign(room.counter_status.use_id, room.counter_status.counter_id) )
+        game.effectTrigger(client._foe, client, avail_effect)
+      }
     }
   })
 
