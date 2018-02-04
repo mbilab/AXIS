@@ -225,7 +225,7 @@ Game.prototype.useCard = function (client) {
 
   //let skt_id = (list.socket)? (list.socket) : (null)
 
-  let use_id = client.card_pause.use
+  let use_id = (client.card_pause.return)? client.card_pause.return : (client.card_pause.use)
   let swp_id = client.card_pause.swap
   let skt_id = client.card_pause.socket
 
@@ -245,7 +245,7 @@ Game.prototype.useCard = function (client) {
       break
 
     case 'item'		 :
-      let to = (skt_id != null)? 'socket' : 'grave'
+      let to = (skt_id != null)? 'socket' : ((client.card_pause.return)? 'hand' : 'grave')
       let act = (skt_id != null)? 'socket' : 'use'
       param[use_id].to = to
       param[use_id].action = act
@@ -1155,10 +1155,16 @@ io.on('connection', client => {
     if (typeof cb !== 'function') return
     if (card == null) return
 
-    if (room.phase === 'counter' && card.field === 'battle') return cb( {err: 'choose'} )
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
+    if (card.field === 'battle' && card.type.effect === 'mosaic') {
+      if (room.phase === 'counter') return cb( {err: 'choose'} )
+      if (room.phase === 'normal') {
+        client.card_pause.return = it.id
+        game.useCard(client)
+      }
+    }
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
 
     if (!Object.keys(client.card_pause).length) {
