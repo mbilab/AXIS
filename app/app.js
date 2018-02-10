@@ -222,7 +222,7 @@ Game.prototype.cardMove = function (rlt) {
 //
 //           name:
 //           action:   // when equip, cast ...
-//           on:       // card (id) choose to socket, when to == socket
+//           skt:       // card (id) choose to socket, when to == socket
 //         }
 //       }
   let fix_field = {personal: {}, opponent: {}}
@@ -239,18 +239,18 @@ Game.prototype.cardMove = function (rlt) {
     card.owner = rlt[id].new_own
     //card.cover = rlt[id].cover
     card.img.loadTexture(card.name)
-    card.img.alpha = 1
-    card.img.angle = 0
+    card.body.alpha = 1
+    card.body.angle = 0
     card.frame.visible = false
     //if (rlt[id].to === 'grave') card.cover = false
-    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.img.kill()
+    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.body.kill()
 
     if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
-      let param = {curr_own: 'personal', from: 'battle', id: rlt[id].on}
-      let on = personal.battle[this.findCard(param)]
-      card.bond = (rlt[id].to === 'socket')? on : (null)
-      if (rlt[id].to === 'socket') on.socket[card.id] = card.img
-      else delete on.socket[card.id]
+      let param = {curr_own: rlt[id].curr_own, from: 'battle', id: rlt[id].skt}
+      let skt = game.player[rlt[id].curr_own].battle[this.findCard(param)]
+      card.bond = (rlt[id].to === 'socket')? rlt[id].skt : (null)
+      if (rlt[id].to === 'socket') skt.socket[card.id] = true
+      else delete skt.socket[card.id]
     }
 
     // move
@@ -682,6 +682,7 @@ const Card = function (init) {
   }, this)
   this.img.events.onInputOut.add( function(){
     game.textPanel({effect: 'empty'})
+    this.curr_skt = 0
     game.phaser.input.mouse.mouseWheelCallback = null
   }, this)
   this.body.addChild(this.img)
@@ -702,26 +703,20 @@ Card.prototype.flip = function (name) {
 
 Card.prototype.overScroll = function () {
   let last = game.phaser.input.mouse._last_over_scroll
-  /*
-  if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP)
-    console.log(`show ${last.name}`)
-  else
-    console.log(`hide ${last.name}`)
 
-  */
   card_id = Object.keys(last.socket)
   if (!card_id.length) return console.log('empty')
 
   let last_skt = (!last.curr_skt)? card_id.length - 1 : last.curr_skt - 1
-  last.socket[card_id[last_skt]].kill()
+  game.player[last.owner].socket[game.findCard({id: card_id[last_skt], curr_own: last.owner, from: 'socket'})].body.kill()
 
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    let curr = last.socket[card_id[last.curr_skt]]
-    curr.reset(last.img.x, last.img.y)
-    curr.angle = last.img.angle
-    game.phaser.world.bringToTop(curr)
+    let curr = game.player[last.owner].socket[game.findCard({id: card_id[last.curr_skt], curr_own: last.owner, from: 'socket'})]
+    curr.body.reset(last.body.x, last.body.y)
+    curr.body.angle = last.body.angle
+    game.phaser.world.bringToTop(curr.body)
 
-    if (curr_skt == card_id.length - 1) last.curr_skt = 0
+    if (last.curr_skt == card_id.length - 1) last.curr_skt = 0
     else last.curr_skt ++
   }
   else last.curr_skt = 0
@@ -841,6 +836,7 @@ socket.on('foeDrawCard', it => {
 })
 
 socket.on('plyUseCard', it => {
+  console.log(it)
   game.cardMove(it.card)
   game.textPanel(it.msg)
   if (it.foe) {
@@ -904,7 +900,7 @@ const personal = game.player.personal
 const opponent = game.player.opponent
 
 socket.emit('preload', res => {
-  game.phaser = new Phaser.Game(game.default.game.width, game.default.game.height, Phaser.Canvas, 'game', {
+  game.phaser = new Phaser.Game(game.default.game.width, game.default.game.height, Phaser.HEADLESS/*Phaser.Canvas*/, 'game', {
     create: () => {
       let top = (100*(1 - game.default.game.width/opt.screen.width)/2).toString()+'%'
       let left = (100*(1 - game.default.game.height/opt.screen.height)/2).toString()+'%'

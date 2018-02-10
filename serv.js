@@ -37,6 +37,7 @@ const Card = function(init){
   this.name = init.name
   this.type = init.type
   this.energy = (this.type.base === 'artifact')? 2: 1
+  this.bond = null
   if (this.type.base === 'artifact') {
     this.overheat = false
     this.socket = {}
@@ -169,7 +170,11 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
       else
         card.energy = 1
     }
-    if (rlt[id].skt) game.room[personal._rid].cards[rlt[id].skt].socket[id] = true
+    if (rlt[id].skt) {
+      console.log('skt')
+      game.room[personal._rid].cards[rlt[id].skt].socket[id] = true
+      card.bond = rlt[id].skt
+    }
 
     // move card
     rlt[id].from = card.field
@@ -187,6 +192,10 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
     Object.assign(param.opponent[id], rlt[id])
   }
+
+  console.log(param.opponent)
+  console.log(param.personal)
+
   return param
 }
 
@@ -1006,9 +1015,9 @@ io.on('connection', client => {
     room.atk_status.curr = (client == room.atk_status.attacker)? (room.atk_status.defender) : (room.atk_status.attacker)
   })
 
-  client.on('giveUp', cb => {
+  client.on('giveUp', () => {
     let room = game.room[client._rid]
-    if (typeof cb !== 'function') return
+
     if (room.phase !== 'attack') return
 
     let action = (client == room.atk_status.attacker)? 'tracking' : 'conceal'
@@ -1300,11 +1309,13 @@ io.on('connection', client => {
     // if it.eff doesn't exist in client.eff_queue.your_id return
     if (!client.eff_queue[it.id][it.eff]) return
     // check card_pick
-    for (let id of it.card_pick) {
+    for (let id in it.card_pick) {
       let card = room.cards[id]
       if (card == null) return
       if (card.curr_own != client._pid && !game.eff_target[effect]) return
     }
+    // if it.card_pick is not iterable
+
 
     let rlt = game[effect](client, it)
     if (rlt.err) return cb(rlt)
