@@ -110,7 +110,7 @@ Game.prototype.buildPlayer = function (client) {
   client.deck_max = game.default.deck_max
   client.hand_max = game.default.hand_max
   client.life_max = game.default.life_max
-  client.card_ammount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0}
+  client.card_amount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0, socket: 0}
 
   // action
   client.curr_act = 'none'
@@ -170,17 +170,21 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
       else
         card.energy = 1
     }
-    if (rlt[id].skt) {
-      console.log('skt')
-      game.room[personal._rid].cards[rlt[id].skt].socket[id] = true
-      card.bond = rlt[id].skt
+    if (rlt[id].on) {
+      //console.log('skt')
+      game.room[personal._rid].cards[rlt[id].on].socket[id] = true
+      card.bond = rlt[id].on
+    }
+    if (rlt[id].off) {
+      delete game.room[personal._rid].cards[rlt[id].off].socket[id]
+      card.bond = null
     }
 
     // move card
     rlt[id].from = card.field
-    personal.card_ammount[rlt[id].from] -= 1
+    personal.card_amount[rlt[id].from] -= 1
     card.field = rlt[id].to
-    player[rlt[id].new_own].card_ammount[rlt[id].to] += 1
+    player[rlt[id].new_own].card_amount[rlt[id].to] += 1
     card.curr_own = player[rlt[id].new_own]._pid
 
     // build return object
@@ -193,8 +197,8 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     Object.assign(param.opponent[id], rlt[id])
   }
 
-  console.log(param.opponent)
-  console.log(param.personal)
+  //console.log(param.opponent)
+  //console.log(param.personal)
 
   return param
 }
@@ -260,10 +264,11 @@ Game.prototype.useCard = function (client) {
 
     case 'item'		 :
       let to = (skt_id != null)? 'socket' : ((rtn_id != null)? 'hand' : 'grave')
-      let act = (skt_id != null)? 'socket' : 'use'
+      let act = (skt_id != null)? 'socket' : ((rtn_id != null)? 'return' : 'use')
       param[use_id].to = to
       param[use_id].action = act
-      if (skt_id != null) param[use_id].skt = skt_id
+      if (skt_id != null) param[use_id].on = skt_id
+      if (rtn_id != null) param[use_id].off = room.cards[use_id].bond
       break
 
     case 'spell'   :
@@ -369,7 +374,7 @@ Game.prototype.judge = function (personal, opponent, card_list) {
                 curr_val = player[target].hp
                 break
               case 'handcard':
-                curr_val = player[target].card_ammount.hand
+                curr_val = player[target].card_amount.hand
                 break
 
               default:break
@@ -825,7 +830,7 @@ io.on('connection', client => {
           owner: client._pid
         }
         client.curr_deck.push(new Card(init))
-        client.card_ammount.deck += 1
+        client.card_amount.deck += 1
       }
 
 
@@ -866,8 +871,8 @@ io.on('connection', client => {
               card.field = 'life'
               life[pid].personal.push({id: id, name: card.name})
               life[room.player[pid]._foe._pid].opponent.push({id: id})
-              room.player[pid].card_ammount.deck -= 1
-              room.player[pid].card_ammount.life += 1
+              room.player[pid].card_amount.deck -= 1
+              room.player[pid].card_amount.life += 1
             }
             room.card_id ++
           }
@@ -918,7 +923,7 @@ io.on('connection', client => {
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent'} )
-    if (client.card_ammount.battle == 0) return cb( {err: 'no artifact to attack'} )
+    if (client.card_amount.battle == 0) return cb( {err: 'no artifact to attack'} )
     //if (client.action_point < 1) return cb( {err: 'not enough action point'} )
     //if (client.atk_phase < 1) return cb( {err: 'not enough attack phase'} )
     if (room.atk_status.first_atk) {
@@ -1078,6 +1083,7 @@ io.on('connection', client => {
     else {
       let param = {}
       param[card_pick[0]] = {from: card.field}
+      if (card.type.effect === 'mosaic') param[card_pick[0]].off = card.bond
       rlt = game.cardMove(client, client._foe, param)
       room.counter_status.counter_id = param
     }
@@ -1099,6 +1105,7 @@ io.on('connection', client => {
     if (counter == true) {
       let param = room.counter_status.use_id
       param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
+      if (room.cards[Object.keys(param)[0]].type.effect === 'mosaic') param[Object.keys(param)[0]].off = room.cards[Object.keys(param)[0]].bond
       let rlt = game.cardMove(client, client._foe, param)
       client.emit('playerPass', { msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
       client._foe.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent, rlt: {pass: true, opponent: true} })
@@ -1144,7 +1151,7 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
-    if (client.card_ammount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
+    if (client.card_amount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
 
     client.action_point -= 1
 
@@ -1155,9 +1162,9 @@ io.on('connection', client => {
       let param = { id: id, name: card.name }
       card.field = 'hand'
       card.cover = false
-      client.card_ammount.hand += 1
-      client.card_ammount.deck -= 1
-      if (client.card_ammount.deck == 0) param.deck_empty = true
+      client.card_amount.hand += 1
+      client.card_amount.deck -= 1
+      if (client.card_amount.deck == 0) param.deck_empty = true
 
       cb({msg: {action: `draw ${param.name}`}, card: param})
       delete param.name
@@ -1189,7 +1196,7 @@ io.on('connection', client => {
     if (!Object.keys(client.card_pause).length) {
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
       if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
-      if (card.field === 'life' && client.card_ammount.hand == 0) return cb( {err: 'no handcard to replace'} )
+      if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
     }
     else
       if(card.field === 'life') return cb( {err: 'its not a handcard'} )
@@ -1198,6 +1205,8 @@ io.on('connection', client => {
       case 'hand':
         let tg = (client.card_pause.use)? room.cards[client.card_pause.use] : (card)
         let tp = (client.card_pause.use)? 'swap' : 'use'
+        if (tp === 'use' && tg.type.effect === 'mosaic' && !client.card_amount.battle) return cb({err: 'no artifact to place on'})
+
         client.card_pause[tp] = it.id
         if (tg.type.effect === 'mosaic') {
           room.phase = 'socket'
@@ -1210,6 +1219,8 @@ io.on('connection', client => {
         break
 
       case 'life':
+        if (room.cards[it.id].type.effect === 'mosaic' && !client.card_amount.battle) return cb({err: 'no artifact to place on'})
+
         room.phase = 'choose'
         client.card_pause.use = it.id
         cb({err: 'choose handcard to replace'})

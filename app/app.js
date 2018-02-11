@@ -33,10 +33,10 @@ const Game = function () {
     },
     player: {
       personal: {
-        y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 65, life: 65}
+        y: { altar: 175, battle: 285, deck: 65, grave: 175, hand: 65, life: 65, socket: 389}
       },
       opponent: {
-        y: { altar: 603, battle: 493, deck: 713, grave: 603, hand: 713, life: 713}
+        y: { altar: 603, battle: 493, deck: 713, grave: 603, hand: 713, life: 713, socket: 389}
       }
     },
     scale: 768*(opt.screen.width/opt.screen.height)/1366
@@ -246,11 +246,14 @@ Game.prototype.cardMove = function (rlt) {
     if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.body.kill()
 
     if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
-      let param = {curr_own: rlt[id].curr_own, from: 'battle', id: rlt[id].skt}
+      let tg_atf = (rlt[id].on)? (rlt[id].on) : (rlt[id].off)
+      let param = {curr_own: rlt[id].curr_own, from: 'battle', id: tg_atf}
       let skt = game.player[rlt[id].curr_own].battle[this.findCard(param)]
-      card.bond = (rlt[id].to === 'socket')? rlt[id].skt : (null)
+      card.bond = (rlt[id].to === 'socket')? tg_atf : (null)
       if (rlt[id].to === 'socket') skt.socket[card.id] = true
       else delete skt.socket[card.id]
+
+      skt.frame.visible = (Object.keys(skt.socket).length)? true : false
     }
 
     // move
@@ -261,6 +264,7 @@ Game.prototype.cardMove = function (rlt) {
     fix_field[rlt[id].curr_own][rlt[id].from] = true
     fix_field[rlt[id].new_own][rlt[id].to] = true
   }
+
   this.fixCardPos(fix_field)
 }
 
@@ -354,11 +358,11 @@ Game.prototype.resetCardPick = function () {
 Game.prototype.resetPlayer = function () {
   for (let field of ['altar', 'battle', 'grave', 'hand', 'life']){
     for (let card of personal[field]) {
-      card.img.destroy()
+      card.body.destroy()
     }
     personal[field] = []
     for (let card of opponent[field]) {
-      card.img.destroy()
+      card.body.destroy()
     }
     opponent[field] = []
   }
@@ -705,15 +709,15 @@ Card.prototype.overScroll = function () {
   let last = game.phaser.input.mouse._last_over_scroll
 
   card_id = Object.keys(last.socket)
-  if (!card_id.length) return console.log('empty')
+  if (!card_id.length) return //console.log('empty')
 
   let last_skt = (!last.curr_skt)? card_id.length - 1 : last.curr_skt - 1
   game.player[last.owner].socket[game.findCard({id: card_id[last_skt], curr_own: last.owner, from: 'socket'})].body.kill()
 
   if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
     let curr = game.player[last.owner].socket[game.findCard({id: card_id[last.curr_skt], curr_own: last.owner, from: 'socket'})]
-    curr.body.reset(last.body.x, last.body.y)
-    curr.body.angle = last.body.angle
+    curr.body.reset(last.body.x, game.default.player[last.owner].y.socket)
+    //curr.body.angle = last.body.angle
     game.phaser.world.bringToTop(curr.body)
 
     if (last.curr_skt == card_id.length - 1) last.curr_skt = 0
