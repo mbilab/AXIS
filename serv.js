@@ -117,7 +117,29 @@ Game.prototype.buildPlayer = function (client) {
 
   // effect
   client.atk_enchant = {}
-  client.aura = [] // card_ids
+  client.aura = { // permenent till be counter or remove
+    cripple: false, // can't draw card
+    dicease: false, // can't use heal cards
+    silence: false, // can't use life field card
+
+    precise: false, // atk cant be vanish
+    stamina: false, // handcard limit + 2
+    recycle: false, // draw 1 card when an artifact send to grave
+    berserk: false  // equip wont cost action point
+  }
+  client.buff = { // next action trigger
+    charge: false, // skip your next turn
+
+    mana_tide : false, // next spell this turn won't cost action point
+    quick_draw: false, // next equip this turn won't cost action point
+    eagle_eye : false // next attack you perform can't be vanish
+  }
+  client.stat = {
+    stun  : false,
+    freeze: false,
+    ignite: false,
+    poison: false
+  }
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
   client.dmg_blk = 0 // effect damage only
 
