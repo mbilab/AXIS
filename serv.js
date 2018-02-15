@@ -1075,11 +1075,11 @@ io.on('connection', client => {
     let rlt = {}
     if (card.type.base === 'artifact') {
       // card flip instead if its artifact
-      /*
+
       card.overheat = true
       card.energy -= 1
-      rlt[card_pick[0]] = {from: 'battle', curr_own: 'personal', trigger: true}
-      */
+      client.emit('playerTrigger', { msg: {action: `trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'personal', from: 'battle'}, rlt: {personal: true, counter: true}  })
+      client._foe.emit('playerTrigger', { msg: {action: `foe trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true}  })
     }
     else {
       let param = {}
@@ -1087,10 +1087,10 @@ io.on('connection', client => {
       if (card.type.effect === 'mosaic') param[card_pick[0]].off = card.bond
       rlt = game.cardMove(client, client._foe, param)
       room.counter_status.counter_id = param
+      client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
+      client._foe.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
     }
 
-    client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
-    client._foe.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
     room.counter_status.type = 'trigger'
     room.counter_status.last_ply = client
   })
@@ -1105,9 +1105,13 @@ io.on('connection', client => {
 
     if (counter == true) {
       let param = room.counter_status.use_id
-      param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
-      if (room.cards[Object.keys(param)[0]].type.effect === 'mosaic') param[Object.keys(param)[0]].off = room.cards[Object.keys(param)[0]].bond
-      let rlt = game.cardMove(client, client._foe, param)
+
+      rlt = {}
+      if (room.cards[Object.keys(param)[0]].type.base !== 'artifact') {
+        param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
+        if (room.cards[Object.keys(param)[0]].type.effect === 'mosaic') param[Object.keys(param)[0]].off = room.cards[Object.keys(param)[0]].bond
+        rlt = game.cardMove(client, client._foe, param)
+      }
       client.emit('playerPass', { msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
       client._foe.emit('playerPass', { msg: {phase: 'normal phase', action: 'counter success... waiting opponent', cursor: ' '}, card: rlt.opponent, rlt: {pass: true, opponent: true} })
 
@@ -1183,14 +1187,12 @@ io.on('connection', client => {
     if (card.curr_own != client._pid) return
 
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+    if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
-    if (card.field === 'socket') {
-      if (room.phase === 'counter') return cb( {err: 'choose'} )
-      if (room.phase === 'normal') {
-        client.card_pause.return = it.id
-        return game.useCard(client)
-      }
+    if (card.field === 'socket' && room.phase === 'normal') {
+      client.card_pause.return = it.id
+      return game.useCard(client)
     }
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
 
@@ -1258,8 +1260,8 @@ io.on('connection', client => {
       room.phase = 'counter'
       room.counter_status = {start: 'trigger', type: 'trigger', use_id: {}, counter_id: {}}
       room.counter_status.use_id[it.id] = true
-      client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'} })
-      client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'} })
+      client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'}, rlt: {} })
+      client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true} })
     }
     else {
       if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effecr === 'trigger')) {
