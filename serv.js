@@ -194,6 +194,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     param.opponent[id] = {}
     rlt[id].curr_own = (rlt[id].curr_own === 'personal')? 'opponent' : 'personal'
     rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
+    rlt[id].cover = (rlt[id].off)? true : false
     Object.assign(param.opponent[id], rlt[id])
   }
 
@@ -297,12 +298,12 @@ Game.prototype.useCard = function (client) {
   client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
   client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
 
-  if (rtn_id == null) {
+  //if (rtn_id != null) {
     room.phase = 'counter'
     room.counter_status.type = 'use'
     room.counter_status.start = 'use'
     room.counter_status.last_ply = client
-  }
+  //}
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -1188,7 +1189,7 @@ io.on('connection', client => {
       if (room.phase === 'counter') return cb( {err: 'choose'} )
       if (room.phase === 'normal') {
         client.card_pause.return = it.id
-        game.useCard(client)
+        return game.useCard(client)
       }
     }
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1243,7 +1244,7 @@ io.on('connection', client => {
     if (room.phase === 'socket') {
       if (card.type.base !== 'artifact') return cb({err: 'can only socket on artifact'})
       client.card_pause['socket'] = it.id
-      game.useCard(client)
+      return game.useCard(client)
     }
     if (room.phase !== 'normal') return cb({err: `not allowed in ${room.phase} phase`})
     if (game.default.all_card[card.name].effect.counter) return cb({err: 'only available in counter phase'})

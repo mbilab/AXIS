@@ -222,7 +222,8 @@ Game.prototype.cardMove = function (rlt) {
 //
 //           name:
 //           action:   // when equip, cast ...
-//           skt:       // card (id) choose to socket, when to == socket
+//           skt:      // card (id) choose to socket, when to == socket
+//           cover:    // card is remain open or become covered
 //         }
 //       }
   let fix_field = {personal: {}, opponent: {}}
@@ -238,7 +239,7 @@ Game.prototype.cardMove = function (rlt) {
     card.name = rlt[id].name
     card.owner = rlt[id].new_own
     //card.cover = rlt[id].cover
-    card.img.loadTexture(card.name)
+    card.img.loadTexture((rlt[id].cover)? 'cardback' : card.name)
     card.body.alpha = 1
     card.body.angle = 0
     card.frame.visible = false
@@ -737,7 +738,8 @@ Card.prototype.click = function () {
       break
 
     case 'socket':
-      personal.chooseCard(this)
+      //personal.chooseCard(this)
+      personal.useCard(this)
       break
 
     case 'grave' :
