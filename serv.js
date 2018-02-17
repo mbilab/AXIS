@@ -419,18 +419,26 @@ Game.prototype.bleed = function (personal, param) {
   let bleed = effect[Object.keys(effect)[0]]
   if (card_pick.length != bleed) return {err: 'error length of card pick'}
 
+  // check err
   for (let id of card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
+  }
+
+  // effect
+  for (let id of card_pick) {
+    let card = room.cards[id]
     card.cover = false
     rlt.card.bleed.personal[id] = card.name
   }
 
   personal.emit('effectTrigger', rlt)
-  Object.assign(rlt.card, genFoeRlt(rlt.card))
-  personal._foe.emit('effectTrigger', rlt)
+  //Object.assign(rlt.card, genFoeRlt(rlt.card))
+  //rlt.card = genFoeRlt(rlt.card)
+  personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
   return {}
 }
 
@@ -443,16 +451,36 @@ Game.prototype.block = function (personal, param) {
   return {}
 }
 
-Game.prototype.aura = function (personal, effect) {
-  let rlt = { stat: {} }
+Game.prototype.aura = function (personal, effect) { // effect = {name: {personal: {id1: ..., id2: ...} } }
+
 }
 
 Game.prototype.buff = function (personal, effect) {
-  let rlt = { stat: {} }
+  let player = {personal: personal, opponent: personal._foe}
+  let rlt = { stat: {personal: {}, opponent: {}} }
+  for (let name in effect) {
+    for (let target in effect[name]) {
+      player[target].buff[name] = effect[name][target]
+      rlt.stat[target][name] = effect[name][target]
+    }
+  }
+  personal.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+  return {}
 }
 
 Game.prototype.stat = function (personal, effect) {
-  let rlt = { stat: {} }
+  let player = {personal: personal, opponent: personal._foe}
+  let rlt = { stat: {personal: {}, opponent: {}} }
+  for (let name in effect) {
+    for (let target in effect[name]) {
+      player[target].stat[name] = effect[name][target]
+      rlt.stat[target][name] = effect[name][target]
+    }
+  }
+  personal.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+  return {}
 }
 
 Game.prototype.control = function(personal, param) {
@@ -552,6 +580,7 @@ Game.prototype.heal = function (personal, param) {
 
   for (let id of card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
@@ -564,8 +593,9 @@ Game.prototype.heal = function (personal, param) {
   }
 
   personal.emit('effectTrigger', rlt)
-  Object.assign(rlt.card, genFoeRlt(rlt.card))
-  personal._foe.emit('effectTrigger', rlt)
+  //Object.assign(rlt.card, genFoeRlt(rlt.card))
+  //rlt.card = genFoeRlt(rlt.card)
+  personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
   return {}
 }
 
@@ -593,6 +623,7 @@ Game.prototype.receive = function (personal, param) {
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
   for (let id of card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
@@ -608,8 +639,9 @@ Game.prototype.receive = function (personal, param) {
   personal.dmg_blk = 0
   personal.hp -= dmg_taken
   personal.emit('effectTrigger', rlt)
-  Object.assign(rlt.card, genFoeRlt(rlt.card))
-  personal._foe.emit('effectTrigger', rlt)
+  //Object.assign(rlt.card, genFoeRlt(rlt.card))
+  //rlt.card = genFoeRlt(rlt.card)
+  personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
 
   return {}
 }
@@ -852,11 +884,11 @@ io.on('connection', client => {
     let deck = []
 
     if (it == null) return
-    if (!rlt[0].deck_slot[it.curr_deck]) return
     if (typeof cb !== 'function') return
 
     if(!it.curr_deck) return cb({err: 'please choose a deck'})
     user.find({account: client._account}).toArray((err, rlt) => {
+      if (!rlt[0].deck_slot[it.curr_deck]) return
 
       // build deck
       deck = shuffle(rlt[0].deck_slot[it.curr_deck].card_list)
@@ -1387,7 +1419,7 @@ io.on('connection', client => {
     for (let id in it.card_pick) {
       let card = room.cards[id]
       if (card == null) return
-      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] || !game.eff_tg_both[effect]) return
+      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] || !game.eff_tg_both[effect])) return
     }
 
 
