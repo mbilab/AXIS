@@ -81,18 +81,23 @@ const Game = function(){
     bleed   : true,
     block   : true, // card you use to block
     control : true,
+    destroy : true,
     drain   : true,
     discard : true,
     damage  : true,
     heal    : true,
     receive : true, // card you flip for life loss
     retrieve: true,
+    steal   : true,
+    teleport: true
+  }
+  this.eff_tg_foe = { // record effect target card is opponent
+    control : true,
+    destroy : true,
     steal   : true
   }
-  this.eff_target = { // record effect target card is opponent
-    control: true,
-    destroy: true,
-    steal  : true
+  this.eff_tg_both = {
+    teleport: true
   }
   this.pool = {}
   this.queue = []
@@ -118,28 +123,28 @@ Game.prototype.buildPlayer = function (client) {
   // effect
   client.atk_enchant = {}
   client.aura = { // permenent till be counter or remove
-    cripple: false, // can't draw card
-    dicease: false, // can't use heal cards
-    silence: false, // can't use life field card
+    cripple: {}, // can't draw card
+    dicease: {}, // can't use heal cards
+    silence: {}, // can't use life field card
+    fear   : {}, // can't attack
 
-    precise: false, // atk cant be vanish
-    stamina: false, // handcard limit + 2
-    recycle: false, // draw 1 card when an artifact send to grave
-    berserk: false  // equip wont cost action point
+    precise: {}, // atk cant be vanish
+    stamina: {}, // handcard limit + 2
+    recycle: {}, // draw 1 card when an artifact send to grave
+    berserk: {}  // equip wont cost action point
   }
   client.buff = { // next action trigger
-    charge: false, // skip your next turn
-
     mana_tide : false, // next spell this turn won't cost action point
     quick_draw: false, // next equip this turn won't cost action point
     eagle_eye : false // next attack you perform can't be vanish
   }
   client.stat = {
-    stun  : false,
-    freeze: false,
-    ignite: false,
-    poison: false
+    charge : false, // skip your next turn
+    stun   : false, // can only use item
+    petrify: false, // can only draw card
+    freeze : false  // can't attack and use item
   }
+
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
   client.dmg_blk = 0 // effect damage only
 
@@ -265,14 +270,11 @@ Game.prototype.effectEnd = function (room) {
 Game.prototype.useCard = function (client) {
   let room = game.room[client._rid]
 
-  //let skt_id = (list.socket)? (list.socket) : (null)
   let rtn_id = client.card_pause.return
   let use_id = (rtn_id != null)? rtn_id : (client.card_pause.use)
   let swp_id = client.card_pause.swap
   let skt_id = client.card_pause.socket
 
-  //let use_id = (list.use)? (list.use) : (Object.keys(client.card_pause)[0])
-  //let swap_id = (list.swap)? (list.swap) : (null)
   client.card_pause = {}
   room.counter_status.use_id[use_id] = true
 
@@ -280,7 +282,8 @@ Game.prototype.useCard = function (client) {
   param[use_id] = {}
   switch (room.cards[use_id].type.base) {
     case 'artifact':
-      client.action_point -= 1
+      if (Object.keys(client.aura.berserk).length || client.buff.quick_draw) client.buff.quick_draw = false
+      else client.action_point -= 1
       param[use_id].to = 'battle'
       param[use_id].action = 'equip'
       break
@@ -295,7 +298,8 @@ Game.prototype.useCard = function (client) {
       break
 
     case 'spell'   :
-      client.action_point -= 1
+      if (client.buff.mana_tide) client.buff.mana_tide = false
+      else client.action_point -= 1
       param[use_id].action = 'cast'
       if (room.cards[use_id].type.effect === 'instant') param[use_id].to = 'grave'
       else param[use_id].to = 'altar'
@@ -306,26 +310,17 @@ Game.prototype.useCard = function (client) {
 
   if (swp_id != null) {
     param[swp_id] = {to: 'life'}
-    //param[swp_id].to = 'life'
   }
 
-  /*
-  if (list.swap) {
-    param[list.swap] = {}
-    param[list.swap].to = 'life'
-  }
-  */
   let rlt = game.cardMove(client, client._foe, param)
   let msg = `${param[use_id].action} ${room.cards[use_id].name}${(swp_id != null)? ` by ${room.cards[swp_id].name}` : ''}`
   client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
   client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
 
-  //if (rtn_id != null) {
-    room.phase = 'counter'
-    room.counter_status.type = 'use'
-    room.counter_status.start = 'use'
-    room.counter_status.last_ply = client
-  //}
+  room.phase = 'counter'
+  room.counter_status.type = 'use'
+  room.counter_status.start = 'use'
+  room.counter_status.last_ply = client
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -404,7 +399,7 @@ Game.prototype.judge = function (personal, opponent, card_list) {
             }
 
             if (condition !== 'hit')
-            if (operation(curr_val, judge[effect][target][condition])) avail_effect[id].push(effect)
+              if (operation(curr_val, judge[effect][target][condition])) avail_effect[id].push(effect)
           }
         }
       }
@@ -446,6 +441,18 @@ Game.prototype.block = function (personal, param) {
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
   return {}
+}
+
+Game.prototype.aura = function (personal, effect) {
+  let rlt = { stat: {} }
+}
+
+Game.prototype.buff = function (personal, effect) {
+  let rlt = { stat: {} }
+}
+
+Game.prototype.stat = function (personal, effect) {
+  let rlt = { stat: {} }
 }
 
 Game.prototype.control = function(personal, param) {
@@ -802,6 +809,8 @@ io.on('connection', client => {
   ///////////////////////////////////////////////////////////////////////////////
   // !-- personal interface
   client.on('login', (it, cb) => {
+    if (it == null) return
+
     let user = app.db.collection('user')
     let pid = idGenerate(16)
     client._pid = pid
@@ -819,6 +828,10 @@ io.on('connection', client => {
   })
 
   client.on('randomDeck', (it, cb) => {
+    if (it == null) return
+    if (it.slot != 1 && it.slot != 2 && it.slot != 3) return
+    if (typeof cb !== 'function') return
+
     console.log(`${client._account} build new deck_${it.slot}`)
     let newDeck = randomDeck()
     let user = app.db.collection('user')
@@ -838,8 +851,11 @@ io.on('connection', client => {
     let cards = app.db.collection('card')
     let deck = []
 
-    if(!it.curr_deck) return cb({err: 'please choose a deck'})
+    if (it == null) return
+    if (!rlt[0].deck_slot[it.curr_deck]) return
+    if (typeof cb !== 'function') return
 
+    if(!it.curr_deck) return cb({err: 'please choose a deck'})
     user.find({account: client._account}).toArray((err, rlt) => {
 
       // build deck
@@ -855,7 +871,6 @@ io.on('connection', client => {
         client.curr_deck.push(new Card(init))
         client.card_amount.deck += 1
       }
-
 
       // find opponent
       if(game.queue.length){
@@ -915,6 +930,8 @@ io.on('connection', client => {
   })
 
   client.on('signUp', (it, cb) => {
+    if (typeof cb !== 'function') return
+
     let user = app.db.collection('user')
     user.find({account: it.acc}).toArray((err, rlt) => {
       if(rlt.length) return cb({err: 'user name exists'})
@@ -943,6 +960,8 @@ io.on('connection', client => {
   // !-- attack
   client.on('attack', cb => {
     let room = game.room[client._rid]
+    if (Object.keys(client.aura.fear).length) return cb({err: 'cant attack when fear'})
+
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent'} )
@@ -963,13 +982,21 @@ io.on('connection', client => {
     client.action_point -= 1
     client.atk_phase -= 1
 
-    client._foe.first_conceal = true
-    client.emit('playerAttack', { msg: {phase: 'attack phase', action: 'attack... waiting opponent'}, rlt: {personal: true, attack: true} })
-    client._foe.emit('playerAttack', { msg: {phase: 'attack phase', action: 'foe attack'}, rlt: {opponent: true, attack: true} })
+    if (Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
+      client.buff.eagle_eye = false
+      let avail_effect = game.judge(client, client._foe, client._foe.atk_enchant)
+      game.effectTrigger(client, client._foe, avail_effect)
+    }
+    else {
+      client._foe.first_conceal = true
+      client.emit('playerAttack', { msg: {phase: 'attack phase', action: 'attack... waiting opponent'}, rlt: {personal: true, attack: true} })
+      client._foe.emit('playerAttack', { msg: {phase: 'attack phase', action: 'foe attack'}, rlt: {opponent: true, attack: true} })
+    }
   })
 
   client.on('useVanish', (it, cb) => {
     let room = game.room[client._rid]
+    if (it == null) return
     if (typeof cb !== 'function') return
     if (room.phase !== 'attack') return
     if (client != room.atk_status.curr) return
@@ -1071,6 +1098,7 @@ io.on('connection', client => {
   // !-- counter
   client.on('counter', (it, cb) => {
     let room = game.room[client._rid]
+    if (it == null) return
     if (typeof cb !== 'function') return
     if (room.phase !== 'counter') return
     if (client == room.counter_status.last_ply) return
@@ -1174,11 +1202,14 @@ io.on('connection', client => {
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
 
+    if (Object.keys(client.aura.cripple).length) return cb({err: 'cant draw card when crippled'})
+    if (client.stat.stun > 0) return cb({err: 'cant draw card when stun'})
+
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
-    if (client.card_amount.hand == client.hand_max) return cb( {err: 'your hand is full'} )
+    if (client.card_amount.hand == client.hand_max + Object.keys(client.aura.stamina).length*2) return cb( {err: 'your hand is full'} )
 
     client.action_point -= 1
 
@@ -1204,9 +1235,13 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
+    if (it == null) return
     if (typeof cb !== 'function') return
     if (card == null) return
     if (card.curr_own != client._pid) return
+
+    if (Object.keys(client.stat.stun).length && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
+    if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
 
     if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
     if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
@@ -1222,6 +1257,7 @@ io.on('connection', client => {
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
       if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
       if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
+      if (card.field === 'life' && Object.keys(client.aura.silence).length) return cb({err: 'cant use life field cards when silenced'})
     }
     else
       if(card.field === 'life') return cb( {err: 'its not a handcard'} )
@@ -1257,6 +1293,8 @@ io.on('connection', client => {
 
   client.on('triggerCard', (it, cb) => {
     // action varies based on its type
+    if (it == null) return
+
     let room = game.room[client._rid]
     let card = room.cards[it.id]
     if (typeof cb !== 'function') return
@@ -1333,6 +1371,7 @@ io.on('connection', client => {
   // !-- choosing
   client.on('effectChoose', (it, cb) => {
     let room = game.room[client._rid]
+    if (it == null) return
     if (typeof cb !== 'function') return
     if (room.phase !== 'attack' && room.phase !== 'effect') return
 
@@ -1348,9 +1387,8 @@ io.on('connection', client => {
     for (let id in it.card_pick) {
       let card = room.cards[id]
       if (card == null) return
-      if (card.curr_own != client._pid && !game.eff_target[effect]) return
+      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] || !game.eff_tg_both[effect]) return
     }
-    // if it.card_pick is not iterable
 
 
     let rlt = game[effect](client, it)

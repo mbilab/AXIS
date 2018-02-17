@@ -419,6 +419,9 @@ const Player = function () {
   this.hand = []
   this.life = []
   this.socket = []
+
+  // stat
+  this.stat = {} // whenever a stat is add or remove, trigger a function to show icon
 }
 
 Player.prototype.attack = function () {
