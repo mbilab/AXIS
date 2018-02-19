@@ -282,7 +282,7 @@ Game.prototype.useCard = function (client) {
   param[use_id] = {}
   switch (room.cards[use_id].type.base) {
     case 'artifact':
-      if (Object.keys(client.aura.berserk).length || client.buff.quick_draw) client.buff.quick_draw = false
+      if (Object.keys(client.aura.berserk).length || client.buff.quick_draw) game.buff(client, {quick_draw: {personal: false}})
       else client.action_point -= 1
       param[use_id].to = 'battle'
       param[use_id].action = 'equip'
@@ -298,7 +298,7 @@ Game.prototype.useCard = function (client) {
       break
 
     case 'spell'   :
-      if (client.buff.mana_tide) client.buff.mana_tide = false
+      if (client.buff.mana_tide) game.buff(client, {mana_tide: {personal: false}})
       else client.action_point -= 1
       param[use_id].action = 'cast'
       if (room.cards[use_id].type.effect === 'instant') param[use_id].to = 'grave'
@@ -422,7 +422,6 @@ Game.prototype.bleed = function (personal, param) {
   // check err
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
@@ -451,8 +450,30 @@ Game.prototype.block = function (personal, param) {
   return {}
 }
 
-Game.prototype.aura = function (personal, effect) { // effect = {name: {personal: {id1: ..., id2: ...} } }
+Game.prototype.aura = function (personal, card_list) { // card_list = {cid: true, ...}
+  let player = {personal: personal, opponent: personal._foe}
+  let rlt = { stat: {personal: {}, opponent: {}} }
+  let room = this.room[personal._rid]
 
+  for (let cid in card_list) {
+    let eff = game.default.all_card[room.cards[cid].name].effect.aura
+    for (let tp in eff) {
+      for (let tg in eff[tp]) {
+        if (player[tg].aura[tp][cid]) {
+          delete player[tg].aura[tp][cid]
+          rlt.stat[tg][tp] = false
+        }
+        else {
+          player[tg].aura[tp][cid] = true
+          rlt.stat[tg][tp] = true
+        }
+      }
+    }
+  }
+
+  personal.emit('effectTrigger', rlt)
+  personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+  return {}
 }
 
 Game.prototype.buff = function (personal, effect) {
@@ -484,6 +505,7 @@ Game.prototype.stat = function (personal, effect) {
 }
 
 Game.prototype.control = function(personal, param) {
+  // check artifact aura
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -499,6 +521,7 @@ Game.prototype.control = function(personal, param) {
 }
 
 Game.prototype.destroy = function(personal, effect) {
+  // check artifact aura
   let rlt = { card: {} }
   for (let target in effect) {
     for (let object in effect[target]) {
@@ -580,7 +603,6 @@ Game.prototype.heal = function (personal, param) {
 
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
@@ -623,7 +645,6 @@ Game.prototype.receive = function (personal, param) {
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card == null) return {err: true}
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
@@ -1015,7 +1036,7 @@ io.on('connection', client => {
     client.atk_phase -= 1
 
     if (Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
-      client.buff.eagle_eye = false
+      game.buff(client, {eagle_eye: {personal: false}})
       let avail_effect = game.judge(client, client._foe, client._foe.atk_enchant)
       game.effectTrigger(client, client._foe, avail_effect)
     }
@@ -1211,7 +1232,14 @@ io.on('connection', client => {
           let avail_effect = game.judge(client._foe, client, Object.assign(room.counter_status.use_id, room.counter_status.counter_id) )
           game.effectTrigger(client._foe, client, avail_effect)
         }
-        else room.phase = 'normal'
+        else {
+          room.phase = 'normal'
+          if (game.default.all_card[card.name].effect.aura) {
+            let param = {}
+            param[use_id] = true
+            game.aura(client._foe, param)
+          }
+        }
       }
       else {
         room.phase = 'normal'
@@ -1349,6 +1377,12 @@ io.on('connection', client => {
       card.overheat = true
       card.energy -= 1
 
+      if (card.energy == 0 && game.default.all_card[card.name].effect.aura) {
+        param = {}
+        param[it.id] = true
+        game.aura(client, param)
+      }
+
       room.phase = 'counter'
       room.counter_status = {start: 'trigger', type: 'trigger', use_id: {}, counter_id: {}}
       room.counter_status.use_id[it.id] = true
@@ -1385,6 +1419,11 @@ io.on('connection', client => {
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
     client.atk_enchant = {}
+
+    // clear stat
+    for (let tp in client.stat) {
+      client.stat[tp] = false
+    }
 
     // put outdated card on field to grave
     let param = {}
