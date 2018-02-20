@@ -88,7 +88,8 @@ const Game = function () {
       personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
       opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
       end_turn: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
-      leave: {type: 'button', x: 0 + 44, y: this.default.game.height - 43 + 21, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby'} },
+      leave: {type: 'button', x: this.default.game.width/2, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
+      setting_panel: {type: 'sprite', x: this.default.game.width/2, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
 
       // normal action
       attack: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
@@ -315,8 +316,10 @@ Game.prototype.pageInit = function () {
       let elem = this.page[page_name][elem_name]
       if(elem != null){
         let next = elem.next
-        if (elem.type!=='html') {
-          this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img, elem.func, this)
+        if (elem.type !== 'html') {
+          if (elem.type === 'button') this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img, elem.func, this)
+          if (elem.type === 'sprite') this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img)
+
           if (elem.ext) Object.assign(this.page[page_name][elem_name], elem.ext)
           this.page[page_name][elem_name].kill()
           if (page_name === 'game') this.page[page_name][elem_name].anchor.setTo(0.5, 0.5)
@@ -347,6 +350,23 @@ Game.prototype.pageInit = function () {
     this.page.game[`opponent_${field}`] = opponent[field]
   }
   this.changePage({next: 'start'})
+
+
+  // add keyboard input
+  $(document).keydown( function(e) {
+    // esc for setting panel
+    if (e.keyCode == 27) {
+      if (game.curr_page !== 'game') return console.log('not in game')
+      for (let elem of ['setting_panel', 'leave']) {
+        if (game.page.game[elem].exists) game.page.game[elem].kill()
+        else {
+          game.page.game[elem].reset(game.default.game.width/2, game.default.game.height/2)
+          game.phaser.world.bringToTop(game.page.game[elem])
+        }
+      }
+    }
+  })
+
 }
 
 Game.prototype.resetCardPick = function () {
@@ -886,6 +906,7 @@ socket.on('effectTrigger', effect => {
   }
   // stat
 
+
   console.log(effect)
 })
 
@@ -904,6 +925,7 @@ socket.on('phaseShift', it => {
 const game = new Game()
 const personal = game.player.personal
 const opponent = game.player.opponent
+const setting_panel = {leave: null}
 
 socket.emit('preload', res => {
   game.phaser = new Phaser.Game(game.default.game.width, game.default.game.height, Phaser.HEADLESS/*Phaser.Canvas*/, 'game', {
@@ -934,6 +956,7 @@ socket.emit('preload', res => {
         Object.assign(game.card_eff, it)
         game.pageInit()
       })
+
     },
     preload: () => {
       for (let type in res)
