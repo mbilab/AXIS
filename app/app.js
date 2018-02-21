@@ -83,30 +83,30 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
-      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
-      personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
-      opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
-      end_turn: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
-      leave: {type: 'button', x: this.default.game.width/2, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
-      setting_panel: {type: 'sprite', x: this.default.game.width/2, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
+      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
+      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
+      personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
+      opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
+      end_turn: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
+      leave: {type: 'button', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
+      setting_panel: {type: 'sprite', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
 
       // normal action
-      attack: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
-      conceal: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
-      tracking: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
-      give_up: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 11/this.default.scale + 21 , img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
+      attack: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
+      conceal: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'conceal', func: this.player.personal.conceal, ext: {action: 'conceal', req: true} },
+      tracking: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'tracking', func: this.player.personal.tracking, ext: {action: 'tracking', req: true} },
+      give_up: {type: 'button', x: this.default.game.width - 220 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21 , img: 'giveup', func: this.player.personal.giveUp, ext: {req: true} },
 
       // counter card
-      counter: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
-      pass: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
+      counter: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'counter', func: this.player.personal.counter, ext: {req: true} },
+      pass: {type: 'button', x: this.default.game.width - 220 + 44 + 12, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'pass', func: this.player.personal.pass, ext: {req: true} },
 
       // effect
-      choose: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} },
+      choose: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'choose', func: this.player.personal.effectChoose, ext: {req: true} },
 
       // block dmg
-      block: {type: 'button', x: this.default.game.width - 121 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'block', func: this.player.personal.block, ext: {req: true} },
-      receive: {type: 'button', x: this.default.game.width - 220 + 44, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
+      block: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'block', func: this.player.personal.block, ext: {req: true} },
+      receive: {type: 'button', x: this.default.game.width - 220 + 44 + 12, y: this.default.game.height/2 + 66/this.default.scale + 21, img: 'receive', func: this.player.personal.receive, ext: {req: true} }
     }
   }
   this.phaser = null
@@ -121,6 +121,11 @@ Game.prototype.textPanel = function (text) {
   if (text.cursor) game.text.cursor.setText(text.cursor)
   if (text.effect) game.text.effect.setText(game.card_eff[text.effect])
   game.phaser.world.bringToTop(game.text_group)
+}
+
+Game.prototype.statPanel = function () {
+  let stat_pnl = this.page.game.stat_panel
+  stat_pnl.reset((stat_pnl.x == -18)? 35 : -18, this.default.game.height/2)
 }
 
 Game.prototype.blockPanel = function (action) {
@@ -175,6 +180,16 @@ Game.prototype.attackPanel = function (action) {
       atk_btn.kill()
       this.page.game[elem].reset(atk_btn.x, atk_btn.y)
       give_up.reset(give_up.x, give_up.y)
+    }
+  }
+}
+
+Game.prototype.showSetting = function () {
+  for (let elem of ['setting_panel', 'leave']) {
+    if (game.page.game[elem].exists) game.page.game[elem].kill()
+    else {
+      game.page.game[elem].reset(game.default.game.width/2, game.default.game.height/2)
+      game.phaser.world.bringToTop(game.page.game[elem])
     }
   }
 }
@@ -289,7 +304,7 @@ Game.prototype.fixCardPos = function (rlt) {
         case 'life':
           init_x = 21 + this.default.card.width/2
           for (let [idx, card] of tg_field.entries()) {
-            let x = init_x + this.default.card.width*6/5*Math.floor(idx/2)
+            let x = init_x + this.default.card.width*6/5*Math.floor(idx/2) + 12
             let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
             //card.img.reset(x, y)
             card.body.reset(x, y)
@@ -299,7 +314,7 @@ Game.prototype.fixCardPos = function (rlt) {
         default:
           init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1) + this.default.card.width*6/5
           for (let [idx, card] of tg_field.entries()) {
-            let x = init_x + this.default.card.width*6/5*idx
+            let x = init_x + this.default.card.width*6/5*idx + 12
             //card.img.reset(x, game.default.player[target].y[`${field}`])
             card.body.reset(x, game.default.player[target].y[`${field}`])
           }
@@ -318,7 +333,13 @@ Game.prototype.pageInit = function () {
         let next = elem.next
         if (elem.type !== 'html') {
           if (elem.type === 'button') this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img, elem.func, this)
-          if (elem.type === 'sprite') this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img)
+          if (elem.type === 'sprite') {
+            this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img)
+            if (elem.func) {
+              this.page[page_name][elem_name].inputEnabled = true
+              for (let tp in elem.func) this.page[page_name][elem_name].events[tp].add(function(){game[elem.func[tp]]()}, this)
+            }
+          }
 
           if (elem.ext) Object.assign(this.page[page_name][elem_name], elem.ext)
           this.page[page_name][elem_name].kill()
@@ -354,16 +375,13 @@ Game.prototype.pageInit = function () {
 
   // add keyboard input
   $(document).keydown( function(e) {
-    // esc for setting panel
-    if (e.keyCode == 27) {
-      if (game.curr_page !== 'game') return console.log('not in game')
-      for (let elem of ['setting_panel', 'leave']) {
-        if (game.page.game[elem].exists) game.page.game[elem].kill()
-        else {
-          game.page.game[elem].reset(game.default.game.width/2, game.default.game.height/2)
-          game.phaser.world.bringToTop(game.page.game[elem])
-        }
-      }
+    switch (e.keyCode) {
+      case 27: // esc for setting panel
+        if (game.curr_page !== 'game') return console.log('not in game')
+        game.showSetting()
+        break
+
+      default: break
     }
   })
 
@@ -937,7 +955,7 @@ socket.emit('preload', res => {
 
       // init text
       game.text_group = game.phaser.add.group()
-      let x = 21
+      let x = 21 + 12
       let text = ''
       let init = {font: "26px Arial", fill: '#ffffff', align: 'left'}
       for (let type in game.text) {
@@ -957,6 +975,11 @@ socket.emit('preload', res => {
         game.pageInit()
       })
 
+      // stat panel
+      game.page.game.stat_panel = game.phaser.add.sprite(-18, game.default.game.height/2, 'stat')
+      game.page.game.stat_panel.inputEnabled = true
+      game.page.game.stat_panel.events.onInputOver.add(function(){game.statPanel(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
+      game.page.game.stat_panel.events.onInputOut.add(function(){game.statPanel(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
     },
     preload: () => {
       for (let type in res)
