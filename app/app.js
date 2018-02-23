@@ -83,10 +83,10 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
-      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
-      personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
-      opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 12, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
+      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
+      opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
+      personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
+      opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
       end_turn: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
       leave: {type: 'button', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
       setting_panel: {type: 'sprite', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
@@ -113,6 +113,7 @@ const Game = function () {
   this.text = {phase: null, action: null, cursor: null, effect: null}
   this.text_group = null
   this.card_eff = {empty: '', cardback: 'covered'}
+  this.stat_list = {}
 }
 
 Game.prototype.textPanel = function (text) {
@@ -123,7 +124,20 @@ Game.prototype.textPanel = function (text) {
   game.phaser.world.bringToTop(game.text_group)
 }
 
-Game.prototype.statPanel = function () {
+// param = {personal: {stat1: true, stat2: false}, opponent: {} ...}
+Game.prototype.statPanel = function (param) {
+  for (let target in param) {
+    for (let stat in param[target]) {
+      let curr = game.player[target]
+      if (param[target][stat]) curr.stat[stat] = true
+      else delete curr.stat[stat]
+    }
+  }
+
+
+}
+
+Game.prototype.showStat = function () {
   let stat_pnl = this.page.game.stat_panel
   stat_pnl.reset((stat_pnl.x == -18)? 35 : -18, this.default.game.height/2)
 }
@@ -968,18 +982,27 @@ socket.emit('preload', res => {
         game.text_group.add(game.text[type])
       }
 
-      // page init
+      // init
       socket.emit('init', it => {
-        for (let name in it) it[name] = it[name].text
-        Object.assign(game.card_eff, it)
+        // card effect init
+        for (let name in it.eff) it.eff[name] = it.eff[name].text
+        Object.assign(game.card_eff, it.eff)
+
+        // player stat init
+        for (let name in it.stat) {
+          game.stat_list[name] = game.phaser.add.sprite(0, 0, name)
+          game.stat_list[name].kill()
+        }
+
+        // page init
         game.pageInit()
       })
 
       // stat panel
       game.page.game.stat_panel = game.phaser.add.sprite(-18, game.default.game.height/2, 'stat')
       game.page.game.stat_panel.inputEnabled = true
-      game.page.game.stat_panel.events.onInputOver.add(function(){game.statPanel(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
-      game.page.game.stat_panel.events.onInputOut.add(function(){game.statPanel(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
+      game.page.game.stat_panel.events.onInputOver.add(function(){game.showStat(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
+      game.page.game.stat_panel.events.onInputOut.add(function(){game.showStat(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
     },
     preload: () => {
       for (let type in res)

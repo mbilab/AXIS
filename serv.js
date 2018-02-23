@@ -51,6 +51,7 @@ const Card = function(init){
 const Game = function(){
   this.default = {
     all_card    : {},
+    all_stat    : {},
     // card type
     artifact_max: 5,//13,
     spell_max   : 3,//14,
@@ -549,6 +550,7 @@ Game.prototype.discard = function(personal, param) {
 }
 
 Game.prototype.drain = function (personal, param) {
+  // check artifact aura
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -578,6 +580,7 @@ Game.prototype.draw = function(personal, effect) {
 }
 
 Game.prototype.equip = function(personal, param) {
+  // check artifact aura
   let effect = game.default.all_card[param.name].effect[param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -799,11 +802,15 @@ io.on('connection', client => {
   ///////////////////////////////////////////////////////////////////////////////
   // !-- init settings
   MongoClient.connect(opt.url, (err, _db) => {
-    if(err) throw err
+    if (err) throw err
     app.db = _db
     app.db.collection('card').find({}).toArray((err, cards) => {
-      for(let name in cards)
+      for (let name in cards)
         game.default.all_card[cards[name].name] = cards[name]
+    })
+    app.db.collection('stat').find({}).toArray((err, stat)) => {
+      for (let type in stat)
+        game.default.all_stat[stat[type].name] = stat[type].text
     })
   })
 
@@ -814,7 +821,7 @@ io.on('connection', client => {
   client.on('init', cb => {
     game.buildPlayer(client)
     console.log('player built')
-    cb(game.default.all_card)
+    cb({eff: game.default.all_card, stat: Object.assign({}, client.aura, client.buff, client.stat)})
   })
 
   ///////////////////////////////////////////////////////////////////////////////
