@@ -121,6 +121,7 @@ Game.prototype.textPanel = function (text) {
   if (text.action) game.text.action.setText(text.action)
   if (text.cursor) game.text.cursor.setText(text.cursor)
   if (text.effect) game.text.effect.setText(game.card_eff[text.effect])
+  if (text.stat) game.text.effect.setText(game.stat_list[text.stat].text)
   game.phaser.world.bringToTop(game.text_group)
 }
 
@@ -134,7 +135,18 @@ Game.prototype.statPanel = function (param) {
     }
   }
 
+  let stat_pnl = this.page.game.stat_panel
+  let rlt = []
+  for (let tg of ['personal', 'opponent']) {
+    let ply = game.player[tg]
+    for (let stat in ply.stat) {
+      let curr = this.stat_list[stat].img
+      curr.reset(0, 0)
+      rlt.push(curr)
+    }
+  }
 
+  stat_pnl.children = rlt
 }
 
 Game.prototype.showStat = function () {
@@ -991,7 +1003,11 @@ socket.emit('preload', res => {
         // player stat init
         for (let name in it.stat) {
           game.stat_list[name] = {img: game.phaser.add.sprite(0, 0, name), text: it.stat[name]}
-          game.stat_list[name].img.kill()
+          game.stat_list[name][img].anchor.setTo(0.5, 0.5)
+          game.stat_list[name][img].inputEnabled = true
+          game.stat_list[name][img].events.onInputOver.add(function(){game.textPanel({stat: name})}, this)
+          game.stat_list[name][img].events.onInputOut.add(function(){game.textPanel({effect: 'empty'})}, this)
+          game.stat_list[name][img].kill()
         }
 
         // page init
