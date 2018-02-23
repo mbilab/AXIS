@@ -808,7 +808,7 @@ io.on('connection', client => {
       for (let name in cards)
         game.default.all_card[cards[name].name] = cards[name]
     })
-    app.db.collection('stat').find({}).toArray((err, stat)) => {
+    app.db.collection('stat').find({}).toArray((err, stat) => {
       for (let type in stat)
         game.default.all_stat[stat[type].name] = stat[type].text
     })
@@ -821,7 +821,7 @@ io.on('connection', client => {
   client.on('init', cb => {
     game.buildPlayer(client)
     console.log('player built')
-    cb({eff: game.default.all_card, stat: Object.assign({}, client.aura, client.buff, client.stat)})
+    cb({eff: game.default.all_card, stat: game.default.all_stat})
   })
 
   ///////////////////////////////////////////////////////////////////////////////

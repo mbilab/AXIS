@@ -990,8 +990,8 @@ socket.emit('preload', res => {
 
         // player stat init
         for (let name in it.stat) {
-          game.stat_list[name] = game.phaser.add.sprite(0, 0, name)
-          game.stat_list[name].kill()
+          game.stat_list[name] = {img: game.phaser.add.sprite(0, 0, name), text: it.stat[name]}
+          game.stat_list[name].img.kill()
         }
 
         // page init
