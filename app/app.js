@@ -29,7 +29,7 @@ const Game = function () {
       phase: -75,
       action: -20,
       cursor: 35,
-      effect: -365
+      effect: -750
     },
     player: {
       personal: {
@@ -110,7 +110,7 @@ const Game = function () {
     }
   }
   this.phaser = null
-  this.text = {phase: null, action: null, cursor: null, effect: null}
+  this.text = {phase: null, action: null, cursor: null, effect: null, stat: null}
   this.text_group = null
   this.card_eff = {empty: '', cardback: 'covered'}
   this.stat_list = {}
@@ -122,7 +122,8 @@ Game.prototype.textPanel = function (text) {
   if (text.cursor) game.text.cursor.setText(text.cursor)
   if (text.effect) game.text.effect.setText(game.card_eff[text.effect])
   if (text.stat) game.text.effect.setText(game.stat_list[text.stat].text)
-  game.phaser.world.bringToTop(game.text_group)
+  //game.phaser.world.bringToTop(game.text_group)
+  game.phaser.world.bringToTop(game.page.game.stat_panel)
 }
 
 // param = {personal: {stat1: true, stat2: false}, opponent: {} ...}
@@ -152,6 +153,7 @@ Game.prototype.statPanel = function (param) {
 Game.prototype.showStat = function () {
   let stat_pnl = this.page.game.stat_panel
   stat_pnl.reset((stat_pnl.x == -18)? 35 : -18, this.default.game.height/2)
+  game.phaser.world.bringToTop(stat_pnl)
 }
 
 Game.prototype.blockPanel = function (action) {
@@ -981,17 +983,17 @@ socket.emit('preload', res => {
 
       // init text
       game.text_group = game.phaser.add.group()
-      let x = 21 + 12
       let text = ''
       let init = {font: "26px Arial", fill: '#ffffff', align: 'left'}
       for (let type in game.text) {
+        let x = (type === 'effect')? 21 + 12 + 18 : 21 + 12
         let y = game.default.game.height/2 + game.default.text[type]/game.default.scale
-        if (type === 'effect') {
+        if (type === 'effect' || type === 'stat') {
           init.backgroundColor = 'rgba(255,255,255,0.9)'
           init.fill = '#000000'
         }
         game.text[type] = game.phaser.add.text(x, y, text, init)
-        game.text_group.add(game.text[type])
+        if (type === 'effect') game.text_group.add(game.text[type])
       }
 
       // init
@@ -1003,11 +1005,11 @@ socket.emit('preload', res => {
         // player stat init
         for (let name in it.stat) {
           game.stat_list[name] = {img: game.phaser.add.sprite(0, 0, name), text: it.stat[name]}
-          game.stat_list[name][img].anchor.setTo(0.5, 0.5)
-          game.stat_list[name][img].inputEnabled = true
-          game.stat_list[name][img].events.onInputOver.add(function(){game.textPanel({stat: name})}, this)
-          game.stat_list[name][img].events.onInputOut.add(function(){game.textPanel({effect: 'empty'})}, this)
-          game.stat_list[name][img].kill()
+          game.stat_list[name].img.anchor.setTo(0.5, 0.5)
+          game.stat_list[name].img.inputEnabled = true
+          game.stat_list[name].img.events.onInputOver.add(function(){game.textPanel({stat: name})}, this)
+          game.stat_list[name].img.events.onInputOut.add(function(){game.textPanel({effect: 'empty'})}, this)
+          game.stat_list[name].img.kill()
         }
 
         // page init
@@ -1017,8 +1019,9 @@ socket.emit('preload', res => {
       // stat panel
       game.page.game.stat_panel = game.phaser.add.sprite(-18, game.default.game.height/2, 'stat')
       game.page.game.stat_panel.inputEnabled = true
-      game.page.game.stat_panel.events.onInputOver.add(function(){game.showStat(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
-      game.page.game.stat_panel.events.onInputOut.add(function(){game.showStat(); game.phaser.world.bringToTop(game.page.game.stat_panel)}, this)
+      game.page.game.stat_panel.events.onInputDown.add(function(){ game.showStat() }, this)
+      game.page.game.stat_panel.addChild(game.text_group)
+
     },
     preload: () => {
       for (let type in res)
