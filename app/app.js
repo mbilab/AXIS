@@ -129,8 +129,8 @@ Game.prototype.textPanel = function (text) {
 Game.prototype.statPanel = function (param) {
   for (let target in param) {
     let idx = 0
-    let st = (target === 'personal')? 350 : -350
-    let nx = (target === 'personal')? -25 : 25
+    let st = (target === 'personal')? 319 : -319
+    let nx = (target === 'personal')? -40 : 40
     let curr = game.player[target].stat
     for (let name in curr) {
       if ((name) in param[target]) curr[name].status = param[target][name]
@@ -146,7 +146,7 @@ Game.prototype.statPanel = function (param) {
 
 Game.prototype.showStat = function () {
   let stat_pnl = this.page.game.stat_panel
-  stat_pnl.reset((stat_pnl.x == -18)? 35 : -18, this.default.game.height/2)
+  stat_pnl.reset((stat_pnl.x == -15)? 25 : -15, this.default.game.height/2)
   game.phaser.world.bringToTop(stat_pnl)
 }
 
@@ -1013,7 +1013,7 @@ socket.emit('preload', res => {
       })
 
       // stat panel
-      game.page.game.stat_panel = game.phaser.add.sprite(-18, game.default.game.height/2, 'stat')
+      game.page.game.stat_panel = game.phaser.add.sprite(-15, game.default.game.height/2, 'stat')
       game.page.game.stat_panel.inputEnabled = true
       game.page.game.stat_panel.events.onInputDown.add(function(){ game.showStat() }, this)
       game.page.game.stat_panel.addChild(game.text_group)
