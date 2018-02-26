@@ -135,11 +135,11 @@ Game.prototype.statPanel = function (param) {
     for (let name in curr) {
       if ((name) in param[target]) curr[name].status = param[target][name]
       if (curr[name].status) {
-        if (game.stat_panel.getChildIndex(curr[name].img) == -1) game.stat_panel.addChild(curr[name].img)
+        if (game.page.game.stat_panel.children.indexOf(curr[name].img) == -1) game.page.game.stat_panel.addChild(curr[name].img)
         curr[name].img.reset(0, st + nx*idx)
         idx ++
       }
-      else game.stat_panel.removeChild(curr[name].img)
+      else game.page.game.stat_panel.removeChild(curr[name].img)
     }
   }
 }
@@ -596,6 +596,7 @@ Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
     if (it.err) return game.textPanel({cursor: it.err})
     game.textPanel(it.msg)
+    console.log(it.card)
     if (Object.keys(it.card).length) game.cardMove(it.card)
     game.resetCardPick()
   })
@@ -926,6 +927,7 @@ socket.on('interrupt', it => {
 })
 
 socket.on('turnStart', it => {
+  console.log(it.card)
   if (Object.keys(it.card).length)  game.cardMove(it.card)
   game.textPanel(it.msg)
 })
@@ -945,7 +947,7 @@ socket.on('effectTrigger', effect => {
     }
   }
   // stat
-
+  game.statPanel(effect.stat)
 
   console.log(effect)
 })

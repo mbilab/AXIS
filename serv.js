@@ -186,7 +186,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     let card = game.room[personal._rid].cards[id]
 
     // owner and attribute adjust, rlt[id].new_own set here when the card will be into grave
-    rlt[id].curr_own = 'personal'
+    rlt[id].curr_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
@@ -457,7 +457,7 @@ Game.prototype.aura = function (personal, card_list) { // card_list = {cid: true
   let room = this.room[personal._rid]
 
   for (let cid in card_list) {
-    let eff = game.default.all_card[room.cards[cid].name].effect.aura
+    let eff = game.default.all_card[room.cards[cid].name].aura
     for (let tp in eff) {
       for (let tg in eff[tp]) {
         if (player[tg].aura[tp][cid]) {
@@ -889,7 +889,7 @@ io.on('connection', client => {
 
   client.on('randomDeck', (it, cb) => {
     if (it == null) return
-    if (it.slot != 1 && it.slot != 2 && it.slot != 3) return
+    if (it.slot != 'slot_1' && it.slot != 'slot_2' && it.slot != 'slot_3') return
     if (typeof cb !== 'function') return
 
     console.log(`${client._account} build new deck_${it.slot}`)
@@ -1044,6 +1044,7 @@ io.on('connection', client => {
 
     if (Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
       game.buff(client, {eagle_eye: {personal: false}})
+      room.atk_status.hit = true
       let avail_effect = game.judge(client, client._foe, client._foe.atk_enchant)
       game.effectTrigger(client, client._foe, avail_effect)
     }
@@ -1183,20 +1184,18 @@ io.on('connection', client => {
     if (effect_object !== 'card' && effect_object !== counter_card.type.base) return cb({err: 'counter object type mismatch'})
 
     let rlt = {}
+    let param = {}
+    param[card_pick[0]] = {from: card.field}
+    room.counter_status.counter_id = param
     if (card.type.base === 'artifact') {
-      // card flip instead if its artifact
-
       card.overheat = true
       card.energy -= 1
       client.emit('playerTrigger', { msg: {action: `trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'personal', from: 'battle'}, rlt: {personal: true, counter: true}  })
       client._foe.emit('playerTrigger', { msg: {action: `foe trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true}  })
     }
     else {
-      let param = {}
-      param[card_pick[0]] = {from: card.field}
       if (card.type.effect === 'mosaic') param[card_pick[0]].off = card.bond
       rlt = game.cardMove(client, client._foe, param)
-      room.counter_status.counter_id = param
       client.emit('playerCounter', { msg: {action: `use ${card.name} to counter`}, card: rlt.personal, rlt: {counter: true, personal: true} })
       client._foe.emit('playerCounter', { msg: {action: `foe use ${card.name} to counter`}, card: rlt.opponent, rlt: {counter: true, opponent: true} })
     }
@@ -1241,11 +1240,7 @@ io.on('connection', client => {
         }
         else {
           room.phase = 'normal'
-          if (game.default.all_card[card.name].effect.aura) {
-            let param = {}
-            param[use_id] = true
-            game.aura(client._foe, param)
-          }
+          if (game.default.all_card[card.name].aura) game.aura(client._foe, room.counter_status.use_id)
         }
       }
       else {
@@ -1384,9 +1379,9 @@ io.on('connection', client => {
       card.overheat = true
       card.energy -= 1
 
-      if (card.energy == 0 && game.default.all_card[card.name].effect.aura) {
+      if (card.energy == 0 && game.default.all_card[card.name].aura) {
         param = {}
-        param[it.id] = true
+        param[it.id] = false
         game.aura(client, param)
       }
 
@@ -1427,9 +1422,16 @@ io.on('connection', client => {
     client.atk_phase = game.default.atk_phase
     client.atk_enchant = {}
 
-    // clear stat
-    for (let tp in client.stat) {
-      client.stat[tp] = false
+    // clear stat and buff
+    for (let tp of ['stat', 'buff']) {
+      let param = {}
+      for (let name in client[tp]) {
+        if (client[tp][name]) {
+          client.stat[name] = false
+          param[name] = {personal: false}
+        }
+      }
+      if (Object.keys(param).length) game[tp](client, param)
     }
 
     // put outdated card on field to grave
