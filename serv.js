@@ -325,6 +325,21 @@ Game.prototype.useCard = function (client) {
   room.counter_status.last_ply = client
 }
 
+Game.prototype.checkMultiType(card) = function (client, card) {
+  let eff_tp = Object.keys(card.type.effect)
+  if (eff_tp.length == 1 && card.type.effect[eff_tp[0]] == 1) return false
+  if (eff_tp.length == 2 && card.type.effect.counter) return false
+
+  if (eff_tp.length == 1) eff_tp = [`${eff_tp[0]}_1`, `${eff_tp[0]}_2`]
+  let eff_str = this.default.all_card[card.name].text.split('\n')
+  let param = {msg: null, rlt: {}}
+  for (let i of [0, 1]) param.rlt[eff_tp[i]] = eff_str[i + 1]
+  param.msg = {phase: 'choose', action: 'choose one effect of the two'}
+  client.emit('chooseOne', param)
+
+  return true
+}
+
 /////////////////////////////////////////////////////////////////////////////////
 // !-- effect apply
 
@@ -1305,6 +1320,7 @@ io.on('connection', client => {
     if (typeof cb !== 'function') return
     if (card == null) return
     if (card.curr_own != client._pid) return
+    if (card.field !== 'hand' && card.field !== 'life' && card.field !== 'socket') return
 
     if (Object.keys(client.stat.stun).length && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
     if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
@@ -1327,6 +1343,9 @@ io.on('connection', client => {
     }
     else
       if(card.field === 'life') return cb( {err: 'its not a handcard'} )
+
+    // check multi type and choose one
+    if (checkMultiType(client, card)) return
 
     switch(card.field){
       case 'hand':
