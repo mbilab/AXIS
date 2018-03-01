@@ -1211,16 +1211,16 @@ io.on('connection', client => {
     if (room.phase !== 'counter') return
     if (client == room.last_ply) return
 
-
     let counter = (client == room.player[room.curr_ply])? true : false
 
     if (counter == true) {
       let param = room.counter_status.use_id
 
       rlt = {}
-      if (room.cards[Object.keys(param)[0]].type.base !== 'artifact') {
+      if (room.counter_status.start === 'use') {
         param[Object.keys(param)[0]] = {from: room.cards[Object.keys(param)[0]].field}
-        if (room.cards[Object.keys(param)[0]].type.effect.mosaic) param[Object.keys(param)[0]].off = room.cards[Object.keys(param)[0]].bond
+        if (room.cards[Object.keys(param)[0]].type.base !== 'artifact')
+          if (room.cards[Object.keys(param)[0]].type.effect.mosaic) param[Object.keys(param)[0]].off = room.cards[Object.keys(param)[0]].bond
         rlt = game.cardMove(client, client._foe, param)
       }
       client.emit('playerPass', { msg: {phase: 'normal phase', action: 'be countered... your turn', cursor: ' '}, card: rlt.personal, rlt: {pass: true, personal: true} })
@@ -1238,8 +1238,8 @@ io.on('connection', client => {
       if (room.counter_status.start === 'use') {
         if (card.field === 'grave') {
           let param = {}
-          param[(rooms.cards[room.counter_status.use_id].type.base === 'item')? 'normal' : 'instant'] = room.counter_status.use_id
-          param.counter = rom.counter_status.counter_id
+          param[(card.type.base === 'item')? 'normal' : 'instant'] = room.counter_status.use_id
+          param.counter = room.counter_status.counter_id
           let avail_effect = game.judge(client._foe, client, param)
           game.effectTrigger(client._foe, client, avail_effect)
         }
