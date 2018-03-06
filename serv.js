@@ -32,7 +32,7 @@ const app = {
 
 // classes
 
-const Card = function(init){
+const Card = function (init) {
   //-! this = JSON.parse(JSON.stringify(init))
   this.name = init.name
   this.type = init.type
@@ -42,13 +42,33 @@ const Card = function(init){
     this.overheat = false
     this.socket = {}
   }
+
+  let rlt = this.checkMultiType(init.type, this.name)
+  if (!Object.keys(rlt).length) {
+    this.curr_eff = null
+    this.eff_choice = rlt
+  }
+
   this.field = init.field
   this.cover = true
   this.owner = init.owner
   this.curr_own = init.owner
 }
 
-const Game = function(){
+Card.prototype.checkMultiType = function (type, name) {
+  let eff_tp = Object.keys(type.effect)
+  if (eff_tp.length == 1 && type[eff_tp[0]] == 1) return {}
+  if (eff_tp.length == 2 && type.counter) return {}
+  if (name === 'vanish') return {}
+
+  if (eff_tp.length == 1) eff_tp = [`${eff_tp[0]}_1`, `${eff_tp[0]}_2`]
+  let eff_str = game.default.all_card[name].text.split('\n')
+  let rlt = {}
+  for (let i of [0, 1]) rlt[eff_tp[i]] = eff_tp[i] + '\n' + eff_str[i + 1]
+  return rlt
+}
+
+const Game = function () {
   this.default = {
     all_card    : {},
     all_stat    : {},
@@ -325,21 +345,6 @@ Game.prototype.useCard = function (client) {
   room.counter_status.last_ply = client
 }
 
-Game.prototype.checkMultiType(card) = function (client, card) {
-  let eff_tp = Object.keys(card.type.effect)
-  if (eff_tp.length == 1 && card.type.effect[eff_tp[0]] == 1) return false
-  if (eff_tp.length == 2 && card.type.effect.counter) return false
-
-  if (eff_tp.length == 1) eff_tp = [`${eff_tp[0]}_1`, `${eff_tp[0]}_2`]
-  let eff_str = this.default.all_card[card.name].text.split('\n')
-  let param = {msg: null, rlt: {}}
-  for (let i of [0, 1]) param.rlt[eff_tp[i]] = eff_str[i + 1]
-  param.msg = {phase: 'choose', action: 'choose one effect of the two'}
-  client.emit('chooseOne', param)
-
-  return true
-}
-
 /////////////////////////////////////////////////////////////////////////////////
 // !-- effect apply
 
@@ -397,7 +402,9 @@ Game.prototype.judge = function (personal, opponent, card_list) {
   for (let tp in card_list) {
     avail_effect[tp] = {}
     for (let id in card_list[tp]) {
-      let judge = this.default.all_card[room.cards[id].name].judge[tp]
+      let card = room.card[id]
+      let tg_tp = (card.curr_eff)? card.curr_eff : (tp)
+      let judge = this.default.all_card[card.name].judge[tg_tp]
       avail_effect[tp][id] = []
 
       for (let effect in judge) {
@@ -1266,8 +1273,11 @@ io.on('connection', client => {
       else {
         room.phase = 'normal'
         if (card.type.base === 'artifact') {
-          if (card.type.effect.enchant) Object.assign(client._foe.atk_enchant, room.counter_status.use_id)
-          if (card.type.effect.trigger) {
+          let curr_tp = {}
+          if (card.curr_eff) curr_tp[card.curr_eff.split('_')[0]] = true
+          else curr_tp = card.type.effect
+          if (curr_tp.enchant) Object.assign(client._foe.atk_enchant, room.counter_status.use_id)
+          if (curr_tp.trigger) {
             let avail_effect = game.judge(client._foe, client, Object.assign({trigger: room.counter_status.use_id}, {counter: room.counter_status.counter_id}) )
             game.effectTrigger(client._foe, client, avail_effect)
           }
@@ -1322,30 +1332,42 @@ io.on('connection', client => {
     if (card.curr_own != client._pid) return
     if (card.field !== 'hand' && card.field !== 'life' && card.field !== 'socket') return
 
-    if (Object.keys(client.stat.stun).length && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
-    if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
+    if (!client.card_pause.choose) {
+      if (Object.keys(client.stat.stun).length && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
+      if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
 
-    if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
-    if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
-    if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
-    if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
-    if (card.field === 'socket' && room.phase === 'normal') {
-      client.card_pause.return = it.id
-      return game.useCard(client)
+      if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+      if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
+      if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
+      if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
+      if (card.field === 'socket' && room.phase === 'normal') {
+        client.card_pause.return = it.id
+        return game.useCard(client)
+      }
+      if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
+
+      if (!Object.keys(client.card_pause).length) {
+        if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
+        if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
+        if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
+        if (card.field === 'life' && Object.keys(client.aura.silence).length) return cb({err: 'cant use life field cards when silenced'})
+      }
+      else
+        if(card.field === 'life') return cb( {err: 'its not a handcard'} )
+
+      if (card.eff_choice) {
+        room.phase = 'choose'
+        let param = {msg: {phase: 'choose', cursor: 'choose an effect to trigger'}, cid: it.id, rlt: card.eff_choice}
+        client.emit('chooseOne', param)
+        client._foe.emit('chooseOne', {msg: {phase: 'choose', cursor: 'opponent choosing effect'}})
+        return
+      }
     }
-    if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
-
-    if (!Object.keys(client.card_pause).length) {
-      if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
-      if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
-      if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
-      if (card.field === 'life' && Object.keys(client.aura.silence).length) return cb({err: 'cant use life field cards when silenced'})
+    else {
+      if (client.card_pause.choose !== it.id) return
+      card.curr_eff = it.eff
+      delete client.card_pause.choose
     }
-    else
-      if(card.field === 'life') return cb( {err: 'its not a handcard'} )
-
-    // check multi type and choose one
-    if (checkMultiType(client, card)) return
 
     switch(card.field){
       case 'hand':

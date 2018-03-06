@@ -150,6 +150,57 @@ Game.prototype.showStat = function () {
   game.phaser.world.bringToTop(stat_pnl)
 }
 
+// to close panel, option = {}
+Game.prototype.choosePanel = function (option) {
+  let name = Object.keys(option.rlt)
+  for (let idx of [1, 2]) {
+    let curr = game.page.game[`choose_${idx}`]
+    if (!name.length) {
+      curr.kill()
+      curr.eff_name = null
+    }
+    else {
+      let x = 600 + (idx-1)*340
+      let y = 350
+      curr.reset(x, y)
+      curr.eff_name = name[idx]
+      curr.cid = option.cid
+      curr.children[0].setText(game.textModify(name[idx] + '\n' + option[name[idx]]))
+      game.phaser.world.bringToTop(curr)
+    }
+  }
+}
+
+Game.prototype.textModify = function (text) {
+  let rlt = text.split('\n')[0] + '\n'
+  let remain = text.split('\n')[1].split(' ')
+  let tmp = ''
+
+  for (let [idx, word] of remain.entries()) {
+    console.log(word)
+    console.log(tmp)
+    if ((tmp + word).length <= 24) tmp += word
+    else {
+      while (tmp.length < 24) tmp += ' '
+      tmp += '\n'
+      rlt += tmp
+      tmp = word
+    }
+    if (idx != remain.length - 1) tmp += ' '
+  }
+  if (tmp.length) rlt += tmp
+
+  return rlt
+}
+
+Game.prototype.chooseOne = function (curr) {
+  //console.log(curr)
+  socket.emit('checkUse', {id: curr.cid, eff: curr.eff_name}, it => {
+    if (it.err) return game.textPanel({cursor: it.err})
+    game.choosePanel({})
+  })
+}
+
 Game.prototype.blockPanel = function (action) {
   let block_btn = this.page.game.block
   let receive_btn = this.page.game.receive
@@ -388,12 +439,29 @@ Game.prototype.pageInit = function () {
   }
 
   // add cards in game page
-  for(let field of ['altar', 'battle', 'hand', 'life']){
+  for (let field of ['altar', 'battle', 'hand', 'life']) {
     this.page.game[`personal_${field}`] = personal[field]
     this.page.game[`opponent_${field}`] = opponent[field]
   }
-  this.changePage({next: 'start'})
 
+  // add choose text in game page
+  for (let type of [1, 2]) {
+    let curr = this.page.game[`choose_${type}`] = game.phaser.add.sprite(0, 0, 'choose_one')
+    curr.inputEnabled = true
+    curr.events.onInputDown.add(function(){game.chooseOne(curr)})
+    curr.anchor.setTo(0.5, 0.5)
+    curr.req = true
+    curr.eff_name = null
+    curr.cid = null
+
+    let text = game.phaser.add.text(0, 0, "", {font: '20px arial', fill: '#001EFF'})
+    text.inputEnabled = true
+    text.events.onInputDown.add(function(){game.chooseOne(curr)})
+    text.anchor.setTo(0.5, 0.5)
+    curr.addChild(text)
+
+    curr.kill()
+  }
 
   // add keyboard input
   $(document).keydown( function(e) {
@@ -407,6 +475,8 @@ Game.prototype.pageInit = function () {
     }
   })
 
+  // done
+  this.changePage({next: 'start'})
 }
 
 Game.prototype.resetCardPick = function () {
@@ -959,6 +1029,11 @@ socket.on('effectLoop', effect => {
 
 socket.on('phaseShift', it => {
   game.textPanel(it.msg)
+})
+
+socket.on('chooseOne', it => {
+  game.textPanel(it.msg)
+  game.choosePanel(it)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////
