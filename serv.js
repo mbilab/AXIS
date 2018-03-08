@@ -43,8 +43,8 @@ const Card = function (init) {
     this.socket = {}
   }
 
-  let rlt = this.checkMultiType(init.type, this.name)
-  if (!Object.keys(rlt).length) {
+  let rlt = this.checkMultiType()
+  if (Object.keys(rlt).length) {
     this.curr_eff = null
     this.eff_choice = rlt
   }
@@ -55,16 +55,16 @@ const Card = function (init) {
   this.curr_own = init.owner
 }
 
-Card.prototype.checkMultiType = function (type, name) {
-  let eff_tp = Object.keys(type.effect)
-  if (eff_tp.length == 1 && type[eff_tp[0]] == 1) return {}
-  if (eff_tp.length == 2 && type.counter) return {}
-  if (name === 'vanish') return {}
+Card.prototype.checkMultiType = function () {
+  let eff_tp = Object.keys(this.type.effect)
+  if (eff_tp.length == 1 && this.type.effect[eff_tp[0]] == 1) return {}
+  if (eff_tp.length == 2 && this.type.effect.counter) return {}
+  if (this.name === 'vanish') return {}
 
   if (eff_tp.length == 1) eff_tp = [`${eff_tp[0]}_1`, `${eff_tp[0]}_2`]
-  let eff_str = game.default.all_card[name].text.split('\n')
+  let eff_str = game.default.all_card[this.name].text.split('\n')
   let rlt = {}
-  for (let i of [0, 1]) rlt[eff_tp[i]] = eff_tp[i] + '\n' + eff_str[2*i+2]
+  for (let i of [0, 1]) rlt[eff_tp[i]] = eff_str[2*i+1] + '\n' + eff_str[2*i+2]
   return rlt
 }
 
@@ -400,17 +400,19 @@ Game.prototype.judge = function (personal, opponent, card_list) {
   let avail_effect = {}
 
   for (let tp in card_list) {
-    avail_effect[tp] = {}
+    //avail_effect[tp] = {}
     for (let id in card_list[tp]) {
       let card = room.cards[id]
       let tg_tp = (card.curr_eff)? card.curr_eff : (tp)
       let judge = this.default.all_card[card.name].judge[tg_tp]
-      avail_effect[tp][id] = []
+
+      if (!avail_effect[tg_tp]) avail_effect[tg_tp] = {}
+      avail_effect[tg_tp][id] = []
 
       for (let effect in judge) {
         // for effects don't need to judge
         if(!Object.keys(judge[effect]).length) {
-          if (effect !== 'counter') avail_effect[tp][id].push(effect)
+          if (effect !== 'counter') avail_effect[tg_tp][id].push(effect)
         }
         // for effects with judges
         else {
@@ -420,7 +422,7 @@ Game.prototype.judge = function (personal, opponent, card_list) {
 
               switch (condition) {
                 case 'hit':
-                  if (room.atk_status.hit) avail_effect[tp][id].push(effect)
+                  if (room.atk_status.hit) avail_effect[tg_tp][id].push(effect)
                   break
                 case 'hp':
                   curr_val = player[target].hp
@@ -433,7 +435,7 @@ Game.prototype.judge = function (personal, opponent, card_list) {
               }
 
               if (condition !== 'hit')
-                if (operation(curr_val, judge[effect][target][condition])) avail_effect[tp][id].push(effect)
+                if (operation(curr_val, judge[effect][target][condition])) avail_effect[tg_tp][id].push(effect)
             }
           }
         }
@@ -1360,6 +1362,7 @@ io.on('connection', client => {
         let param = {msg: {phase: 'choose', cursor: 'choose an effect to trigger'}, cid: it.id, rlt: card.eff_choice}
         client.emit('chooseOne', param)
         client._foe.emit('chooseOne', {msg: {phase: 'choose', cursor: 'opponent choosing effect'}})
+        client.card_pause.choose = it.id
         return
       }
     }
@@ -1367,6 +1370,7 @@ io.on('connection', client => {
       if (client.card_pause.choose !== it.id) return
       card.curr_eff = it.eff
       delete client.card_pause.choose
+      cb({})
     }
 
     switch(card.field){

@@ -152,10 +152,11 @@ Game.prototype.showStat = function () {
 
 // to close panel, option = {}
 Game.prototype.choosePanel = function (option) {
-  let name = Object.keys(option.rlt)
+  let name = (option.rlt == null)? null : Object.keys(option.rlt)
   for (let idx of [1, 2]) {
     let curr = game.page.game[`choose_${idx}`]
-    if (!name.length) {
+    if (name == null) {
+      console.log('clear')
       curr.kill()
       curr.eff_name = null
     }
@@ -163,9 +164,9 @@ Game.prototype.choosePanel = function (option) {
       let x = 600 + (idx-1)*340
       let y = 350
       curr.reset(x, y)
-      curr.eff_name = name[idx]
+      curr.eff_name = name[idx-1]
       curr.cid = option.cid
-      curr.children[0].setText(game.textModify(name[idx] + '\n' + option[name[idx]]))
+      curr.children[0].setText(game.textModify(option.rlt[name[idx-1]]))
       game.phaser.world.bringToTop(curr)
     }
   }
@@ -177,8 +178,6 @@ Game.prototype.textModify = function (text) {
   let tmp = ''
 
   for (let [idx, word] of remain.entries()) {
-    console.log(word)
-    console.log(tmp)
     if ((tmp + word).length <= 24) tmp += word
     else {
       while (tmp.length < 24) tmp += ' '
@@ -189,15 +188,14 @@ Game.prototype.textModify = function (text) {
     if (idx != remain.length - 1) tmp += ' '
   }
   if (tmp.length) rlt += tmp
-
   return rlt
 }
 
 Game.prototype.chooseOne = function (curr) {
-  //console.log(curr)
+  console.log('aaa')
   socket.emit('checkUse', {id: curr.cid, eff: curr.eff_name}, it => {
     if (it.err) return game.textPanel({cursor: it.err})
-    game.choosePanel({})
+    this.choosePanel({})
   })
 }
 
