@@ -64,7 +64,7 @@ Card.prototype.checkMultiType = function (type, name) {
   if (eff_tp.length == 1) eff_tp = [`${eff_tp[0]}_1`, `${eff_tp[0]}_2`]
   let eff_str = game.default.all_card[name].text.split('\n')
   let rlt = {}
-  for (let i of [0, 1]) rlt[eff_tp[i]] = eff_tp[i] + '\n' + eff_str[i + 1]
+  for (let i of [0, 1]) rlt[eff_tp[i]] = eff_tp[i] + '\n' + eff_str[2*i+2]
   return rlt
 }
 
@@ -402,7 +402,7 @@ Game.prototype.judge = function (personal, opponent, card_list) {
   for (let tp in card_list) {
     avail_effect[tp] = {}
     for (let id in card_list[tp]) {
-      let card = room.card[id]
+      let card = room.cards[id]
       let tg_tp = (card.curr_eff)? card.curr_eff : (tp)
       let judge = this.default.all_card[card.name].judge[tg_tp]
       avail_effect[tp][id] = []
@@ -716,7 +716,7 @@ Game.prototype.set = function(personal, effect) {
   let rlt = { attr: { personal: {}, opponent: {} } }
   for (let target in effect) {
     for (let object in effect[target]) {
-      //player[target][object] = effect[target][object]
+      player[target][object] = effect[target][object]
       rlt.attr[target][object] = effect[target][object]
     }
   }
@@ -1333,11 +1333,9 @@ io.on('connection', client => {
     if (card.field !== 'hand' && card.field !== 'life' && card.field !== 'socket') return
 
     if (!client.card_pause.choose) {
-      if (Object.keys(client.stat.stun).length && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
-      if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
-
       if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
       if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
+
       if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
       if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
       if (card.field === 'socket' && room.phase === 'normal') {
@@ -1347,6 +1345,8 @@ io.on('connection', client => {
       if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
 
       if (!Object.keys(client.card_pause).length) {
+        if (client.stat.stun && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
+        if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
         if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
         if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
         if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
