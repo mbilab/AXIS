@@ -955,12 +955,6 @@ socket.on('playerTrigger', it => {
   game.resetCardPick()
   game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
   game.counterPanel(it.rlt)
-  /*
-  if (it.card.curr_own === 'opponent') {
-    game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
-    game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
-  }
-  */
 })
 
 socket.on('foeDrawCard', it => {
@@ -1006,11 +1000,29 @@ socket.on('effectTrigger', effect => {
 
   // card
   for (let type in effect.card) {
+    // card flip or cover
     if (type === 'receive' || type === 'heal' || type === 'bleed') {
       let target = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
       for (let id in effect.card[type][target]) {
         let pos = game.findCard({id: id, curr_own: target, from: 'life'})
         game.player[target].life[pos].flip(effect.card[type][target][id])
+      }
+    }
+    // card move or trigger
+    else {
+      for (let target in effect.card[type]) {
+        for (let id in effect.card[type][target]) {
+          let curr = effect.card[type][target][id]
+          if (curr.turn_dn) {
+            let pos = game.findCard({id: id, curr_own: target, from: 'battle'})
+            game.player[target].battle[pos].body.angle += 90
+          }
+          else {
+            let param = {}
+            param[id] = curr
+            game.cardMove(param)
+          }
+        }
       }
     }
   }

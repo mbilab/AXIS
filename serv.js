@@ -168,7 +168,7 @@ Game.prototype.buildPlayer = function (client) {
   }
 
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
-  client.dmg_blk = 0 // effect damage only
+  client.dmg_blk = [] // effect damage only
 
   // choose
   client.card_pause = {} // card needs another card to effect
@@ -377,7 +377,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
         if (this.choose_eff[effect_name]) {
           for (let target in effect) {
-            if (effect_name === 'damage') player[target].dmg_blk += effect[target]
+            if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
             player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: avail_effect, tp: tp}})
             if (!(id in player[target].eff_queue)) player[target].eff_queue[id] = {}
             if (!(tp in player[target].eff_queue[id])) player[target].eff_queue[id][tp] = {}
@@ -476,11 +476,43 @@ Game.prototype.bleed = function (personal, param) {
 }
 
 Game.prototype.block = function (personal, param) {
-  let rlt = { card: {} }
-  rlt.card['block'] = {}
-  personal.dmg_blk = 0
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
+  let room = this.room[personal._rid]
+  let card_pick = Object.keys(param.card_pick)
+  // if block only under trigger type effect
+
+  if (card_pick.length != 1) return {err: 'can only choose one card'}
+  for (let id of card_pick) {
+    let card = room.cards[id]
+    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card.field === 'life') return {err: 'cant choose life field card'}
+    if (!game.default.all_card[card.name].effect.trigger.block &&
+        !game.default.all_card[card.name].effect.mosaic.block) return {err: 'no block effect'}
+    if (card.type.base === 'artifact') {
+      if (card.overheat) return {err: 'artifact overheat'}
+      if (card.energy) return {err: 'not enough energy'}
+    }
+  }
+
+  let rlt = { card: { block: { personal: {}, opponent: {} } } }
+  let tmp = { personal: {} }
+  for (let id of card_pick) {
+    let card = room.cards[id]
+    if (card.type.base === 'item') {
+      let param = {}
+      param[id] = {from: card.field, to: 'grave'}
+      tmp = game.cardMove(param)
+    }
+    if (card.type.base === 'artifact') {
+      card.overheat = true
+      card.energy -= 1
+      tmp.personal[id] = {turn_dn: true}
+      tmp.opponent = tmp.personal
+    }
+    personal.dmg_blk.shift()
+  }
+
+  personal.emit('effectTrigger', Object.assign(Object.assign({}, rlt), tmp.personal) )
+  personal._foe.emit('effectTrigger', Object.assign(Object.assign({}, rlt), tmp.opponent) )
   return {}
 }
 
@@ -527,10 +559,14 @@ Game.prototype.buff = function (personal, effect) {
 Game.prototype.stat = function (personal, effect) {
   let player = {personal: personal, opponent: personal._foe}
   let rlt = { stat: {personal: {}, opponent: {}} }
+
   for (let name in effect) {
     for (let target in effect[name]) {
-      player[target].stat[name] = effect[name][target]
-      rlt.stat[target][name] = effect[name][target]
+      let tp = (name === 'all')? Object.keys(player[target].stat) : [name]
+      for (let st_nm of tp) {
+        player[target].stat[st_nm] = effect[name][target]
+        rlt.stat[target][st_nm] = effect[name][target]
+      }
     }
   }
   personal.emit('effectTrigger', rlt)
@@ -671,7 +707,7 @@ Game.prototype.modify = function(personal, effect) {
 
 Game.prototype.receive = function (personal, param) {
   let room = this.room[personal._rid]
-  let dmg_taken = (param.id === 'attack')? ((personal._foe.atk_damage < 0)? 0 : personal._foe.atk_damage) : (personal.dmg_blk)
+  let dmg_taken = (param.id === 'attack')? ((personal._foe.atk_damage < 0)? 0 : personal._foe.atk_damage) : (personal.dmg_blk[0])
   let card_pick = Object.keys(param.card_pick)
   let rlt = { card: {receive: {personal: {}, opponent: {}}} }
 
@@ -691,7 +727,7 @@ Game.prototype.receive = function (personal, param) {
     rlt.card.receive.personal[id] = card.name
   }
 
-  personal.dmg_blk = 0
+  personal.dmg_blk.shift()
   personal.hp -= dmg_taken
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
@@ -1368,6 +1404,7 @@ io.on('connection', client => {
     }
     else {
       if (client.card_pause.choose !== it.id) return
+      if (!game.default.all_card[card.name].effect[it.eff]) return
       card.curr_eff = it.eff
       delete client.card_pause.choose
       cb({})
