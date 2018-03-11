@@ -485,22 +485,24 @@ Game.prototype.block = function (personal, param) {
     let card = room.cards[id]
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field === 'life') return {err: 'cant choose life field card'}
-    if (!game.default.all_card[card.name].effect.trigger.block &&
-        !game.default.all_card[card.name].effect.mosaic.block) return {err: 'no block effect'}
+    let eff = game.default.all_card[card.name].effect
+    if (eff.trigger) if(!eff.trigger.block) return {err: 'no block effect'}
+    if (eff.mosaic) if(!eff.mosaic.block) return {err: 'no block effect'}
+
     if (card.type.base === 'artifact') {
       if (card.overheat) return {err: 'artifact overheat'}
       if (card.energy) return {err: 'not enough energy'}
     }
   }
 
-  let rlt = { card: { block: { personal: {}, opponent: {} } } }
   let tmp = { personal: {} }
   for (let id of card_pick) {
     let card = room.cards[id]
     if (card.type.base === 'item') {
       let param = {}
       param[id] = {from: card.field, to: 'grave'}
-      tmp = game.cardMove(param)
+      if (card.type.effect.mosaic) param[id].off = card.bond
+      tmp = game.cardMove(personal, personal._foe, param)
     }
     if (card.type.base === 'artifact') {
       card.overheat = true
@@ -511,8 +513,8 @@ Game.prototype.block = function (personal, param) {
     personal.dmg_blk.shift()
   }
 
-  personal.emit('effectTrigger', Object.assign(Object.assign({}, rlt), tmp.personal) )
-  personal._foe.emit('effectTrigger', Object.assign(Object.assign({}, rlt), tmp.opponent) )
+  personal.emit('effectTrigger', {card:{block:{ personal: tmp.personal, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card:{block:{ personal: {}, opponent: tmp.opponent }}})
   return {}
 }
 
@@ -735,7 +737,7 @@ Game.prototype.receive = function (personal, param) {
   return {}
 }
 
-Game.prototype.retrieve = function(personal, param) {
+Game.prototype.retrieve = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -750,12 +752,17 @@ Game.prototype.retrieve = function(personal, param) {
   return {}
 }
 
-Game.prototype.set = function(personal, effect) {
+Game.prototype.set = function (personal, effect) {
+  let player = {personal: personal, opponent: personal._foe}
   let rlt = { attr: { personal: {}, opponent: {} } }
   for (let target in effect) {
     for (let object in effect[target]) {
-      player[target][object] = effect[target][object]
-      rlt.attr[target][object] = effect[target][object]
+      for (let src in effect[target][object]) {
+        let val = 0
+        if (src === 'card_amount') val = player[target][src][effect[target][object][src]]
+        player[target][object] = val
+        rlt.attr[target][object] = val
+      }
     }
   }
   personal.emit('effectTrigger', rlt)
@@ -763,7 +770,7 @@ Game.prototype.set = function(personal, effect) {
   return {}
 }
 
-Game.prototype.steal = function(personal, param) {
+Game.prototype.steal = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
