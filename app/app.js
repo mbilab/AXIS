@@ -192,9 +192,10 @@ Game.prototype.textModify = function (text) {
 }
 
 Game.prototype.chooseOne = function (curr) {
-  console.log('aaa')
-  socket.emit('checkUse', {id: curr.cid, eff: curr.eff_name}, it => {
+  //socket.emit('checkUse', {id: curr.cid, eff: curr.eff_name}, it => {
+  socket.emit('clickCard', {id: curr.cid, eff: curr.eff_name}, it => {
     if (it.err) return game.textPanel({cursor: it.err})
+    game.textPanel(it)
     this.choosePanel({})
   })
 }
@@ -652,11 +653,13 @@ Player.prototype.drawCard = function () {
 
 // for player trigger a card on field/ enchant an attack
 Player.prototype.triggerCard = function (card) {
-  socket.emit('triggerCard', {id: card.id}, it => {
+  //socket.emit('triggerCard', {id: card.id}, it => {
+  socket.emit('clickCard', {id: card.id}, it => {
     if (it.err) {
       if (it.err === 'choose') personal.chooseCard(card)
       else return game.textPanel({cursor: it.err})
     }
+    game.textPanel({cursor: ''})
   })
 }
 
@@ -734,12 +737,14 @@ Player.prototype.signUp = function () {
 }
 
 Player.prototype.useCard = function (card) {
-  socket.emit('checkUse', {id: card.id}, it => {
+  //socket.emit('checkUse', {id: card.id}, it => {
+  socket.emit('clickCard', {id: card.id}, it => {
     if (it.err) {
       if (it.err === 'choose') personal.chooseCard(card)
       else game.textPanel({cursor: it.err})
       return
     }
+    game.textPanel({cursor: ''})
   })
 }
 

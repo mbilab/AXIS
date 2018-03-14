@@ -484,7 +484,7 @@ Game.prototype.block = function (personal, param) {
   for (let id of card_pick) {
     let card = room.cards[id]
     if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
-    if (card.field === 'life') return {err: 'cant choose life field card'}
+    if (card.field === 'life' || card.field === 'hand') return {err: 'can only choose battle, altar, socket card'}
     let eff = game.default.all_card[card.name].effect
     if (eff.trigger) if(!eff.trigger.block) return {err: 'no block effect'}
     if (eff.mosaic) if(!eff.mosaic.block) return {err: 'no block effect'}
@@ -1093,6 +1093,7 @@ io.on('connection', client => {
   client.on('attack', cb => {
     let room = game.room[client._rid]
     if (Object.keys(client.aura.fear).length) return cb({err: 'cant attack when fear'})
+    if (client.stat.stun) return cb({err: 'cant attack when stun'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1221,8 +1222,8 @@ io.on('connection', client => {
     client.first_conceal = false
 
     // effect phase
-    let avail_effect = game.judge(client._foe, client, {enchant: client._foe.atk_enchant} )
-    game.effectTrigger(client._foe, client, avail_effect)
+    let avail_effect = game.judge(room.atk_status.attacker, room.atk_status.defender, {enchant: room.atk_status.attacker.atk_enchant} )
+    game.effectTrigger(room.atk_status.attacker, room.atk_status.defender, avail_effect)
   })
 
   // ----------------------------------------------------------------------------
@@ -1339,7 +1340,7 @@ io.on('connection', client => {
     let room = game.room[client._rid]
 
     if (Object.keys(client.aura.cripple).length) return cb({err: 'cant draw card when crippled'})
-    if (client.stat.stun > 0) return cb({err: 'cant draw card when stun'})
+    if (client.stat.stun) return cb({err: 'cant draw card when stun'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1367,7 +1368,7 @@ io.on('connection', client => {
     }
   })
 
-  client.on('checkUse', (it, cb) => {
+  client.on('clickCard', (it, cb) => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
@@ -1375,7 +1376,16 @@ io.on('connection', client => {
     if (typeof cb !== 'function') return
     if (card == null) return
     if (card.curr_own != client._pid) return
-    if (card.field !== 'hand' && card.field !== 'life' && card.field !== 'socket') return
+
+    let type = (card.field === 'battle' || card.field === 'altar')? 'trigger' : 'use'
+    if (type === 'use') game.checkUse(client, it, cb)
+    else game.triggerCard(client, it, cb)
+  })
+
+  Game.prototype.checkUse = function (client, it, cb) {
+    // pre-checking ...
+    let room = game.room[client._rid]
+    let card = room.cards[it.id]
 
     if (!client.card_pause.choose) {
       if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
@@ -1399,23 +1409,10 @@ io.on('connection', client => {
       }
       else
         if(card.field === 'life') return cb( {err: 'its not a handcard'} )
+    }
 
-      if (card.eff_choice) {
-        room.phase = 'choose'
-        let param = {msg: {phase: 'choose', cursor: 'choose an effect to trigger'}, cid: it.id, rlt: card.eff_choice}
-        client.emit('chooseOne', param)
-        client._foe.emit('chooseOne', {msg: {phase: 'choose', cursor: 'opponent choosing effect'}})
-        client.card_pause.choose = it.id
-        return
-      }
-    }
-    else {
-      if (client.card_pause.choose !== it.id) return
-      if (!game.default.all_card[card.name].effect[it.eff]) return
-      card.curr_eff = it.eff
-      delete client.card_pause.choose
-      cb({})
-    }
+    // choose one check ... if true return else continue
+    if (game.chooseOne(client, it, cb)) return
 
     switch(card.field){
       case 'hand':
@@ -1444,17 +1441,12 @@ io.on('connection', client => {
 
       default: break
     }
-  })
+  }
 
-  client.on('triggerCard', (it, cb) => {
-    // action varies based on its type
-    if (it == null) return
-
+  Game.prototype.triggerCard = function (client, it, cb) {
+    // pre-checking ...
     let room = game.room[client._rid]
     let card = room.cards[it.id]
-    if (typeof cb !== 'function') return
-    if (card == null) return
-    if (card.curr_own != client._pid) return
 
     if (room.phase === 'counter') return cb({err: 'choose'})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
@@ -1465,6 +1457,9 @@ io.on('connection', client => {
     }
     if (room.phase !== 'normal') return cb({err: `not allowed in ${room.phase} phase`})
     if (game.default.all_card[card.name].type.effect.counter && Object.keys(game.default.all_card[card.name].type.effect).length == 1) return cb({err: 'only available in counter phase'})
+
+    // choose one check ... if true return else continue
+    if (game.chooseOne(client, it, cb)) return
 
     if (card.type.base === 'artifact') {
       if (card.overheat) return cb({err: 'artifact overheat'})
@@ -1501,7 +1496,32 @@ io.on('connection', client => {
         //game.effectTrigger(client._foe, client, avail_effect)
       }
     }
-  })
+  }
+
+  Game.prototype.chooseOne = function (client, it, cb) {
+    let room = game.room[client._rid]
+    let card = room.cards[it.id]
+
+    if (!client.card_pause.choose) {
+      if (card.eff_choice) {
+        room.phase = 'choose'
+        let param = {msg: {phase: 'choose', cursor: `choose an effect to trigger`}, cid: it.id, rlt: card.eff_choice}
+        client.emit('chooseOne', param)
+        client._foe.emit('chooseOne', {msg: {phase: 'choose', cursor: 'opponent choosing effect'}})
+        client.card_pause.choose = it.id
+        return true
+      }
+      else return false
+    }
+    else {
+      if (client.card_pause.choose !== it.id) return
+      if (!game.default.all_card[card.name].effect[it.eff]) return
+      card.curr_eff = it.eff
+      delete client.card_pause.choose
+      cb({cursor: `${(card.field === 'life')? 'choose a handcard to replace' : ''}`})
+      return false
+    }
+  }
 
   client.on('endTurn', cb => {
     let room = game.room[client._rid]
