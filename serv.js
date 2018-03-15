@@ -149,7 +149,6 @@ Game.prototype.buildPlayer = function (client) {
     dicease: {}, // can't use heal cards
     silence: {}, // can't use life field card
     fear   : {}, // can't attack
-    daze   : {}, // pass turn when turn start
 
     precise: {}, // atk cant be vanish
     stamina: {}, // handcard limit + 2
@@ -162,10 +161,10 @@ Game.prototype.buildPlayer = function (client) {
     eagle_eye : false // next attack you perform can't be vanish
   }
   client.stat = {
-    charge : false, // skip your next turn
-    stun   : false, // can only use item
-    petrify: false, // can only draw card
-    freeze : false  // can't attack and use item
+    overload : false, // skip your next turn
+    stun     : false, // can only use item
+    petrify  : false, // can only draw card
+    freeze   : false  // can't attack and use item
   }
 
   client.eff_queue = {} // { id_1 : {eff_1: ..., eff_2: ...} ... }
@@ -309,7 +308,6 @@ Game.prototype.checkUse = function (client, it, cb) {
     if (!game.phase_rule.use.normal[room.phase]) return cb( { err: `not allowed in ${room.phase} phase`} )
 
     if (!Object.keys(client.card_pause).length) {
-      if (client.stat.stun && card.type.base !== 'item') return cb({err: 'can only use item when stun'})
       if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
       if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
@@ -1237,7 +1235,6 @@ io.on('connection', client => {
   client.on('attack', cb => {
     let room = game.room[client._rid]
     if (Object.keys(client.aura.fear).length) return cb({err: 'cant attack when fear'})
-    if (client.stat.stun) return cb({err: 'cant attack when stun'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1483,9 +1480,7 @@ io.on('connection', client => {
   // !-- action
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
-
     if (Object.keys(client.aura.cripple).length) return cb({err: 'cant draw card when crippled'})
-    if (client.stat.stun) return cb({err: 'cant draw card when stun'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1533,8 +1528,9 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
+    // !-- end last player turn
+    // default attr
     room.atk_status.first_atk = true
-    room.curr_ply = client._foe._pid
     client.action_point = game.default.action_point
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
@@ -1560,13 +1556,22 @@ io.on('connection', client => {
       if (card.overheat) card.overheat = false
     }
     let rlt = {personal: {}, opponent: {}}
-    if(Object.keys(param).length) rlt = game.cardMove(client, client._foe, param)
+    if (Object.keys(param).length) rlt = game.cardMove(client, client._foe, param)
     cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '}, card: rlt.personal })
     client._foe.emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '}, card: rlt.opponent})
 
+    // !-- start next player turn
+    // change player
+    room.curr_ply = client._foe._pid
+
+    // attr check
+    if (room.curr_ply.stat.stun) room.curr_ply.action_point -= 1
+
     // chanting spell trigger
-    let avail_effect = game.judge(client._foe, client, {chanting: room.curr_ply.chanting})
-    game.effectTrigger(client._foe, client, avail_effect)
+    if (!room.curr_ply.stat.stun) {
+      let avail_effect = game.judge(client._foe, client, {chanting: room.curr_ply.chanting})
+      game.effectTrigger(client._foe, client, avail_effect)
+    }
   })
 
   // ----------------------------------------------------------------------------
