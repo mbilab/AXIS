@@ -140,7 +140,7 @@ Game.prototype.buildPlayer = function (client) {
   client.card_amount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0, socket: 0}
 
   // action
-  client.curr_act = 'none'
+  client.interrupt = false
 
   // effect
   client.atk_enchant = {}
@@ -161,7 +161,7 @@ Game.prototype.buildPlayer = function (client) {
     eagle_eye : false // next attack you perform can't be vanish
   }
   client.stat = {
-    overload : false, // skip your next turn
+    charge   : false, // add one additional turn
     stun     : false, // can only use item
     petrify  : false, // can only draw card
     freeze   : false  // can't attack and use item
@@ -280,9 +280,15 @@ Game.prototype.effectEnd = function (room) {
   }
   else {
     room.phase = 'normal'
-    for (let pid in room.player) {
-      let rlt = (pid == room.curr_ply) ? 'your turn' : 'opponent turn'
-      room.player[pid].emit('phaseShift', {msg: {phase: 'normal phase', action: rlt}})
+    if (room.player[room.curr_ply].interrupt) {
+      // end turn immediately
+      game.endTurn(room.player[room.curr_ply])
+    }
+    else {
+      for (let pid in room.player) {
+        let rlt = (pid == room.curr_ply) ? 'your turn' : 'opponent turn'
+        room.player[pid].emit('phaseShift', {msg: {phase: 'normal phase', action: rlt}})
+      }
     }
   }
 }
@@ -455,7 +461,7 @@ Game.prototype.triggerCard = function (client, it, cb) {
       client._foe.emit('plyUseCard', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent })
 
       // effect trigger
-      let param = {trigger: {}}
+      param = {trigger: {}}
       param.trigger[it.id] = {}
       let avail_effect = game.judge(client._foe, client, param)
       game.effectTrigger(client._foe, client, avail_effect)
@@ -536,7 +542,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
 Game.prototype.judge = function (personal, opponent, card_list) {
   // card_list = {type: {list}}
-  console.log(card_list)
+  // console.log(card_list)
   let room = this.room[personal._rid]
   let player = {personal: personal, opponent: opponent}
   let avail_effect = {}
@@ -718,7 +724,7 @@ Game.prototype.stat = function (personal, effect) {
   return {}
 }
 
-Game.prototype.control = function(personal, param) {
+Game.prototype.control = function (personal, param) {
   // check artifact aura
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
@@ -901,6 +907,7 @@ Game.prototype.set = function (personal, effect) {
     for (let object in effect[target]) {
       for (let src in effect[target][object]) {
         let val = 0
+        if (src === 'value') val = effect[target][object][src]
         if (src === 'card_amount') val = player[target][src][effect[target][object][src]]
         player[target][object] = val
         rlt.attr[target][object] = val
@@ -1454,8 +1461,13 @@ io.on('connection', client => {
         }
         else {
           room.phase = 'normal'
-          if (card.type.effect === 'chanting') client._foe.chanting[Object.keys(room.counter_status.use_id)[0]] = {}
-          if (game.default.all_card[card.name].aura) game.aura(client._foe, room.counter_status.use_id)
+          if (card.type.effect.chanting) client._foe.chanting[Object.keys(room.counter_status.use_id)[0]] = {to: 'grave'}
+          if (game.default.all_card[card.name].aura) {
+
+            game.aura(client._foe, room.counter_status.use_id)
+            console.log('aura in ')
+          }
+
         }
       }
       else {
@@ -1522,11 +1534,8 @@ io.on('connection', client => {
     else game.triggerCard(client, it, cb)
   })
 
-  client.on('endTurn', cb => {
+  Game.prototype.endTurn = function (client) {
     let room = game.room[client._rid]
-    if (typeof cb !== 'function') return
-    if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
-    if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
     // !-- end last player turn
     // default attr
@@ -1535,6 +1544,10 @@ io.on('connection', client => {
     client.atk_damage = game.default.atk_damage
     client.atk_phase = game.default.atk_phase
     client.atk_enchant = {}
+    client.interrupt = false
+
+    // change player
+    room.curr_ply = (client.stat.charge)? client._pid : (client._foe._pid)
 
     // clear stat and buff
     for (let tp of ['stat', 'buff']) {
@@ -1557,21 +1570,36 @@ io.on('connection', client => {
     }
     let rlt = {personal: {}, opponent: {}}
     if (Object.keys(param).length) rlt = game.cardMove(client, client._foe, param)
-    cb({ msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '}, card: rlt.personal })
-    client._foe.emit('turnStart', { msg: {phase: 'normal phase', action: 'your turn', cursor: ' '}, card: rlt.opponent})
+
+    let act_msg = (room.curr_ply === client._pid)? ['your', 'opponent'] : (['opponent', 'your'])
+    client.emit('turnShift', { msg: {phase: 'normal phase', action: `${act_msg[0]} turn`, cursor: ' '}, card: rlt.personal})
+    client._foe.emit('turnShift', { msg: {phase: 'normal phase', action: `${act_msg[1]} turn`, cursor: ' '}, card: rlt.opponent})
 
     // !-- start next player turn
-    // change player
-    room.curr_ply = client._foe._pid
-
     // attr check
-    if (room.curr_ply.stat.stun) room.curr_ply.action_point -= 1
+    let nxt_ply = (room.curr_ply === client._pid)? client : (client._foe)
+    if (nxt_ply.stat.stun) nxt_ply.action_point -= 1
 
     // chanting spell trigger
-    if (!room.curr_ply.stat.stun) {
-      let avail_effect = game.judge(client._foe, client, {chanting: room.curr_ply.chanting})
-      game.effectTrigger(client._foe, client, avail_effect)
+    if (!nxt_ply.stat.stun && Object.keys(nxt_ply.chanting).length) {
+      // card move
+      rlt = game.cardMove(nxt_ply, nxt_ply._foe, nxt_ply.chanting)
+      nxt_ply.emit('chantingTrigger', {card: rlt.personal})
+      nxt_ply._foe.emit('chantingTrigger', {card: rlt.opponent})
+      // effect
+      let avail_effect = game.judge(nxt_ply, nxt_ply._foe, {chanting: nxt_ply.chanting})
+      game.effectTrigger(nxt_ply, nxt_ply._foe, avail_effect)
     }
+  }
+
+  client.on('endTurn', cb => {
+    if (typeof cb !== 'function') return
+
+    let room = game.room[client._rid]
+    if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
+    if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
+
+    game.endTurn(client)
   })
 
   // ----------------------------------------------------------------------------

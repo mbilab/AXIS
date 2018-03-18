@@ -666,10 +666,12 @@ Player.prototype.triggerCard = function (card) {
 Player.prototype.endTurn = function () {
   socket.emit('endTurn', it => {
     if (it.err) return game.textPanel({cursor: it.err})
+    /*
     game.textPanel(it.msg)
     console.log(it.card)
     if (Object.keys(it.card).length) game.cardMove(it.card)
     game.resetCardPick()
+    */
   })
 }
 
@@ -999,6 +1001,13 @@ socket.on('turnStart', it => {
   game.textPanel(it.msg)
 })
 
+socket.on('turnShift', it => {
+  console.log(it.card)
+  game.textPanel(it.msg)
+  if (Object.keys(it.card).length) game.cardMove(it.card)
+  game.resetCardPick()
+})
+
 // card effects
 socket.on('effectTrigger', effect => {
   // attr
@@ -1049,6 +1058,10 @@ socket.on('phaseShift', it => {
 socket.on('chooseOne', it => {
   game.textPanel(it.msg)
   game.choosePanel(it)
+})
+
+socket.on('chantingTrigger', it => {
+  game.cardMove(it.card)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////
