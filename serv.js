@@ -203,6 +203,7 @@ rlt = {
 Game.prototype.cardMove = function (personal, opponent, rlt) {
   let player = {personal: personal, opponent: opponent}
   let param = {personal: {}, opponent: {}}
+  let aura_cancel = {}
 
   for (let id in rlt) {
     let card = game.room[personal._rid].cards[id]
@@ -212,8 +213,9 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
-    if (rlt[id].to === 'grave' || rlt[id].to === 'hand') {
-      if(card.type.base === 'artifact') {
+    if (rlt[id].to === 'grave' || rlt[id].to === 'hand' || rlt[id].to === 'deck') {
+      if (game.default.all_card[card.name].aura) aura_cancel[id] = false
+      if (card.type.base === 'artifact') {
         card.overheat = false
         card.energy = 2
       }
@@ -248,6 +250,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     Object.assign(param.opponent[id], rlt[id])
   }
 
+  game.aura(personal, aura_cancel)
   //console.log(param.opponent)
   //console.log(param.personal)
 
