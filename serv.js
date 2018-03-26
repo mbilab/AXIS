@@ -203,7 +203,7 @@ rlt = {
 Game.prototype.cardMove = function (personal, opponent, rlt) {
   let player = {personal: personal, opponent: opponent}
   let param = {personal: {}, opponent: {}}
-  let aura_cancel = {}
+  let aura_modify = {personal: {}, opponent: {}}
 
   for (let id in rlt) {
     let card = game.room[personal._rid].cards[id]
@@ -213,8 +213,8 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
-    if (rlt[id].to === 'grave' || rlt[id].to === 'hand' || rlt[id].to === 'deck') {
-      if (game.default.all_card[card.name].aura) aura_cancel[id] = false
+    if (rlt[id].to === 'grave' || rlt[id].to === 'hand' || ((rlt[id].to === 'deck' || rlt[id].to === 'life') && card.field !== 'hand') ) {
+      if (game.default.all_card[card.name].aura) aura_modify.personal[id] = false
       if (card.type.base === 'artifact') {
         card.overheat = false
         card.energy = 2
@@ -222,6 +222,15 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
       else
         card.energy = 1
     }
+    else {
+      if (card.field === rlt[id].to && card.curr_own !== player[rlt[id].new_own]._pid) {
+        if (game.default.all_card[card.name].aura) {
+          aura_modify.personal[id] = false
+          aura_modify.opponent[id] = true
+        }
+      }
+    }
+
     if (rlt[id].on) {
       //console.log('skt')
       game.room[personal._rid].cards[rlt[id].on].socket[id] = true
@@ -250,7 +259,8 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     Object.assign(param.opponent[id], rlt[id])
   }
 
-  game.aura(personal, aura_cancel)
+  if (Object.keys(aura_modify.personal)) game.aura(personal, aura_modify.personal)
+  if (Object.keys(aura_modify.opponent)) game.aura(opponent, aura_modify.opponent)
   //console.log(param.opponent)
   //console.log(param.personal)
 
@@ -309,6 +319,7 @@ Game.prototype.checkUse = function (client, it, cb) {
     if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
 
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
+    if (card.curr_own !== client._pid) return cb( {err: 'cant use opponent card'})
     if (card.cover && card.field === 'life') return cb({err: 'cant use covered card'})
     if (card.field === 'socket' && room.phase === 'normal') {
       client.card_pause.return = it.id
@@ -422,6 +433,7 @@ Game.prototype.triggerCard = function (client, it, cb) {
 
   if (room.phase === 'counter') return cb({err: 'choose'})
   if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
+  if (card.curr_own !== client._pid) return cb( {err: 'cant trigger opponent card'})
   if (room.phase === 'socket') {
     if (card.type.base !== 'artifact') return cb({err: 'can only socket on artifact'})
       client.card_pause['socket'] = it.id
@@ -609,7 +621,7 @@ Game.prototype.bleed = function (personal, param) {
   // check err
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
   }
@@ -828,7 +840,7 @@ Game.prototype.heal = function (personal, param) {
 
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
   }
@@ -868,7 +880,7 @@ Game.prototype.receive = function (personal, param) {
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
   }
@@ -1592,6 +1604,8 @@ io.on('connection', client => {
       // effect
       let avail_effect = game.judge(nxt_ply, nxt_ply._foe, {chanting: nxt_ply.chanting})
       game.effectTrigger(nxt_ply, nxt_ply._foe, avail_effect)
+      // reset
+      nxt_ply.chanting = {}
     }
   }
 
@@ -1629,7 +1643,7 @@ io.on('connection', client => {
     for (let id in it.card_pick) {
       let card = room.cards[id]
       if (card == null) return {err: true}
-      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] || !game.eff_tg_both[effect])) return
+      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] && !game.eff_tg_both[effect])) return
     }
 
     let rlt = game[effect](client, it)
