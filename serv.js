@@ -231,9 +231,15 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
       }
     }
 
+    if (card.socket && Object.keys(card.socket).length) {
+      let tmp = game.cardMove(personal, opponent, Object.assign({}, card.socket))
+      Object.assign(param.personal, tmp.personal)
+      Object.assign(param.opponent, tmp.opponent)
+    }
+
     if (rlt[id].on) {
       //console.log('skt')
-      game.room[personal._rid].cards[rlt[id].on].socket[id] = true
+      game.room[personal._rid].cards[rlt[id].on].socket[id] = {off: rlt[id].on}
       card.bond = rlt[id].on
     }
     if (rlt[id].off) {
@@ -646,7 +652,7 @@ Game.prototype.block = function (personal, param) {
   if (card_pick.length != 1) return {err: 'can only choose one card'}
   for (let id of card_pick) {
     let card = room.cards[id]
-    if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
     if (card.field === 'life' || card.field === 'hand') return {err: 'can only choose battle, altar, socket card'}
     let eff = game.default.all_card[card.name].effect
     if (eff.trigger) if(!eff.trigger.block) return {err: 'no block effect'}
@@ -740,7 +746,24 @@ Game.prototype.stat = function (personal, effect) {
 }
 
 Game.prototype.control = function (personal, param) {
-  // check artifact aura
+  /*
+  let room = this.room[personal._rid]
+  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
+  let card_pick = Object.keys(param.card_pick)
+
+  if (card_pick.length != 1) return {err: 'can only choose one card'}
+  for (let id of card_pick) {
+    let card = room.cards[id]
+    if (!effect.personal[card.field]) return {err: 'wrong type of chosen card field'}
+    if (!effect.personal[card.field][card.type.base]) return {err: 'wrong type of chosen card type'}
+
+    let param = {}
+    param[id] = {to: card.field, new_own: 'opponent'}
+    let rlt = this.cardMove(personal._foe, personal, param)
+  }
+  */
+  //
+
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
