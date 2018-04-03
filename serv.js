@@ -209,7 +209,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     let card = game.room[personal._rid].cards[id]
 
     // owner and attribute adjust, rlt[id].new_own set here when the card will be into grave
-    rlt[id].curr_own = (card.owner === personal._pid)? 'personal' : 'opponent'
+    rlt[id].curr_own = (card.curr_own === personal._pid)? 'personal' : 'opponent'
     rlt[id].name = (rlt[id].cover)? 'cardback' : card.name
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
@@ -437,7 +437,7 @@ Game.prototype.triggerCard = function (client, it, cb) {
   let room = game.room[client._rid]
   let card = room.cards[it.id]
 
-  if (room.phase === 'counter') return cb({err: 'choose'})
+  if (room.phase === 'counter' || room.phase === 'effect') return cb({err: 'choose'})
   if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
   if (card.curr_own !== client._pid) return cb( {err: 'cant trigger opponent card'})
   if (room.phase === 'socket') {
@@ -471,21 +471,23 @@ Game.prototype.triggerCard = function (client, it, cb) {
     client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true} })
   }
   else {
-    if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effecr === 'trigger')) {
+    if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effect.trigger)) {
       room.phase = 'effect'
 
       // send to grave
       let param = {}
       param[it.id] = {to: 'grave'}
       let rlt = game.cardMove(client, client._foe, param)
-      client.emit('plyUseCard', { msg: {phase: 'effect phase', action: `trigger ${card.name}`}, card: rlt.personal })
-      client._foe.emit('plyUseCard', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent })
+      client.emit('playerTrigger', { msg: {phase: 'effect phase', action: `trigger ${card.name}`}, card: rlt.personal })
+      client._foe.emit('playerTrigger', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent })
+
+      console.log('send success')
 
       // effect trigger
       param = {trigger: {}}
       param.trigger[it.id] = {}
-      let avail_effect = game.judge(client._foe, client, param)
-      game.effectTrigger(client._foe, client, avail_effect)
+      let avail_effect = game.judge(client, client._foe, param)
+      game.effectTrigger(client, client._foe, avail_effect)
     }
   }
 }
@@ -746,10 +748,10 @@ Game.prototype.stat = function (personal, effect) {
 }
 
 Game.prototype.control = function (personal, param) {
-  /*
   let room = this.room[personal._rid]
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let card_pick = Object.keys(param.card_pick)
+  let rlt = {}
 
   if (card_pick.length != 1) return {err: 'can only choose one card'}
   for (let id of card_pick) {
@@ -758,23 +760,12 @@ Game.prototype.control = function (personal, param) {
     if (!effect.personal[card.field][card.type.base]) return {err: 'wrong type of chosen card type'}
 
     let param = {}
-    param[id] = {to: card.field, new_own: 'opponent'}
-    let rlt = this.cardMove(personal._foe, personal, param)
+    param[id] = {from: card.field, to: card.field, new_own: 'opponent'}
+    rlt = this.cardMove(personal._foe, personal, param)
   }
-  */
-  //
 
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    for (let object in effect[target]) {
-      for (let type in effect[target][object]) {
-        rlt.card['control'] = {}
-      }
-    }
-  }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
+  personal.emit('effectTrigger', {card:{control:{ personal: rlt.opponent, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card:{control:{ personal: {}, opponent: rlt.personal }}})
   return {}
 }
 
@@ -1562,10 +1553,10 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     let card = room.cards[it.id]
 
-    if (it == null) return
-    if (typeof cb !== 'function') return
-    if (card == null) return
-    if (card.curr_own != client._pid) return
+    if (it == null) return {err: 'it = null'}
+    if (typeof cb !== 'function') {err: 'cb != function'}
+    if (card == null) return {err: 'card = null'}
+    //if (card.curr_own != client._pid) return
 
     let type = (card.field === 'battle' || card.field === 'altar')? 'trigger' : 'use'
     if (type === 'use') game.checkUse(client, it, cb)
@@ -1652,6 +1643,7 @@ io.on('connection', client => {
 
     let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
 
+    console.log('effectChoose')
     console.log(client.eff_queue)
 
     // if can't find effect name return

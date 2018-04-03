@@ -43,8 +43,8 @@ const Game = function () {
   }
 
   for (let field in this.default.player.personal.y) {
-      this.default.player.personal.y[field] = this.default.game.height - this.default.player.personal.y[field] / this.default.scale
-      this.default.player.opponent.y[field] = this.default.game.height - this.default.player.opponent.y[field] / this.default.scale
+    this.default.player.personal.y[field] = this.default.game.height - this.default.player.personal.y[field] / this.default.scale
+    this.default.player.opponent.y[field] = this.default.game.height - this.default.player.opponent.y[field] / this.default.scale
   }
 
   this.player = {
@@ -817,7 +817,8 @@ const Card = function (init) {
   this.img.inputEnabled = true
 
   this.img.events.onInputDown.add( function(){
-    if (this.owner === 'personal') this.click()
+    //if (this.owner === 'personal') this.click()
+    this.click()
   }, this)
   this.img.events.onInputOver.add( function(){
     game.textPanel({effect: this.name})
@@ -960,8 +961,13 @@ socket.on('plyUseVanish', it => {
 socket.on('playerTrigger', it => {
   game.textPanel(it.msg)
   game.resetCardPick()
-  game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
-  game.counterPanel(it.rlt)
+  if (it.rlt) {
+    game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
+    game.counterPanel(it.rlt)
+  }
+  else {
+    game.cardMove(it.card)
+  }
 })
 
 socket.on('foeDrawCard', it => {
@@ -1010,6 +1016,8 @@ socket.on('turnShift', it => {
 
 // card effects
 socket.on('effectTrigger', effect => {
+  console.log(effect)
+
   // attr
 
   // card
@@ -1043,7 +1051,6 @@ socket.on('effectTrigger', effect => {
   // stat
   game.statPanel(effect.stat)
 
-  console.log(effect)
 })
 
 socket.on('effectLoop', effect => {
