@@ -150,6 +150,7 @@ Game.prototype.buildPlayer = function (client) {
     silence: {}, // can't use life field card
     fear   : {}, // can't attack
 
+    triumph: {}, // atk cant be vanish when artifact > 3 on battle
     precise: {}, // atk cant be vanish
     stamina: {}, // handcard limit + 2
     recycle: {}, // draw 1 card when an artifact send to grave
@@ -601,6 +602,8 @@ Game.prototype.judge = function (personal, opponent, card_list) {
                 case 'handcard':
                   curr_val = player[target].card_amount.hand
                   break
+                case 'battle':
+                  curr_val = player[target].card_amount.battle
 
                 default:break
               }
@@ -1290,7 +1293,7 @@ io.on('connection', client => {
     client.action_point -= 1
     client.atk_phase -= 1
 
-    if (Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
+    if ((Object.keys(client.aura.triumph).length && client.card_amount.battle >= 3) || Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
       game.buff(client, {eagle_eye: {personal: false}})
       room.atk_status.hit = true
       let avail_effect = game.judge(client, client._foe, {enchant: client._foe.atk_enchant})
