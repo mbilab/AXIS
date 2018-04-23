@@ -110,6 +110,7 @@ const Game = function () {
     }
   }
   this.phaser = null
+  this.tween = null
   this.text = {phase: null, action: null, cursor: null, effect: null, stat: null}
   this.text_group = null
   this.card_eff = {empty: '', cardback: 'covered'}
@@ -332,7 +333,7 @@ Game.prototype.cardMove = function (rlt) {
     card.body.angle = 0
     card.frame.visible = false
     //if (rlt[id].to === 'grave') card.cover = false
-    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.body.kill()
+    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') //card.body.kill()
 
     if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
       let tg_atf = (rlt[id].on)? (rlt[id].on) : (rlt[id].off)
@@ -371,24 +372,51 @@ Game.prototype.fixCardPos = function (rlt) {
       let init_x = 0
       switch (field) {
         case 'grave':
-          this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
+          let card = tg_field[tg_field.length - 1]
+          this.tween = this.phaser.add.tween(card.body).to(
+            {x: this.page.game[`${target}_grave`].x, y: this.page.game[`${target}_grave`].y},
+            300, Phaser.Easing.Sinusoidal.InOut, true
+          )
+          this.tween.onComplete.add(() => {
+            card.body.kill()
+            game.page.game[`${target}_grave`].loadTexture(card.name)
+          })
+
+
+          //this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
           break
         case 'life':
           init_x = 21 + this.default.card.width/2
           for (let [idx, card] of tg_field.entries()) {
+            //let last_x = card.body.x
             let x = init_x + this.default.card.width*6/5*Math.floor(idx/2) + 12
             let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
             //card.img.reset(x, y)
-            card.body.reset(x, y)
+
+            //tween
+            this.tween = this.phaser.add.tween(card.body).to(
+              {x: x, y: y}, 300, Phaser.Easing.Sinusoidal.InOut, true
+            )
+
+            //card.body.reset(x, y)
+
+            //
+
           }
           break
-        case 'socket': break
+        case 'socket':
+          break
+
         default:
           init_x = this.default.game.width/2 - this.default.card.width*3/5*(tg_field.length - 1) + this.default.card.width*6/5
           for (let [idx, card] of tg_field.entries()) {
             let x = init_x + this.default.card.width*6/5*idx + 12
+            let y = game.default.player[target].y[`${field}`]
             //card.img.reset(x, game.default.player[target].y[`${field}`])
-            card.body.reset(x, game.default.player[target].y[`${field}`])
+            //card.body.reset(x, game.default.player[target].y[`${field}`])
+            this.tween = this.phaser.add.tween(card.body).to(
+              {x: x, y: y}, 300, Phaser.Easing.Sinusoidal.InOut, true
+            )
           }
           break
       }
@@ -809,7 +837,14 @@ const Card = function (init) {
   this.bond = null
   this.owner = init.owner
 
-  this.body = game.phaser.add.sprite(0, 0, null)
+
+  this.body = game.phaser.add.sprite(
+    game.page.game[`${this.owner}_deck`].x,
+    game.page.game[`${this.owner}_deck`].y,
+    null
+  )
+
+  //this.body = game.phaser.add.sprite(0, 0, null)
   this.body.anchor.setTo(0.5, 0.5)
 
   this.img = game.phaser.add.sprite(0, 0, init.cover ? 'cardback' : init.name)
