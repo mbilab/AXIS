@@ -329,19 +329,29 @@ Game.prototype.cardMove = function (rlt) {
     card.owner = rlt[id].new_own
     //card.cover = rlt[id].cover
     card.img.loadTexture((rlt[id].cover)? 'cardback' : card.name)
-    card.body.alpha = 1
-    card.body.angle = 0
+    this.tween = this.phaser.add.tween(card.body).to(
+      {alpha: 1, angle: 0}, 300, Phaser.Easing.Sinusoidal.InOut, true
+    )
+    //card.body.alpha = 1
+    //card.body.angle = 0
     card.frame.visible = false
     //if (rlt[id].to === 'grave') card.cover = false
-    if (rlt[id].to === 'grave' || rlt[id].to === 'socket') //card.body.kill()
+    //if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.body.kill()
 
     if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
       let tg_atf = (rlt[id].on)? (rlt[id].on) : (rlt[id].off)
       let param = {curr_own: rlt[id].curr_own, from: 'battle', id: tg_atf}
       let skt = game.player[rlt[id].curr_own].battle[this.findCard(param)]
       card.bond = (rlt[id].to === 'socket')? tg_atf : (null)
-      if (rlt[id].to === 'socket') skt.socket[card.id] = true
-      else delete skt.socket[card.id]
+      if (rlt[id].to === 'socket') {
+        skt.socket[card.id] = true
+        this.tween = this.phaser.add.tween(card.body).to(
+          {x: skt.body.x, y: skt.body.y, visible: false}, 300, Phaser.Easing.Sinusoidal.InOut, true
+        )
+      }
+      else {
+        delete skt.socket[card.id]
+      }
 
       skt.frame.visible = (Object.keys(skt.socket).length)? true : false
     }
@@ -382,9 +392,9 @@ Game.prototype.fixCardPos = function (rlt) {
             game.page.game[`${target}_grave`].loadTexture(card.name)
           })
 
-
           //this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
           break
+
         case 'life':
           init_x = 21 + this.default.card.width/2
           for (let [idx, card] of tg_field.entries()) {
@@ -392,16 +402,10 @@ Game.prototype.fixCardPos = function (rlt) {
             let x = init_x + this.default.card.width*6/5*Math.floor(idx/2) + 12
             let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
             //card.img.reset(x, y)
-
-            //tween
+            //card.body.reset(x, y)
             this.tween = this.phaser.add.tween(card.body).to(
               {x: x, y: y}, 300, Phaser.Easing.Sinusoidal.InOut, true
             )
-
-            //card.body.reset(x, y)
-
-            //
-
           }
           break
         case 'socket':
@@ -415,7 +419,7 @@ Game.prototype.fixCardPos = function (rlt) {
             //card.img.reset(x, game.default.player[target].y[`${field}`])
             //card.body.reset(x, game.default.player[target].y[`${field}`])
             this.tween = this.phaser.add.tween(card.body).to(
-              {x: x, y: y}, 300, Phaser.Easing.Sinusoidal.InOut, true
+              {x: x, y: y, visible: true}, 300, Phaser.Easing.Sinusoidal.InOut, true
             )
           }
           break
@@ -997,7 +1001,12 @@ socket.on('playerTrigger', it => {
   game.textPanel(it.msg)
   game.resetCardPick()
   if (it.rlt) {
-    game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
+    //game.player[it.card.curr_own][it.card.from][game.findCard(it.card)].body.angle += 90
+    let card = game.player[it.card.curr_own][it.card.from][game.findCard(it.card)]
+    game.tween = game.phaser.add.tween(card.body).to(
+      {angle: card.body.angle + 90}, 500, Phaser.Easing.Sinusoidal.InOut, true
+    )
+
     game.counterPanel(it.rlt)
   }
   else {
