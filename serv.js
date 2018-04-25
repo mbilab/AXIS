@@ -827,7 +827,6 @@ Game.prototype.destroy = function (personal, effect) {
     let curr_own = (card.curr_own === personal._pid)? 'personal' : 'opponent'
     if (!mod_eff[curr_own]) continue
     if (!mod_eff[curr_own][card.field]) continue
-    if (!mod_eff[curr_own][card.field][card.type.base]) continue
     tmp[curr_own][id] = {from: card.field, to: 'grave'}
   }
 
@@ -855,8 +854,14 @@ Game.prototype.destroy = function (personal, effect) {
 }
 
 
-
 Game.prototype.discard = function (personal, param) {
+  /*
+  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
+  let card_pick = Object.keys(param.card_pick)
+  let rlt = { card: { discard: { personal: {}, opponent: {} } } }
+
+  */
+
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
