@@ -101,8 +101,9 @@ const Game = function () {
   this.choose_eff = {
     bleed   : true,
     block   : true, // card you use to block
+    break   : true,
     control : true,
-    destroy : true,
+    //destroy : true,
     drain   : true,
     discard : true,
     damage  : true,
@@ -115,10 +116,11 @@ const Game = function () {
   }
   this.eff_tg_foe = { // record effect target card is opponent
     control : true,
-    destroy : true,
+    // destroy : true,
     steal   : true
   }
   this.eff_tg_both = {
+    break   : true,
     teleport: true
   }
   this.pool = {}
@@ -150,11 +152,12 @@ Game.prototype.buildPlayer = function (client) {
     silence: {}, // can't use life field card
     fear   : {}, // can't attack
 
-    triumph: {}, // atk cant be vanish when artifact > 3 on battle
-    precise: {}, // atk cant be vanish
-    stamina: {}, // handcard limit + 2
-    recycle: {}, // draw 1 card when an artifact send to grave
-    berserk: {}  // equip wont cost action point
+    solidity: {}, // your artifacts can't be destroy or break
+    triumph : {}, // atk cant be vanish when artifact > 3 on battle
+    precise : {}, // atk cant be vanish
+    stamina : {}, // handcard limit + 2
+    recycle : {}, // draw 1 card when an artifact send to grave
+    berserk : {}  // equip wont cost action point
   }
   client.buff = { // next action trigger
     mana_tide : false, // next spell this turn won't cost action point
@@ -215,6 +218,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
     if (rlt[id].to === 'grave' || rlt[id].to === 'hand' || ((rlt[id].to === 'deck' || rlt[id].to === 'life') && card.field !== 'hand') ) {
+      console.log('111')
       if (game.default.all_card[card.name].aura) aura_modify.personal[id] = false
       if (card.type.base === 'artifact') {
         card.overheat = false
@@ -701,6 +705,15 @@ Game.prototype.aura = function (personal, card_list) { // card_list = {cid: true
     let eff = game.default.all_card[room.cards[cid].name].aura
     for (let tp in eff) {
       for (let tg in eff[tp]) {
+        if (card_list[cid]) {
+          player[tg].aura[tp][cid] = true
+          rlt.stat[tg][tp] = true
+        }
+        else {
+          delete player[tg].aura[tp][cid]
+          rlt.stat[tg][tp] = false
+        }
+        /*
         if (player[tg].aura[tp][cid]) {
           delete player[tg].aura[tp][cid]
           rlt.stat[tg][tp] = false
@@ -709,12 +722,16 @@ Game.prototype.aura = function (personal, card_list) { // card_list = {cid: true
           player[tg].aura[tp][cid] = true
           rlt.stat[tg][tp] = true
         }
+        */
       }
     }
   }
 
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', genFoeRlt(rlt))
+
+  console.log(personal.aura.cripple)
+
   return {}
 }
 
@@ -772,9 +789,46 @@ Game.prototype.control = function (personal, param) {
   return {}
 }
 
-Game.prototype.destroy = function(personal, effect) {
-  // check artifact aura
-  let rlt = { card: {} }
+// break = choose card to send to grave
+Game.prototype.break = function () {
+
+}
+
+// destroy = send all cards in specific field to grave
+Game.prototype.destroy = function (personal, effect) {
+  let room = this.room[personal._rid]
+  let player = {personal: personal, opponent: personal._foe}
+  let mod_eff = Object.assign({}, effect)
+  //let rlt = { card: { destroy: { personal: {}, opponent: {} } } }
+
+  // remove effect which is canceled by aura
+
+  let rlt = {}
+
+  for (let tg in mod_eff) {
+    if (Object.keys(player[tg].aura.solidity).length) delete mod_eff[tg].battle
+  }
+
+  let tmp = {personal: {}, opponent: {}}
+  for (let id in room.cards) {
+    let card = room.cards[id]
+    let curr_own = (card.curr_own === personal._pid)? 'personal' : 'opponent'
+    if (!mod_eff[curr_own]) continue
+    if (!mod_eff[curr_own][card.field]) continue
+    if (!mod_eff[curr_own][card.field][card.type.base]) continue
+    tmp[curr_own][id] = {from: card.field, to: 'grave'}
+  }
+
+  for (let tg in mod_eff) {
+    if (!Object.keys(mod_eff[tg]).length) continue
+    rlt = this.cardMove(player[tg], player[tg]._foe, tmp[tg])
+    player[tg].emit('effectTrigger', {card: {destroy: { personal: rlt.personal, opponent: {} }}})
+    player[tg]._foe.emit('effectTrigger', {card: {destroy: { personal: {}, opponent: rlt.opponent }}})
+  }
+
+  return {}
+
+  /*
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
@@ -785,9 +839,12 @@ Game.prototype.destroy = function(personal, effect) {
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
   return {}
+  */
 }
 
-Game.prototype.discard = function(personal, param) {
+
+
+Game.prototype.discard = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
