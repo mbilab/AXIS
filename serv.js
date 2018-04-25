@@ -42,6 +42,9 @@ const Card = function (init) {
     this.overheat = false
     this.socket = {}
   }
+  if (this.type.base === 'spell' && this.type.effect.trigger) {
+    this.lock = true
+  }
 
   let rlt = this.checkMultiType()
   if (Object.keys(rlt).length) {
@@ -224,8 +227,10 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
         card.overheat = false
         card.energy = 2
       }
-      else
+      else {
+        if ('lock' in card) card.lock = true
         card.energy = 1
+      }
     }
     else {
       if (card.field === rlt[id].to && card.curr_own !== player[rlt[id].new_own]._pid) {
@@ -477,8 +482,10 @@ Game.prototype.triggerCard = function (client, it, cb) {
   }
   else {
     if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effect.trigger)) {
-      room.phase = 'effect'
+      console.log(card.lock)
+      if (card.type.base === 'spell' && card.lock) return cb({err: 'trigger spell takes one turn to unseal'})
 
+      room.phase = 'effect'
       // send to grave
       let param = {}
       param[it.id] = {to: 'grave'}
@@ -790,8 +797,13 @@ Game.prototype.control = function (personal, param) {
 }
 
 // break = choose card to send to grave
-Game.prototype.break = function () {
+Game.prototype.break = function (personal, param) {
+  let room = this.room[personal._rid]
+  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
+  let card_pick = Object.keys(param.card_pick)
+  let rlt = {}
 
+  //if (card_pick.length != effect)
 }
 
 // destroy = send all cards in specific field to grave
@@ -1650,12 +1662,22 @@ io.on('connection', client => {
       if (Object.keys(param).length) game[tp](client, param)
     }
 
-    // put outdated card on field to grave
+    // put outdated card on field to grave and unseal trigger spell
     let param = {}
     for (let id in room.cards) {
       let card = room.cards[id]
-      if (card.energy == 0 && card.field === 'battle') param[id] = {from: card.field}
-      if (card.overheat) card.overheat = false
+      switch (card.field) {
+        case 'battle':
+          if (card.energy == 0) param[id] = {from: card.field}
+          if (card.overheat) card.overheat = false
+          break
+
+        case 'altar':
+          if (card.type.effect.trigger) card.lock = false
+          break
+
+        default: break
+      }
     }
     let rlt = {personal: {}, opponent: {}}
     if (Object.keys(param).length) rlt = game.cardMove(client, client._foe, param)
