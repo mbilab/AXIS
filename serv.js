@@ -221,7 +221,6 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     if (!rlt[id].new_own) rlt[id].new_own = (card.owner === personal._pid)? 'personal' : 'opponent'
     if (!rlt[id].to) rlt[id].to = 'grave'
     if (rlt[id].to === 'grave' || rlt[id].to === 'hand' || ((rlt[id].to === 'deck' || rlt[id].to === 'life') && card.field !== 'hand') ) {
-      console.log('111')
       if (game.default.all_card[card.name].aura) aura_modify.personal[id] = false
       if (card.type.base === 'artifact') {
         card.overheat = false
@@ -1387,7 +1386,7 @@ io.on('connection', client => {
     if ((Object.keys(client.aura.triumph).length && client.card_amount.battle >= 3) || Object.keys(client.aura.precise).length || client.buff.eagle_eye) {
       game.buff(client, {eagle_eye: {personal: false}})
       room.atk_status.hit = true
-      let avail_effect = game.judge(client, client._foe, {enchant: client._foe.atk_enchant})
+      let avail_effect = game.judge(client, client._foe, {enchant: client.atk_enchant})
       game.effectTrigger(client, client._foe, avail_effect)
     }
     else {
