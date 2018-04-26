@@ -561,7 +561,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
         if (this.choose_eff[effect_name]) {
           for (let target in effect) {
             if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
-            player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: avail_effect, tp: tp}})
+            player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}})
             if (!(id in player[target].eff_queue)) player[target].eff_queue[id] = {}
             if (!(tp in player[target].eff_queue[id])) player[target].eff_queue[id][tp] = {}
             player[target].eff_queue[id][tp][avail_effect] = true
@@ -637,7 +637,7 @@ Game.prototype.bleed = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let card_pick = Object.keys(param.card_pick)
   let rlt = { card: {bleed: {personal: {}, opponent: {}}} }
-  let bleed = effect[Object.keys(effect)[0]]
+  let bleed = effect[param.tg]//effect[Object.keys(effect)[0]]
   if (card_pick.length != bleed) return {err: 'error length of card pick'}
 
   // check err
@@ -855,12 +855,28 @@ Game.prototype.destroy = function (personal, effect) {
 
 
 Game.prototype.discard = function (personal, param) {
-  /*
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
+  let room = this.room[personal._rid]
+  let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
   let card_pick = Object.keys(param.card_pick)
-  let rlt = { card: { discard: { personal: {}, opponent: {} } } }
+  let total_len = 0
+  for (let tp in effect) {
+    total_len += effect[tp]
+  }
+  if (card_pick.length != total_len) return {err: 'error discard length'}
 
-  */
+  for (let id in param.card_pick) {
+    let card = room.cards[id]
+    if (card.field !== 'hand') return {err: 'please choose hand card'}
+    if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
+    if (!effect[('card' in effect)? 'card' : card.type.base]) return {err: 'error type length'}
+    effect[('card' in effect)? 'card' : card.type.base] --
+  }
+
+  let rlt = this.cardMove(personal, personal._foe, param.card_pick)
+  personal.emit('effectTrigger', {card: {discard: { personal: rlt.personal, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card: {discard: { personal: {}, opponent: rlt.opponent }}})
+  return {}
+  /*
 
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
@@ -872,6 +888,7 @@ Game.prototype.discard = function (personal, param) {
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
   return {}
+  */
 }
 
 Game.prototype.drain = function (personal, param) {
@@ -1745,7 +1762,14 @@ io.on('connection', client => {
     for (let id in it.card_pick) {
       let card = room.cards[id]
       if (card == null) return {err: true}
-      if (card.curr_own != client._pid && (!game.eff_tg_foe[effect] && !game.eff_tg_both[effect])) return
+
+      if (card.curr_own === client._pid) {
+        if (game.eff_tg_foe[effect]) return
+      }
+      else {
+        if (!game.eff_tg_foe[effect] && !game.eff_tg_both[effect]) return
+      }
+
     }
 
     let rlt = game[effect](client, it)
