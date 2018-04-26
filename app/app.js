@@ -322,21 +322,12 @@ Game.prototype.cardMove = function (rlt) {
     let card = game.player[rlt[id].curr_own][rlt[id].from][pos]
 
     // adjust card attribute
-    //card.img.inputEnabled = (rlt[id].new_own === 'opponent')? false:((rlt[id].to === 'grave')? false: true)
     card.img.inputEnabled = (rlt[id].to === 'grave')? false: true
     card.field = rlt[id].to
     card.name = rlt[id].name
     card.owner = rlt[id].new_own
-    //card.cover = rlt[id].cover
     card.img.loadTexture((rlt[id].cover)? 'cardback' : card.name)
-    this.tween = this.phaser.add.tween(card.body).to(
-      {alpha: 1, angle: 0}, 300, Phaser.Easing.Sinusoidal.InOut, true
-    )
-    //card.body.alpha = 1
-    //card.body.angle = 0
     card.frame.visible = false
-    //if (rlt[id].to === 'grave') card.cover = false
-    //if (rlt[id].to === 'grave' || rlt[id].to === 'socket') card.body.kill()
 
     if (rlt[id].to === 'socket' || rlt[id].from === 'socket') {
       let tg_atf = (rlt[id].on)? (rlt[id].on) : (rlt[id].off)
@@ -382,29 +373,31 @@ Game.prototype.fixCardPos = function (rlt) {
       let init_x = 0
       switch (field) {
         case 'grave':
-          let card = tg_field[tg_field.length - 1]
-          this.tween = this.phaser.add.tween(card.body).to(
-            {x: this.page.game[`${target}_grave`].x, y: this.page.game[`${target}_grave`].y},
-            300, Phaser.Easing.Sinusoidal.InOut, true
-          )
-          this.tween.onComplete.add(() => {
-            card.body.kill()
-            game.page.game[`${target}_grave`].loadTexture(card.name)
-          })
-
-          //this.page.game[`${target}_grave`].loadTexture(tg_field[tg_field.length - 1].name)
+          for (let card of tg_field) {
+            if (!card.body.alive) continue
+            this.tween = this.phaser.add.tween(card.body).to(
+              {
+                x: this.page.game[`${target}_grave`].x,
+                y: this.page.game[`${target}_grave`].y,
+                alpha: 1,
+                angle: 0
+              },
+              300, Phaser.Easing.Sinusoidal.InOut, true
+            )
+            this.tween.onComplete.add(() => {
+              card.body.kill()
+              game.page.game[`${target}_grave`].loadTexture(card.name)
+            })
+          }
           break
 
         case 'life':
           init_x = 21 + this.default.card.width/2
           for (let [idx, card] of tg_field.entries()) {
-            //let last_x = card.body.x
             let x = init_x + this.default.card.width*6/5*Math.floor(idx/2) + 12
             let y = game.default.player[target].y[(idx%2)? 'altar' : 'battle'] + game.default.card.height/2*((target === 'personal')? 1 : -1)
-            //card.img.reset(x, y)
-            //card.body.reset(x, y)
             this.tween = this.phaser.add.tween(card.body).to(
-              {x: x, y: y}, 300, Phaser.Easing.Sinusoidal.InOut, true
+              {x: x, y: y, alpha: 1, angle: 0}, 300, Phaser.Easing.Sinusoidal.InOut, true
             )
           }
           break
@@ -416,10 +409,8 @@ Game.prototype.fixCardPos = function (rlt) {
           for (let [idx, card] of tg_field.entries()) {
             let x = init_x + this.default.card.width*6/5*idx + 12
             let y = game.default.player[target].y[`${field}`]
-            //card.img.reset(x, game.default.player[target].y[`${field}`])
-            //card.body.reset(x, game.default.player[target].y[`${field}`])
             this.tween = this.phaser.add.tween(card.body).to(
-              {x: x, y: y, visible: true}, 300, Phaser.Easing.Sinusoidal.InOut, true
+              {x: x, y: y, alpha: 1, angle: (field === 'hand')? 0 : card.body.angle, visible: true}, 300, Phaser.Easing.Sinusoidal.InOut, true
             )
           }
           break
@@ -1082,13 +1073,11 @@ socket.on('effectTrigger', effect => {
           if (curr.turn_dn) {
             let pos = game.findCard({id: id, curr_own: target, from: 'battle'})
             game.player[target].battle[pos].body.angle += 90
-          }
-          else {
-            let param = {}
-            param[id] = curr
-            game.cardMove(param)
+            delete effect.card[type][target][id]
           }
         }
+        if(Object.keys(effect.card[type][target]).length)
+          game.cardMove(effect.card[type][target])
       }
     }
   }
