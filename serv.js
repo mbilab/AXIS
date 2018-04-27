@@ -310,7 +310,8 @@ Game.prototype.effectEnd = function (room) {
     room.phase = 'normal'
     if (room.player[room.curr_ply].interrupt) {
       // end turn immediately
-      game.endTurn(room.player[room.curr_ply])
+      //game.endTurn(room.player[room.curr_ply])
+      game.frontEnd(room.player[room.curr_ply])
     }
     else {
       for (let pid in room.player) {
@@ -330,7 +331,7 @@ Game.prototype.checkUse = function (client, it, cb) {
   let card = room.cards[it.id]
 
   if (!client.card_pause.choose) {
-    if (room.phase === 'effect' || room.phase === 'attack') return cb( { err: 'choose'} )
+    if (room.phase === 'effect' || room.phase === 'attack' || room.phase === 'end') return cb( { err: 'choose'} )
     if (card.field === 'socket' && room.phase === 'counter') return cb( {err: 'choose'} )
 
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
@@ -837,25 +838,14 @@ Game.prototype.destroy = function (personal, effect) {
   }
 
   return {}
-
-  /*
-  for (let target in effect) {
-    for (let object in effect[target]) {
-      for (let type in effect[target][object]) {
-        rlt.card['destroy'] = {}
-      }
-    }
-  }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
-  return {}
-  */
 }
-
 
 Game.prototype.discard = function (personal, param) {
   let room = this.room[personal._rid]
-  let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
+  let effect = (room.phase === 'end')
+               ? {card: personal.card_amount.hand + Object.keys(personal.aura.stamina).length*2 - personal.hand_max}
+               : Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
+
   let card_pick = Object.keys(param.card_pick)
   let total_len = 0
   for (let tp in effect) {
@@ -875,19 +865,6 @@ Game.prototype.discard = function (personal, param) {
   personal.emit('effectTrigger', {card: {discard: { personal: rlt.personal, opponent: {} }}})
   personal._foe.emit('effectTrigger', {card: {discard: { personal: {}, opponent: rlt.opponent }}})
   return {}
-  /*
-
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    for (let type in effect[target]) {
-      rlt.card['discard'] = {}
-    }
-  }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
-  return {}
-  */
 }
 
 Game.prototype.drain = function (personal, param) {
@@ -1620,7 +1597,7 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
-    if (client.card_amount.hand == client.hand_max + Object.keys(client.aura.stamina).length*2) return cb( {err: 'your hand is full'} )
+    //if (client.card_amount.hand == client.hand_max + Object.keys(client.aura.stamina).length*2) return cb( {err: 'your hand is full'} )
 
     client.action_point -= 1
 
@@ -1656,7 +1633,7 @@ io.on('connection', client => {
     else game.triggerCard(client, it, cb)
   })
 
-  Game.prototype.endTurn = function (client) {
+  Game.prototype.frontEnd = function (client) {
     let room = game.room[client._rid]
 
     // !-- end last player turn
@@ -1667,9 +1644,6 @@ io.on('connection', client => {
     client.atk_phase = game.default.atk_phase
     client.atk_enchant = {}
     client.interrupt = false
-
-    // change player
-    room.curr_ply = (client.stat.charge)? client._pid : (client._foe._pid)
 
     // clear stat and buff
     for (let tp of ['stat', 'buff']) {
@@ -1683,8 +1657,25 @@ io.on('connection', client => {
       if (Object.keys(param).length) game[tp](client, param)
     }
 
-    // put outdated card on field to grave and unseal trigger spell
+    room.phase = 'end'
+
+    // discard card request when turn ends
+    if (client.card_amount.hand > client.hand_max) {
+      client.eff_queue.end = {end: {discard: true}}
+      client.emit('effectLoop', {rlt: {name: 'end', id: 'end', eff: 'discard', tp: 'end', tg: 'personal'}})
+    }
+    else this.backEnd(client)
+  }
+
+  Game.prototype.backEnd = function (client) {
+    let room = game.room[client._rid]
     let param = {}
+
+    // change player
+    room.curr_ply = (client.stat.charge)? client._pid : (client._foe._pid)
+    room.phase = 'normal'
+
+    // put outdated card on field to grave and unseal trigger spell
     for (let id in room.cards) {
       let card = room.cards[id]
       switch (card.field) {
@@ -1694,7 +1685,7 @@ io.on('connection', client => {
           break
 
         case 'altar':
-          if (card.type.effect.trigger) card.lock = false
+          if (card.type.effect.trigger && card.lock) card.lock = false
           break
 
         default: break
@@ -1733,7 +1724,8 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb({ err: `not allowed in ${room.phase} phase`})
     if (room.curr_ply !== client._pid) return cb({err: 'waiting for opponent'})
 
-    game.endTurn(client)
+    //game.endTurn(client)
+    game.frontEnd(client)
   })
 
   // ----------------------------------------------------------------------------
@@ -1742,12 +1734,9 @@ io.on('connection', client => {
     let room = game.room[client._rid]
     if (it == null) return
     if (typeof cb !== 'function') return
-    if (room.phase !== 'attack' && room.phase !== 'effect') return
+    if (room.phase !== 'attack' && room.phase !== 'effect' && room.phase !== 'end') return
 
     let effect = (it.eff.split('_')[0] === 'damage')? (it.decision) : (it.eff.split('_')[0])
-
-    console.log('effectChoose')
-    console.log(client.eff_queue)
 
     // if can't find effect name return
     if (!game[effect]) return {err: true}
@@ -1780,7 +1769,10 @@ io.on('connection', client => {
 
     if (!Object.keys(client.eff_queue).length && !Object.keys(client._foe.eff_queue).length) {
       if (it.decision && room.phase === 'attack') game.attackEnd(room)
-      else game.effectEnd(room)
+      else {
+        if (room.phase === 'end') game.backEnd(client)
+        else game.effectEnd(room)
+      }
     }
   })
 })
