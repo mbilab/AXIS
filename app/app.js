@@ -1057,33 +1057,50 @@ socket.on('effectTrigger', effect => {
 
   // card
   for (let type in effect.card) {
-    // card flip or cover
-    if (type === 'receive' || type === 'heal' || type === 'bleed') {
-      let target = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
-      for (let id in effect.card[type][target]) {
-        let pos = game.findCard({id: id, curr_own: target, from: 'life'})
-        game.player[target].life[pos].flip(effect.card[type][target][id])
-      }
-    }
-    // card move or trigger
-    else {
-      for (let target in effect.card[type]) {
+    switch (type) {
+      // card flip
+      case 'receive':
+      case 'heal':
+      case 'bleed':
+        let target = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
         for (let id in effect.card[type][target]) {
-          let curr = effect.card[type][target][id]
-          if (curr.turn_dn) {
-            let pos = game.findCard({id: id, curr_own: target, from: 'battle'})
-            game.player[target].battle[pos].body.angle += 90
-            delete effect.card[type][target][id]
-          }
+          let pos = game.findCard({id: id, curr_own: target, from: 'life'})
+          game.player[target].life[pos].flip(effect.card[type][target][id])
         }
-        if(Object.keys(effect.card[type][target]).length)
-          game.cardMove(effect.card[type][target])
-      }
+        break
+
+      // generate new card
+      case 'draw':
+        let fix_field = {}
+        for (let id in effect.card[type]) {
+          let curr = effect.card[type][id]
+          game.player[curr.new_own].hand.push( new Card({name: (curr.name)? curr.name : 'cardback', id: id, cover: (curr.cover)? curr.cover : (false), owner: curr.new_own, field: curr.to}) )
+          if (curr.deck_empty) game.page.game[`${curr.new_own}_deck`].kill()
+          if (!fix_field[curr.new_own]) fix_field[curr.new_own] = {hand: true}
+        }
+        game.fixCardPos(fix_field)
+        break
+
+      // card move or turn
+      default:
+        for (let target in effect.card[type]) {
+          for (let id in effect.card[type][target]) {
+            let curr = effect.card[type][target][id]
+            if (curr.turn_dn) {
+              let pos = game.findCard({id: id, curr_own: target, from: 'battle'})
+              game.player[target].battle[pos].body.angle += 90
+              delete effect.card[type][target][id]
+            }
+          }
+          if(Object.keys(effect.card[type][target]).length)
+            game.cardMove(effect.card[type][target])
+        }
+        break
     }
   }
+
   // stat
   game.statPanel(effect.stat)
-
 })
 
 socket.on('effectLoop', effect => {

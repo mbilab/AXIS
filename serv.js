@@ -262,6 +262,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     card.field = rlt[id].to
     player[rlt[id].new_own].card_amount[rlt[id].to] += 1
     card.curr_own = player[rlt[id].new_own]._pid
+    if (!personal.card_amount.deck) rlt[id].deck_empty = 'personal'
 
     // build return object
     param.personal[id] = {}
@@ -270,7 +271,15 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
     param.opponent[id] = {}
     rlt[id].curr_own = (rlt[id].curr_own === 'personal')? 'opponent' : 'personal'
     rlt[id].new_own = (rlt[id].new_own === 'personal')? 'opponent' : 'personal'
+    if (rlt[id].deck_empty) rlt[id].deck_empty = (rlt[id].deck_empty === 'personal')? 'opponent' : 'personal'
+
     rlt[id].cover = (rlt[id].off)? true : false
+
+    if (rlt[id].to === 'hand') {
+      rlt[id].cover = true
+      delete rlt[id].name
+    }
+
     Object.assign(param.opponent[id], rlt[id])
   }
 
@@ -883,8 +892,37 @@ Game.prototype.drain = function (personal, param) {
   return {}
 }
 
-Game.prototype.draw = function(personal, effect) {
+Game.prototype.draw = function (personal, effect) {
+  let room = this.room[personal._rid]
+  let player = {personal: personal, opponent: personal._foe}
+  let rlt = {personal: {}, opponent: {}}
+
+  for (let target in effect) {
+    for (let object in effect[target]) {
+      let val = effect[target][object]
+      let tmp = {}
+      for (let id in room.cards) {
+        let card = room.cards[id]
+        if (card.field === 'deck' && card.curr_own === player[target]._pid) {
+          tmp[id] = {to: 'hand'}
+          val --
+        }
+        if (!val || (val && (val == effect[target][object] - player[target].card_amount.deck)) ) break
+      }
+      let rtn = game.cardMove(player[target], player[target]._foe, tmp)
+      Object.assign(rlt[target], rtn.personal)
+      Object.assign(rlt[(target === 'personal')? 'opponent' : 'personal'], rtn.opponent)
+    }
+  }
+
+  personal.emit('effectTrigger', {card: {draw: rlt.personal}})
+  personal._foe.emit('effectTrigger', {card: {draw: rlt.opponent}})
+
+  return {}
+
+  /*
   let rlt = { card: {} }
+
   for (let target in effect) {
     for (let object in effect[target]) {
       for (let type in effect[target][object]) {
@@ -895,6 +933,7 @@ Game.prototype.draw = function(personal, effect) {
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
   return {}
+  */
 }
 
 Game.prototype.equip = function(personal, param) {
