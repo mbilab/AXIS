@@ -106,7 +106,6 @@ const Game = function () {
     block   : true, // card you use to block
     break   : true,
     control : true,
-    //destroy : true,
     drain   : true,
     discard : true,
     damage  : true,
@@ -119,11 +118,11 @@ const Game = function () {
   }
   this.eff_tg_foe = { // record effect target card is opponent
     control : true,
-    // destroy : true,
     steal   : true
   }
   this.eff_tg_both = {
     break   : true,
+    drain   : true,
     teleport: true
   }
   this.pool = {}
@@ -275,7 +274,7 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
 
     rlt[id].cover = (rlt[id].off)? true : false
 
-    if (rlt[id].to === 'hand') {
+    if (rlt[id].to === 'hand' && rlt[id].from === 'deck') {
       rlt[id].cover = true
       delete rlt[id].name
     }
@@ -569,8 +568,12 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
         if (this.choose_eff[effect_name]) {
           for (let target in effect) {
+            let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}
+
             if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
-            player[target].emit('effectLoop', {rlt: {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}})
+            if (effect_name === 'steal') tmp.ext = {}
+            player[target].emit('effectLoop', {rlt: tmp})
+
             if (!(id in player[target].eff_queue)) player[target].eff_queue[id] = {}
             if (!(tp in player[target].eff_queue[id])) player[target].eff_queue[id][tp] = {}
             player[target].eff_queue[id][tp][avail_effect] = true
@@ -1636,7 +1639,6 @@ io.on('connection', client => {
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
     if (room.curr_ply !== client._pid) return cb( {err: 'waiting for opponent' } )
     if (client.action_point <= 0) return cb( {err: 'not enough action point'} )
-    //if (client.card_amount.hand == client.hand_max + Object.keys(client.aura.stamina).length*2) return cb( {err: 'your hand is full'} )
 
     client.action_point -= 1
 
@@ -1644,16 +1646,12 @@ io.on('connection', client => {
       let card = room.cards[id]
       if (card.field !== 'deck' || card.curr_own !== client._pid) continue
 
-      let param = { id: id, name: card.name }
-      card.field = 'hand'
-      card.cover = false
-      client.card_amount.hand += 1
-      client.card_amount.deck -= 1
-      if (client.card_amount.deck == 0) param.deck_empty = true
+      let param = {}
+      param[id] = {to: 'hand'}
+      let rlt = game.cardMove(client, client._foe, param)
+      client.emit('plyDrawCard', {msg: {action: `draw ${card.name}`}, card: rlt.personal})
+      client._foe.emit('plyDrawCard', {msg: {action: 'foe draw card'}, card: rlt.opponent})
 
-      cb({msg: {action: `draw ${param.name}`}, card: param})
-      delete param.name
-      client._foe.emit('foeDrawCard', {msg: {action: 'foe draw card'}, card: param})
       break
     }
   })

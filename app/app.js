@@ -662,15 +662,7 @@ Player.prototype.chooseCard = function (card) {
 
 Player.prototype.drawCard = function () {
   socket.emit('drawCard', it => {
-    console.log(it)
     if (it.err) return game.textPanel({cursor: it.err})
-    game.textPanel(it.msg)
-
-    //personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, input: true, field: 'hand'}) )
-    personal.hand.push( new Card({name: it.card.name, id: it.card.id, cover: false, owner: 'personal', field: 'hand'}) )
-    game.fixCardPos({ personal: {hand: true} })
-
-    if (it.card.deck_empty) game.page.game.personal_deck.kill()
   })
 }
 
@@ -1005,11 +997,17 @@ socket.on('playerTrigger', it => {
   }
 })
 
-socket.on('foeDrawCard', it => {
+socket.on('plyDrawCard', it => {
   game.textPanel(it.msg)
-  opponent.hand.push(new Card({name: 'cardback', id: it.card.id, cover: true, owner: 'opponent', field: 'hand'}))
-  game.fixCardPos({opponent: {hand: true}})
-  if (it.card.deck_empty) game.page.game.opponent_deck.kill()
+
+  let fix_field = {}
+  for (let id in it.card) {
+    let curr = it.card[id]
+    game.player[curr.new_own].hand.push( new Card({name: (curr.name)? curr.name : 'cardback', id: id, cover: (curr.cover)? curr.cover : (false), owner: curr.new_own, field: curr.to}) )
+    if (curr.deck_empty) game.page.game[`${curr.new_own}_deck`].kill()
+    if (!fix_field[curr.new_own]) fix_field[curr.new_own] = {hand: true}
+  }
+  game.fixCardPos(fix_field)
 })
 
 socket.on('plyUseCard', it => {
