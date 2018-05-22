@@ -568,10 +568,15 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
         if (this.choose_eff[effect_name]) {
           for (let target in effect) {
-            let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}
+            let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target, ext: {}}
 
             if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
-            if (effect_name === 'steal') tmp.ext = {}
+            if (effect_name === 'steal') tmp.ext.hand = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
+              if (this.room[personal._rid].cards[curr].curr_own === opponent._pid && this.room[personal._rid].cards[curr].field === 'hand')
+                last[curr] = this.room[personal._rid].cards[curr].name
+              return last
+            }, {})
+
             player[target].emit('effectLoop', {rlt: tmp})
 
             if (!(id in player[target].eff_queue)) player[target].eff_queue[id] = {}

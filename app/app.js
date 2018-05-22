@@ -1102,6 +1102,7 @@ socket.on('effectTrigger', effect => {
 })
 
 socket.on('effectLoop', effect => {
+  if (Object.keys(effect.rlt.ext).length) console.log(effect.rlt.ext)
   personal.eff_queue.push(effect.rlt)
   if (personal.eff_queue.length == 1) personal.effectLoop()
 })
