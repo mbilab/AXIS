@@ -265,6 +265,9 @@ Game.prototype.cardMove = function (personal, opponent, rlt) {
 
     // build return object
     param.personal[id] = {}
+    if (rlt[id].to === 'hand' && rlt[id].new_own === 'opponent') {
+      rlt[id].cover = true
+    }
     Object.assign(param.personal[id], rlt[id])
 
     param.opponent[id] = {}
@@ -568,14 +571,17 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
         if (this.choose_eff[effect_name]) {
           for (let target in effect) {
-            let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target, ext: {}}
+            let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}
 
             if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
-            if (effect_name === 'steal') tmp.ext.hand = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
-              if (this.room[personal._rid].cards[curr].curr_own === opponent._pid && this.room[personal._rid].cards[curr].field === 'hand')
-                last[curr] = this.room[personal._rid].cards[curr].name
-              return last
-            }, {})
+            if (effect_name === 'steal') {
+              tmp.ext = {}
+              tmp.ext.hand = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
+                if (this.room[personal._rid].cards[curr].curr_own === opponent._pid && this.room[personal._rid].cards[curr].field === 'hand')
+                  last[curr] = this.room[personal._rid].cards[curr].name
+                return last
+              }, {})
+            }
 
             player[target].emit('effectLoop', {rlt: tmp})
 
@@ -927,21 +933,6 @@ Game.prototype.draw = function (personal, effect) {
   personal._foe.emit('effectTrigger', {card: {draw: rlt.opponent}})
 
   return {}
-
-  /*
-  let rlt = { card: {} }
-
-  for (let target in effect) {
-    for (let object in effect[target]) {
-      for (let type in effect[target][object]) {
-        rlt.card['draw'] = {}
-      }
-    }
-  }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
-  return {}
-  */
 }
 
 Game.prototype.equip = function(personal, param) {
@@ -1066,6 +1057,7 @@ Game.prototype.set = function (personal, effect) {
 }
 
 Game.prototype.steal = function (personal, param) {
+  /*
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let rlt = { card: {} }
   for (let target in effect) {
@@ -1077,6 +1069,32 @@ Game.prototype.steal = function (personal, param) {
   }
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', rlt)
+  return {}
+  */
+
+  let room = this.room[personal._rid]
+  let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
+
+  let card_pick = Object.keys(param.card_pick)
+  let total_len = 0
+  for (let tp in effect) {
+    total_len += effect[tp]
+  }
+  if (card_pick.length != total_len) return {err: 'error steal length'}
+
+  for (let id in param.card_pick) {
+    let card = room.cards[id]
+    if (card.field !== 'hand') return {err: 'please choose hand card'}
+    if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
+    if (!effect[('card' in effect)? 'card' : card.type.base]) return {err: 'error type length'}
+    effect[('card' in effect)? 'card' : card.type.base] --
+    param.card_pick[id] = {new_own: 'opponent', to: 'hand'}
+  }
+
+  let rlt = this.cardMove(personal._foe, personal, param.card_pick)
+
+  personal.emit('effectTrigger', {card: {steal: { personal: rlt.opponent, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card: {steal: { personal: {}, opponent: rlt.personal }}})
   return {}
 }
 

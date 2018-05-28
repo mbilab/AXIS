@@ -640,8 +640,15 @@ Player.prototype.effectChoose = function () {
 
 Player.prototype.effectLoop = function () {
   if (personal.eff_queue.length) {
-    if (personal.eff_queue[0].eff.split('_')[0] === 'damage') game.blockPanel({damage: true})
+    let curr_eff = personal.eff_queue[0].eff.split('_')[0]
+
+    if (curr_eff === 'damage') game.blockPanel({damage: true})
     else {
+      if (curr_eff === 'steal') {
+        // flip opponent hand card
+        for (let card of opponent.hand)
+          card.img.loadTexture(card.name)
+      }
       let choose_btn = game.page.game.choose
       choose_btn.reset(choose_btn.x, choose_btn.y)
     }
@@ -1079,6 +1086,11 @@ socket.on('effectTrigger', effect => {
         game.fixCardPos(fix_field)
         break
 
+      case 'steal':
+        // flip hand card back
+        for (let card of opponent.hand)
+          card.img.loadTexture('cardback')
+
       // card move or turn
       default:
         for (let target in effect.card[type]) {
@@ -1102,7 +1114,17 @@ socket.on('effectTrigger', effect => {
 })
 
 socket.on('effectLoop', effect => {
-  if (Object.keys(effect.rlt.ext).length) console.log(effect.rlt.ext)
+  // update covered card name
+  if (effect.rlt.ext) {
+    console.log(effect.rlt.ext)
+    for (let field in effect.rlt.ext) {
+      let upd = effect.rlt.ext[field]
+      for (let card of opponent[field])
+        card.name = upd[card.id]
+    }
+  }
+
+  // effect queue
   personal.eff_queue.push(effect.rlt)
   if (personal.eff_queue.length == 1) personal.effectLoop()
 })
