@@ -116,15 +116,7 @@ const Game = function () {
     steal   : true,
     teleport: true
   }
-  this.eff_tg_foe = { // record effect target card is opponent
-    control : true,
-    steal   : true
-  }
-  this.eff_tg_both = {
-    break   : true,
-    drain   : true,
-    teleport: true
-  }
+
   this.pool = {}
   this.queue = []
   this.room = {}
@@ -666,7 +658,8 @@ Game.prototype.bleed = function (personal, param) {
   // check err
   for (let id of card_pick) {
     let card = room.cards[id]
-    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
   }
@@ -691,7 +684,8 @@ Game.prototype.block = function (personal, param) {
   if (card_pick.length != 1) return {err: 'can only choose one card'}
   for (let id of card_pick) {
     let card = room.cards[id]
-    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field === 'life' || card.field === 'hand') return {err: 'can only choose battle, altar, socket card'}
     let eff = game.default.all_card[card.name].effect
     if (eff.trigger) if(!eff.trigger.block) return {err: 'no block effect'}
@@ -806,6 +800,8 @@ Game.prototype.control = function (personal, param) {
   if (card_pick.length != 1) return {err: 'can only choose one card'}
   for (let id of card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._foe._pid) return {err: 'please choose opponent card'}
     if (!effect.personal[card.field]) return {err: 'wrong type of chosen card field'}
     if (!effect.personal[card.field][card.type.base]) return {err: 'wrong type of chosen card type'}
 
@@ -822,6 +818,7 @@ Game.prototype.control = function (personal, param) {
 // break = choose card to send to grave
 Game.prototype.break = function (personal, param) {
   let room = this.room[personal._rid]
+  let player = {personal: personal, opponent: personal._foe}
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let card_pick = Object.keys(param.card_pick)
   let rlt = {}
@@ -878,6 +875,8 @@ Game.prototype.discard = function (personal, param) {
 
   for (let id in param.card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field !== 'hand') return {err: 'please choose hand card'}
     if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
     if (!effect[('card' in effect)? 'card' : card.type.base]) return {err: 'error type length'}
@@ -962,7 +961,8 @@ Game.prototype.heal = function (personal, param) {
 
   for (let id of card_pick) {
     let card = room.cards[id]
-    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (card.cover) return {err: 'cant pick card is cover'}
   }
@@ -1002,7 +1002,8 @@ Game.prototype.receive = function (personal, param) {
   if (card_pick.length != dmg_taken) return {err: 'error length of card pick'}
   for (let id of card_pick) {
     let card = room.cards[id]
-    //if (card.curr_own !== personal._pid) return {err: 'can only choose your card'}
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field !== 'life') return {err: 'can only choose life field card'}
     if (!card.cover) return {err: 'cant pick card is unveiled'}
   }
@@ -1057,21 +1058,6 @@ Game.prototype.set = function (personal, effect) {
 }
 
 Game.prototype.steal = function (personal, param) {
-  /*
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    for (let object in effect[target]) {
-      for (let type in effect[target][object]) {
-        rlt.card['steal'] = {}
-      }
-    }
-  }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
-  return {}
-  */
-
   let room = this.room[personal._rid]
   let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
 
@@ -1084,6 +1070,8 @@ Game.prototype.steal = function (personal, param) {
 
   for (let id in param.card_pick) {
     let card = room.cards[id]
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._foe._pid) return {err: 'please choose opponent card'}
     if (card.field !== 'hand') return {err: 'please choose hand card'}
     if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
     if (!effect[('card' in effect)? 'card' : card.type.base]) return {err: 'error type length'}
@@ -1806,19 +1794,6 @@ io.on('connection', client => {
     if (!client.eff_queue[it.id][it.tp]) return {err: true}
     // if it.eff doesn't exist in client.eff_queue.your_id return
     if (!client.eff_queue[it.id][it.tp][it.eff]) return {err: true}
-    // check card_pick
-    for (let id in it.card_pick) {
-      let card = room.cards[id]
-      if (card == null) return {err: true}
-
-      if (card.curr_own === client._pid) {
-        if (game.eff_tg_foe[effect]) return
-      }
-      else {
-        if (!game.eff_tg_foe[effect] && !game.eff_tg_both[effect]) return
-      }
-
-    }
 
     let rlt = game[effect](client, it)
     if (rlt.err) return cb(rlt)
