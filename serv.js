@@ -567,9 +567,17 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
 
             if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
             if (effect_name === 'steal') {
-              tmp.ext = {}
+              if (!('ext' in tmp))tmp.ext = {}
               tmp.ext.hand = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
                 if (this.room[personal._rid].cards[curr].curr_own === opponent._pid && this.room[personal._rid].cards[curr].field === 'hand')
+                  last[curr] = this.room[personal._rid].cards[curr].name
+                return last
+              }, {})
+            }
+            if (effect_name === 'retrieve') {
+              if (!('ext' in tmp))tmp.ext = {}
+              tmp.ext.deck = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
+                if (this.room[personal._rid].cards[curr].curr_own === personal._pid && this.room[personal._rid].cards[curr].field === 'deck')
                   last[curr] = this.room[personal._rid].cards[curr].name
                 return last
               }, {})
@@ -818,12 +826,31 @@ Game.prototype.control = function (personal, param) {
 // break = choose card to send to grave
 Game.prototype.break = function (personal, param) {
   let room = this.room[personal._rid]
-  let player = {personal: personal, opponent: personal._foe}
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
-  let card_pick = Object.keys(param.card_pick)
-  let rlt = {}
+  let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
 
-  //if (card_pick.length != effect)
+  let card_pick = Object.keys(param.card_pick)
+  let total_len = 0
+  for (let tp in effect) {
+    total_len += effect[tp]
+  }
+  if (card_pick.length != total_len) return {err: 'error break length'}
+
+  for (let id in param.card_pick) {
+    let card = room.cards[id]
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._foe._pid) return {err: 'please choose opponent card'}
+    if (card.field !== 'battle' && card.field !== 'altar') return {err: 'error chosen card field'}
+    if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
+    if (!effect[('card' in effect)? 'card' : card.type.base]) return {err: 'error type length'}
+    effect[('card' in effect)? 'card' : card.type.base] --
+    param.card_pick[id] = {new_own: 'personal', to: 'grave'}
+  }
+
+  let rlt = this.cardMove(personal._foe, personal, param.card_pick)
+
+  personal.emit('effectTrigger', {card: {break: { personal: rlt.opponent, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card: {break: { personal: {}, opponent: rlt.personal }}})
+  return {}
 }
 
 // destroy = send all cards in specific field to grave
