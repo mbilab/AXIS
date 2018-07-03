@@ -90,6 +90,7 @@ const Game = function () {
       end_turn: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
       leave: {type: 'button', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
       setting_panel: {type: 'sprite', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
+      end_match: {type: 'sprite', x: this.default.game.width/2, y: this.default.game.height/2, img: 'end_match', func: this.player.personal.matchEnd, ext: {req: true} },
 
       // normal action
       attack: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
@@ -627,6 +628,8 @@ Player.prototype.effectChoose = function () {
   socket.emit('effectChoose', param, it => {
     if (it.err) return game.textPanel({cursor: it.err})
 
+    // if needed remove retrieve choose panel here
+
     if (param.eff.split('_')[0] === 'damage') game.blockPanel({done: true})
     personal.eff_queue.shift()
     game.resetCardPick()
@@ -648,6 +651,10 @@ Player.prototype.effectLoop = function () {
         // flip opponent hand card
         for (let card of opponent.hand)
           card.img.loadTexture(card.name)
+      }
+      if (curr_eff === 'retrieve') {
+        // generate a choose card list / panel
+
       }
       let choose_btn = game.page.game.choose
       choose_btn.reset(choose_btn.x, choose_btn.y)
@@ -699,7 +706,13 @@ Player.prototype.endTurn = function () {
 
 Player.prototype.leaveMatch = function () {
   socket.emit('leaveMatch')
-  game.changePage({ next:'lobby' })
+  game.changePage({next: 'lobby'})
+  game.resetPlayer()
+}
+
+Player.prototype.matchEnd = function () {
+  socket.emit('matchEnd')
+  game.changePage({next: 'lobby'})
   game.resetPlayer()
 }
 
@@ -1116,11 +1129,12 @@ socket.on('effectTrigger', effect => {
 socket.on('effectLoop', effect => {
   // update covered card name
   if (effect.rlt.ext) {
-    console.log(effect.rlt.ext)
     for (let field in effect.rlt.ext) {
-      let upd = effect.rlt.ext[field]
-      for (let card of opponent[field])
-        card.name = upd[card.id]
+      if (field !== 'deck') {
+        let upd = effect.rlt.ext[field]
+        for (let card of opponent[field])
+          card.name = upd[card.id]
+      }
     }
   }
 
@@ -1140,6 +1154,12 @@ socket.on('chooseOne', it => {
 
 socket.on('chantingTrigger', it => {
   game.cardMove(it.card)
+})
+
+socket.on('gameOver', it => {
+  let end_panel = game.page.game.end_match
+  end_panel.reset()
+  game.phaser.world.bringToTop(end_panel)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////

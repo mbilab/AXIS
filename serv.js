@@ -660,7 +660,7 @@ Game.prototype.bleed = function (personal, param) {
   let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
   let card_pick = Object.keys(param.card_pick)
   let rlt = { card: {bleed: {personal: {}, opponent: {}}} }
-  let bleed = effect[param.tg]//effect[Object.keys(effect)[0]]
+  let bleed = ((personal.hp - effect[param.tg]) < 0)? personal.hp : (effect[param.tg])//effect[Object.keys(effect)[0]]
   if (card_pick.length != bleed) return {err: 'error length of card pick'}
 
   // check err
@@ -679,6 +679,7 @@ Game.prototype.bleed = function (personal, param) {
     rlt.card.bleed.personal[id] = card.name
   }
 
+  personal.hp -= bleed
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
   return {}
@@ -1000,6 +1001,7 @@ Game.prototype.heal = function (personal, param) {
     rlt.card.heal.personal[id] = card.name
   }
 
+  personal.hp += heal
   personal.emit('effectTrigger', rlt)
   personal._foe.emit('effectTrigger', {card: genFoeRlt(rlt.card)})
   return {}
@@ -1264,6 +1266,16 @@ io.on('connection', client => {
     }
     delete game.room[rid]
     return
+  })
+
+  client.on('matchEnd', cb => {
+    if (!client.hp || !client._foe.hp) {
+      game.buildPlayer(client)
+      game.pool[client._pid] = client
+      delete game.room[client._rid].player[client._pid]
+      if (!Object.keys(game.room[client._rid].player).length) delete game.room[client._rid]
+      delete client._rid
+    }
   })
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -1824,7 +1836,15 @@ io.on('connection', client => {
 
     let rlt = game[effect](client, it)
     if (rlt.err) return cb(rlt)
-    else cb({})
+    else {
+      if (!client.hp) {
+        client.emit('gameOver', {state: 'lose'})
+        client._foe.emit('gameOver', {state: 'win'})
+        return
+      }
+      else cb({})
+    }
+
     delete client.eff_queue[it.id][it.tp][it.eff]
     if (!Object.keys(client.eff_queue[it.id][it.tp]).length) delete client.eff_queue[it.id][it.tp]
     if (!Object.keys(client.eff_queue[it.id]).length) delete client.eff_queue[it.id]
