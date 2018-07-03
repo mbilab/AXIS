@@ -1273,8 +1273,9 @@ io.on('connection', client => {
       game.buildPlayer(client)
       game.pool[client._pid] = client
       delete game.room[client._rid].player[client._pid]
-      if (!Object.keys(game.room[client._rid].player).length) delete game.room[client._rid]
+      if (Object.keys(game.room[client._rid].player).length == 1) delete game.room[client._rid]
       delete client._rid
+      cb({})
     }
   })
 
@@ -1838,8 +1839,9 @@ io.on('connection', client => {
     if (rlt.err) return cb(rlt)
     else {
       if (!client.hp) {
-        client.emit('gameOver', {state: 'lose'})
-        client._foe.emit('gameOver', {state: 'win'})
+        client.emit('gameOver', {msg: {phase: 'You LOSE'}})
+        client._foe.emit('gameOver', {msg: {phase: 'You WIN'}})
+        client._foe.hp = 0
         return
       }
       else cb({})

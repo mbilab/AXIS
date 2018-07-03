@@ -90,7 +90,7 @@ const Game = function () {
       end_turn: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 - 44/this.default.scale + 21, img: 'endTurn', func: this.player.personal.endTurn},
       leave: {type: 'button', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'leave', func: this.player.personal.leaveMatch, ext: {next: 'lobby', req: true} },
       setting_panel: {type: 'sprite', x: this.default.game.width/2 + 12, y: this.default.game.height/2, img: 'setting', ext: {req: true} },
-      end_match: {type: 'sprite', x: this.default.game.width/2, y: this.default.game.height/2, img: 'end_match', func: this.player.personal.matchEnd, ext: {req: true} },
+      end_match: {type: 'sprite', x: this.default.game.width/2, y: this.default.game.height/2, img: 'end_match', func: {onInputDown: this.player.personal.matchEnd}, ext: {next: 'lobby', req: true} },
 
       // normal action
       attack: {type: 'button', x: this.default.game.width - 121 + 44 + 12, y: this.default.game.height/2 + 11/this.default.scale + 21, img: 'attack', func: this.player.personal.attack},
@@ -433,7 +433,7 @@ Game.prototype.pageInit = function () {
             this.page[page_name][elem_name] = game.phaser.add[elem.type](elem.x, elem.y, elem.img)
             if (elem.func) {
               this.page[page_name][elem_name].inputEnabled = true
-              for (let tp in elem.func) this.page[page_name][elem_name].events[tp].add(function(){game[elem.func[tp]]()}, this)
+              for (let tp in elem.func) this.page[page_name][elem_name].events[tp].add(function(){ elem.func[tp]() }, this)
             }
           }
 
@@ -711,9 +711,10 @@ Player.prototype.leaveMatch = function () {
 }
 
 Player.prototype.matchEnd = function () {
-  socket.emit('matchEnd')
-  game.changePage({next: 'lobby'})
-  game.resetPlayer()
+  socket.emit('matchEnd', it => {
+    game.changePage({next: 'lobby'})
+    game.resetPlayer()
+  })
 }
 
 Player.prototype.login = function () {
@@ -1157,8 +1158,9 @@ socket.on('chantingTrigger', it => {
 })
 
 socket.on('gameOver', it => {
+  game.textPanel(it.msg)
   let end_panel = game.page.game.end_match
-  end_panel.reset()
+  end_panel.reset(game.default.game.width/2, game.default.game.height/2)
   game.phaser.world.bringToTop(end_panel)
 })
 
