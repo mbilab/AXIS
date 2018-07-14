@@ -29,7 +29,8 @@ const Game = function () {
       phase: -75,
       action: -20,
       cursor: 35,
-      effect: -750
+      effect: -750,
+      end: -20
     },
     player: {
       personal: {
@@ -112,7 +113,14 @@ const Game = function () {
   }
   this.phaser = null
   this.tween = null
-  this.text = {phase: null, action: null, cursor: null, effect: null, stat: null}
+  this.text = {
+    phase: {init: {font: "26px Arial", fill: '#ffffff', align: 'left'}, x: 51},
+    action: {init: {font: "26px Arial", fill: '#ffffff', align: 'left'}, x: 51},
+    cursor: {init: {font: "26px Arial", fill: '#ffffff', align: 'left'}, x: 51},
+    effect: {init: {font: "26px Arial", fill: '#ffffff', align: 'left'}, x: 51},
+    stat: {init: {font: "26px Arial", fill: '#ffffff', align: 'left'}, x: 33},
+    end: {init: {font: "50px Arial", fill: '#ffffff', align: 'center'}, x: this.default.game.width/2}
+  }
   this.text_group = null
   this.card_eff = {empty: '', cardback: 'covered'}
 }
@@ -122,9 +130,15 @@ Game.prototype.textPanel = function (text) {
   if (text.action) game.text.action.setText(text.action)
   if (text.cursor) game.text.cursor.setText(text.cursor)
   if (text.effect) game.text.effect.setText(game.card_eff[text.effect])
-  if (text.stat) game.text.effect.setText(text.stat)
+  if (text.stat) {
+    game.text.effect.setText(text.stat)
+    game.phaser.world.bringToTop(game.page.game.stat_panel)
+  }
+  if (text.end) {
+    game.text.end.setText(text.end)
+    game.phaser.world.bringToTop(game.text)
+  }
   //game.phaser.world.bringToTop(game.text_group)
-  game.phaser.world.bringToTop(game.page.game.stat_panel)
 }
 
 // param = {personal: {stat1: true, stat2: false}, opponent: {} ...}
@@ -534,7 +548,7 @@ Game.prototype.showTexture = function (btn) {
   let next_btn = this.page.deck_view.next
   let prev_btn = this.page.deck_view.prev
 
-  if(btn.init) deck.page = btn.init
+  if (btn.init) deck.page = btn.init
   else deck.page += btn.page
 
   let start_pos = (deck.page - 1)*10
@@ -744,6 +758,13 @@ Player.prototype.login = function () {
       game.page.deck_build[`${slot}_btn`] = personal.deck_slot[slot].rdm_btn
     }
 
+    // build match search page random deck
+
+    let rdm = new Deck({slot: 'random', name: 'random'})
+    rdm.img.loadTexture('random')
+    rdm.img.inputEnabled = true
+    game.page.match_search.random_deck = rdm.img
+
     game.changePage({ next: 'lobby' })
   })
 }
@@ -793,7 +814,7 @@ const Deck = function (init) {
   this.page = 1
 
   // deck
-  this.index = this.slot.split("_")[1]
+  this.index = (this.slot === 'random')? 4 : this.slot.split("_")[1]
   this.img = game.phaser.add.sprite((game.default.game.width-232)/2 + 84*(this.index-1), game.default.game.height/2, 'emptySlot')
   this.img.events.onInputDown.add(this.click, this)
   this.img.kill()
@@ -823,6 +844,7 @@ Deck.prototype.click = function (){
   }
 }
 
+// !deckmech
 Deck.prototype.randomDeck = function () {
   // !--
   socket.emit('randomDeck', { slot: this.slot }, it => {
@@ -844,7 +866,6 @@ const Card = function (init) {
   this.curr_skt = 0
   this.bond = null
   this.owner = init.owner
-
 
   this.body = game.phaser.add.sprite(
     game.page.game[`${this.owner}_deck`].x,
@@ -1158,10 +1179,13 @@ socket.on('chantingTrigger', it => {
 })
 
 socket.on('gameOver', it => {
-  game.textPanel(it.msg)
+  // game over panel
   let end_panel = game.page.game.end_match
   end_panel.reset(game.default.game.width/2, game.default.game.height/2)
   game.phaser.world.bringToTop(end_panel)
+
+  // game over text
+  game.textPanel(it.msg)
 })
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -1182,10 +1206,10 @@ socket.emit('preload', res => {
 
       // init text
       game.text_group = game.phaser.add.group()
-      let text = ''
-      let init = {font: "26px Arial", fill: '#ffffff', align: 'left'}
       for (let type in game.text) {
-        let x = (type === 'effect')? 21 + 12 + 18 : 21 + 12
+        let text = ''
+        let init = game.text[type].init//{font: "26px Arial", fill: '#ffffff', align: 'left'}
+        let x = game.text[type].x//(type === 'effect')? 21 + 12 + 18 : 21 + 12
         let y = game.default.game.height/2 + game.default.text[type]/game.default.scale
         if (type === 'effect' || type === 'stat') {
           init.backgroundColor = 'rgba(255,255,255,0.9)'
@@ -1193,6 +1217,7 @@ socket.emit('preload', res => {
         }
         game.text[type] = game.phaser.add.text(x, y, text, init)
         if (type === 'effect') game.text_group.add(game.text[type])
+        if (type === 'end') game.text[type].anchor.setTo(0.5)
       }
 
       // init

@@ -19,7 +19,8 @@ const opt = {
   mongo: JSON.parse(fs.readFileSync('./option.json', 'utf-8')).mongo,
   serv_port: 1350
 }
-opt.url = `mongodb://${opt.mongo.account}:${opt.mongo.passwd}@localhost/${opt.mongo.dbname}`
+//opt.url = `mongodb://${opt.mongo.account}:${opt.mongo.passwd}@localhost/${opt.mongo.dbname}`
+opt.url = `mongodb://${opt.mongo.account}:${opt.mongo.passwd}@merry.ee.ncku.edu.tw:27017/${opt.mongo.dbname}`
 
 const app = {
   db: null,
@@ -134,6 +135,7 @@ Game.prototype.buildPlayer = function (client) {
   client.hand_max = game.default.hand_max
   client.life_max = game.default.life_max
   client.card_amount = {altar: 0, battle: 0, deck: 0, grave: 0, hand: 0, life: 0, socket: 0}
+  client.choose_deck = {}
 
   // action
   client.interrupt = false
@@ -1273,7 +1275,7 @@ io.on('connection', client => {
       game.buildPlayer(client)
       game.pool[client._pid] = client
       delete game.room[client._rid].player[client._pid]
-      if (Object.keys(game.room[client._rid].player).length == 1) delete game.room[client._rid]
+      if (!Object.keys(game.room[client._rid].player).length) delete game.room[client._rid]
       delete client._rid
       cb({})
     }
@@ -1300,6 +1302,7 @@ io.on('connection', client => {
     })
   })
 
+  // !deckmech
   client.on('randomDeck', (it, cb) => {
     if (it == null) return
     if (it.slot != 'slot_1' && it.slot != 'slot_2' && it.slot != 'slot_3') return
@@ -1332,7 +1335,11 @@ io.on('connection', client => {
       if (!rlt[0].deck_slot[it.curr_deck]) return
 
       // build deck
-      deck = shuffle(rlt[0].deck_slot[it.curr_deck].card_list)
+
+      // player can choose random deck
+      deck = shuffle((it.curr_deck === 'random')? randomDeck() : (rlt[0].deck_slot[it.curr_deck].card_list) )
+      client.choose_deck[curr_deck] = deck
+
       for(let card_name of deck){
         let curr_card = game.default.all_card[card_name]
         let init = {
@@ -1839,8 +1846,8 @@ io.on('connection', client => {
     if (rlt.err) return cb(rlt)
     else {
       if (!client.hp) {
-        client.emit('gameOver', {msg: {phase: 'You LOSE'}})
-        client._foe.emit('gameOver', {msg: {phase: 'You WIN'}})
+        client.emit('gameOver', {msg: {end: 'You LOSE\nclick anywhere else to leave'}})
+        client._foe.emit('gameOver', {msg: {end: 'You WIN\nclick anywhere else to leave'}})
         client._foe.hp = 0
         return
       }
