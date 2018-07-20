@@ -1332,13 +1332,13 @@ io.on('connection', client => {
 
     if(!it.curr_deck) return cb({err: 'please choose a deck'})
     user.find({account: client._account}).toArray((err, rlt) => {
-      if (!rlt[0].deck_slot[it.curr_deck]) return
+      if (!rlt[0].deck_slot[it.curr_deck] && it.curr_deck !== 'random') return
 
       // build deck
 
       // player can choose random deck
       deck = shuffle((it.curr_deck === 'random')? randomDeck() : (rlt[0].deck_slot[it.curr_deck].card_list) )
-      client.choose_deck[curr_deck] = deck
+      client.choose_deck[it.curr_deck] = deck
 
       for(let card_name of deck){
         let curr_card = game.default.all_card[card_name]

@@ -130,15 +130,12 @@ Game.prototype.textPanel = function (text) {
   if (text.action) game.text.action.setText(text.action)
   if (text.cursor) game.text.cursor.setText(text.cursor)
   if (text.effect) game.text.effect.setText(game.card_eff[text.effect])
-  if (text.stat) {
-    game.text.effect.setText(text.stat)
-    game.phaser.world.bringToTop(game.page.game.stat_panel)
-  }
+  if (text.stat) game.text.effect.setText(text.stat)
   if (text.end) {
     game.text.end.setText(text.end)
-    game.phaser.world.bringToTop(game.text)
+    game.phaser.world.bringToTop(game.text.end)
   }
-  //game.phaser.world.bringToTop(game.text_group)
+  game.phaser.world.bringToTop(game.page.game.stat_panel)
 }
 
 // param = {personal: {stat1: true, stat2: false}, opponent: {} ...}
