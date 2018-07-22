@@ -35,6 +35,7 @@ const app = {
 
 const Card = function (init) {
   //-! this = JSON.parse(JSON.stringify(init))
+  this.id = null
   this.name = init.name
   this.type = init.type
   this.energy = (this.type.base === 'artifact')? 2: 1
@@ -1378,28 +1379,31 @@ io.on('connection', client => {
         room.player[client._pid] = client
 
         // build all cards, life and deck
-        let life = {}
-        life[opponent._pid] = {personal: [], opponent: []}
-        life[client._pid] = {personal: [], opponent: []}
+        let record_deck = {[opponent._pid]: [], [client._pid]: []}
+        let life = {
+            [opponent._pid]: {personal: [], opponent: []},
+            [client._pid]: {personal: [], opponent: []}
+        }
         for (let pid in room.player) {
           for (let [index, card] of room.player[pid].curr_deck.entries()) {
             let id = `card_${game.room[rid].card_id}`
             room.cards[id] = card
-            if(index < room.player[pid].life_max){
+            if (index < room.player[pid].life_max) {
               card.field = 'life'
               life[pid].personal.push({id: id, name: card.name})
               life[room.player[pid]._foe._pid].opponent.push({id: id})
               room.player[pid].card_amount.deck -= 1
               room.player[pid].card_amount.life += 1
             }
+            else record_deck[pid].push({id: id, name: card.name})
             room.card_id ++
           }
         }
         cb({})
 
         // game start
-        opponent.emit('buildLife', {card_list: life[opponent._pid], msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
-        client.emit('buildLife', {card_list: life[client._pid], msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
+        opponent.emit('gameStart', {card_list: {life: life[opponent._pid], deck: record_deck[opponent._pid]}, msg: {phase: 'normal phase', action: 'your turn', cursor: ' '} })
+        client.emit('gameStart', {card_list: {life: life[client._pid], deck: record_deck[client._pid]}, msg: {phase: 'normal phase', action: 'opponent turn', cursor: ' '} })
       }
       else{
         game.queue.push(client)

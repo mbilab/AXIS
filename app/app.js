@@ -84,7 +84,7 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: this.player.personal.drawCard },
+      personal_deck: { type: 'sprite', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: {onInputDown: this.player.personal.drawCard, onInputOver: this.showDeck, onInputOut: this.closeDeck} },
       opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
       personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
       opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
@@ -161,6 +161,23 @@ Game.prototype.showStat = function () {
   let stat_pnl = this.page.game.stat_panel
   stat_pnl.reset((stat_pnl.x == -15)? 25 : -15, this.default.game.height/2)
   game.phaser.world.bringToTop(stat_pnl)
+}
+
+Game.prototype.setDeckOverScroll = function () {
+  this.phaser.input.mouse.mouseWheelCallback = this.showRecordDeck
+}
+
+Game.prototype.removeDeckOverScroll = function () {
+  this.phaser.input.mouse.mouseWheelCallback = null
+}
+
+Game.prototype.showRecordDeck = function () {
+  if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
+    // show the record deck panel
+  }
+  else {
+    // close the panel
+  }
 }
 
 // to close panel, option = {}
@@ -309,7 +326,7 @@ Game.prototype.changePage = function (obj) {
 
   // variable reset due to page change
   personal.curr_deck = null
-  game.textPanel({phase: ' ', action: ' ', cursor: ' '})
+  game.textPanel({phase: ' ', action: ' ', cursor: ' ', end: ' '})
 
 }
 
@@ -583,6 +600,7 @@ const Player = function () {
   this.hand = []
   this.life = []
   this.socket = []
+  this.record_deck = []
 
   // stat
   this.stat = {} // whenever a stat is add or remove, trigger a function to show icon
@@ -976,14 +994,19 @@ function buildList (obj) {
 
 // socket server
 
-socket.on('buildLife', it => {
-  for (let target in it.card_list){
-    for(let card of it.card_list[target]){
+socket.on('gameStart', it => {
+  // record deck
+  personal.record_deck = it.card_list.deck
+
+  // build life
+  for (let target in it.card_list.life){
+    for(let card of it.card_list.life[target]){
       let name = (card.name)? card.name : 'cardback'
       let input = (target === 'personal')? true : false
       game.player[target].life.push(new Card({name: name, id: card.id, cover: true, field: 'life', owner: target}))
     }
   }
+
   game.fixCardPos({personal: {life: true}, opponent: {life: true}})
   game.changePage({next: 'game'})
   game.textPanel(it.msg)
