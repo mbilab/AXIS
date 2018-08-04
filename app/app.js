@@ -825,7 +825,7 @@ Player.prototype.useCard = function (card) {
 const Deck = function (init) {
   this.slot = init.slot
   this.name = init.name
-  this.card_list = {}
+  this.card_list = []
   this.page = 1
 
   // deck
@@ -839,6 +839,41 @@ const Deck = function (init) {
 
   this.rdm_btn = game.phaser.add.button((game.default.game.width-232)/2 + 84*(this.index-1), game.default.game.height/2 + 110, 'new', this.randomDeck, this)
   this.rdm_btn.kill()
+
+  // deck view
+  this.deck_panel = game.phaser.add.sprite(game.default.game.width/2 + 25, game.default.game.height/2, 'deck_panel')
+  this.deck_panel.anchor.setTo(0.5)
+  this.deck_panel.events.onInputOver.add( function () {
+    game.phaser.input.mouse.mouseWheelCallback = this.viewCards
+  }, this)
+  this.deck_panel.events.onInputOut.add( function () {
+    game.phaser.input.mouse.mouseWheelCallback = null
+  }, this)
+  let mask = game.phaser.add.graphics(game.default.game.width/2 + 25 - 500, game.default.game.height/2 - 270)
+  mask.beginFill(0xffffff)
+  mask.drawRoundedRect(0,0, 1000, 540)
+  mask.endFill()
+  this.deck_panel.mask = mask
+  this.deck_panel.kill()
+}
+
+Deck.prototype.buildDeckPanel = function (deck = this.card_list) {
+  for (let card in deck) {
+    let curr = game.phaser.add.sprite(0, 0, card.name)
+  }
+}
+
+Deck.prototype.viewCards = function () {
+  if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
+    deck_panel.children.forEach(function (card) {
+      card.y -= 5
+    })
+  }
+  else {
+    deck_panel.children.forEach(function (card) {
+      card.y += 5
+    })
+  }
 }
 
 Deck.prototype.click = function (){
@@ -859,9 +894,7 @@ Deck.prototype.click = function (){
   }
 }
 
-// !deckmech
 Deck.prototype.randomDeck = function () {
-  // !--
   socket.emit('randomDeck', { slot: this.slot }, it => {
     console.log(it.newDeck)
     this.card_list = it.newDeck
