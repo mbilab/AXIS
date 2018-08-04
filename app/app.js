@@ -851,15 +851,36 @@ const Deck = function (init) {
   }, this)
   let mask = game.phaser.add.graphics(game.default.game.width/2 + 25 - 500, game.default.game.height/2 - 270)
   mask.beginFill(0xffffff)
-  mask.drawRoundedRect(0,0, 1000, 540)
+  mask.drawRect(0,0, 1000, 540)
   mask.endFill()
   this.deck_panel.mask = mask
   this.deck_panel.kill()
 }
 
-Deck.prototype.buildDeckPanel = function (deck = this.card_list) {
-  for (let card in deck) {
-    let curr = game.phaser.add.sprite(0, 0, card.name)
+Deck.prototype.buildDeckPanel = function (width = 7, height = 3, indent = 20, scaler = 1.3) {
+  let init_x = -1 * (parseInt(width/2)) * (game.default.card.width + indent) * scaler
+  let init_y = -1 * (parseInt(height/2)) * (game.default.card.height + indent) * scaler
+
+  for (let [idx, ele] of this.card_list.entries()) {
+    let x = init_x + (idx % width) * (game.default.card.width + indent) * scaler
+    let y = init_y + parseInt(idx/width) * (game.default.card.height + indent) * scaler
+    let curr = game.phaser.add.sprite(x, y, ele)
+    curr.anchor.setTo(0.5)
+    curr.scale.setTo(scaler)
+    //if (ele.id) curr._id = ele.id
+
+    curr.inputEnabled = true
+    curr.events.onInputOver.add( function () {
+      game.textPanel({effect: ele})
+    })
+    curr.events.onInputOut.add( function () {
+      game.textPanel({effect: 'empty'})
+    })
+    curr.events.onInputDown.add( function () {
+
+    })
+
+    this.deck_panel.addChild(curr)
   }
 }
 
