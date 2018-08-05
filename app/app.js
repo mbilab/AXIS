@@ -84,7 +84,7 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'sprite', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: {onInputDown: this.player.personal.drawCard, onInputOver: this.showDeck, onInputOut: this.closeDeck} },
+      personal_deck: { type: 'sprite', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: {onInputDown: this.player.personal.drawCard, onInputOver: this.setDeckOverScroll, onInputOut: this.removeDeckOverScroll} },
       opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
       personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
       opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
@@ -174,9 +174,11 @@ Game.prototype.removeDeckOverScroll = function () {
 Game.prototype.showRecordDeck = function () {
   if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
     // show the record deck panel
+
   }
   else {
     // close the panel
+
   }
 }
 
@@ -843,10 +845,13 @@ const Deck = function (init) {
   // deck view
   this.deck_panel = game.phaser.add.sprite(game.default.game.width/2 + 25, game.default.game.height/2, 'deck_panel')
   this.deck_panel.anchor.setTo(0.5)
+  this.deck_panel.inputEnabled = true
   this.deck_panel.events.onInputOver.add( function () {
+    game.phaser.input.mouse._last_over_scroll = this
     game.phaser.input.mouse.mouseWheelCallback = this.viewCards
   }, this)
   this.deck_panel.events.onInputOut.add( function () {
+    game.phaser.input.mouse._last_over_scroll = null
     game.phaser.input.mouse.mouseWheelCallback = null
   }, this)
   let mask = game.phaser.add.graphics(game.default.game.width/2 + 25 - 500, game.default.game.height/2 - 270)
@@ -885,15 +890,16 @@ Deck.prototype.buildDeckPanel = function (width = 7, height = 3, indent = 20, sc
 }
 
 Deck.prototype.viewCards = function () {
-  if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    deck_panel.children.forEach(function (card) {
-      card.y -= 5
-    })
+  let deck = game.phaser.input.mouse._last_over_scroll.deck_panel
+  if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
+    for (let card of deck.children) {
+      card.y -= 45
+    }
   }
   else {
-    deck_panel.children.forEach(function (card) {
-      card.y += 5
-    })
+    for (let card of deck.children) {
+      card.y += 45
+    }
   }
 }
 
