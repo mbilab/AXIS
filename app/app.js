@@ -84,7 +84,7 @@ const Game = function () {
     },
     loading: {},
     game: {
-      personal_deck: { type: 'sprite', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: {onInputDown: this.player.personal.drawCard, onInputOver: this.setDeckOverScroll, onInputOut: this.removeDeckOverScroll} },
+      personal_deck: { type: 'sprite', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.deck, img: 'cardback', func: {onInputDown: this.player.personal.drawCard} },
       opponent_deck: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.deck, img: 'cardback', func: null },
       personal_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.personal.y.grave, img: 'emptySlot', func: null },
       opponent_grave: { type: 'button', x: this.default.game.width*(1 - 1/13) + 32 + 20, y: this.default.player.opponent.y.grave, img: 'emptySlot', func: null },
@@ -161,25 +161,6 @@ Game.prototype.showStat = function () {
   let stat_pnl = this.page.game.stat_panel
   stat_pnl.reset((stat_pnl.x == -15)? 25 : -15, this.default.game.height/2)
   game.phaser.world.bringToTop(stat_pnl)
-}
-
-Game.prototype.setDeckOverScroll = function () {
-  this.phaser.input.mouse.mouseWheelCallback = this.showRecordDeck
-}
-
-Game.prototype.removeDeckOverScroll = function () {
-  this.phaser.input.mouse.mouseWheelCallback = null
-}
-
-Game.prototype.showRecordDeck = function () {
-  if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    // show the record deck panel
-
-  }
-  else {
-    // close the panel
-
-  }
 }
 
 // to close panel, option = {}
@@ -316,7 +297,7 @@ Game.prototype.changePage = function (obj) {
   this.curr_page = obj.next
   if (new_page) {
     for (let elem in new_page) {
-      if(!new_page[elem].req){
+      if(!('req' in new_page[elem])){
         if ('html' === new_page[elem].type)
           this.shiftInputForm(new_page[elem], 'front')
         else
@@ -327,7 +308,7 @@ Game.prototype.changePage = function (obj) {
   }
 
   // variable reset due to page change
-  personal.curr_deck = null
+  if (this.curr_page !== 'game' && this.curr_page !== 'loading') personal.curr_deck = null
   game.textPanel({phase: ' ', action: ' ', cursor: ' ', end: ' '})
 
 }
@@ -550,6 +531,7 @@ Game.prototype.resetPlayer = function () {
     }
     opponent[field] = []
   }
+  this.page.game.deck_panel.removeChildren()
   this.page.game.personal_grave.loadTexture('emptySlot')
   this.page.game.opponent_grave.loadTexture('emptySlot')
 }
@@ -859,30 +841,31 @@ const Deck = function (init) {
   mask.drawRect(0,0, 1000, 540)
   mask.endFill()
   this.deck_panel.mask = mask
+  this.deck_panel.req = true
   this.deck_panel.kill()
 }
 
-Deck.prototype.buildDeckPanel = function (width = 7, height = 3, indent = 20, scaler = 1.3) {
+Deck.prototype.buildDeckPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
   let init_x = -1 * (parseInt(width/2)) * (game.default.card.width + indent) * scaler
   let init_y = -1 * (parseInt(height/2)) * (game.default.card.height + indent) * scaler
 
-  for (let [idx, ele] of this.card_list.entries()) {
+  for (let [idx, ele] of card_list.entries()) {
     let x = init_x + (idx % width) * (game.default.card.width + indent) * scaler
     let y = init_y + parseInt(idx/width) * (game.default.card.height + indent) * scaler
-    let curr = game.phaser.add.sprite(x, y, ele)
+    let curr = game.phaser.add.sprite(x, y, ele.name)
     curr.anchor.setTo(0.5)
     curr.scale.setTo(scaler)
-    //if (ele.id) curr._id = ele.id
+    curr._id = ele.id
 
     curr.inputEnabled = true
     curr.events.onInputOver.add( function () {
-      game.textPanel({effect: ele})
+      game.textPanel({effect: ele.name})
     })
     curr.events.onInputOut.add( function () {
       game.textPanel({effect: 'empty'})
     })
     curr.events.onInputDown.add( function () {
-
+      // choose card
     })
 
     this.deck_panel.addChild(curr)
@@ -1057,6 +1040,8 @@ function buildList (obj) {
 socket.on('gameStart', it => {
   // record deck
   personal.record_deck = it.card_list.deck
+  personal.deck_slot[personal.curr_deck].buildDeckPanel(personal.record_deck)
+  game.page.game.deck_panel = personal.deck_slot[personal.curr_deck].deck_panel
 
   // build life
   for (let target in it.card_list.life){
