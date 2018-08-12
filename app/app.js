@@ -138,6 +138,51 @@ Game.prototype.textPanel = function (text) {
   game.phaser.world.bringToTop(game.page.game.stat_panel)
 }
 
+Game.prototype.buildDeckPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
+  this.page.game.deck_panel.removeChildren()
+
+  let init_x = -1 * (parseInt(width/2)) * (this.default.card.width + indent) * scaler
+  let init_y = -1 * (parseInt(height/2)) * (this.default.card.height + indent) * scaler
+
+  for (let [idx, ele] of card_list.entries()) {
+    let x = init_x + (idx % width) * (game.default.card.width + indent) * scaler
+    let y = init_y + parseInt(idx/width) * (game.default.card.height + indent) * scaler
+    let curr = game.phaser.add.sprite(x, y, ele.name)
+    curr.anchor.setTo(0.5)
+    curr.scale.setTo(scaler)
+    curr._id = ele.id
+    curr._this = false
+
+    curr.inputEnabled = true
+    curr.events.onInputOver.add( function () {
+      game.textPanel({effect: ele.name})
+    })
+    curr.events.onInputOut.add( function () {
+      game.textPanel({effect: 'empty'})
+    })
+    curr.events.onInputDown.add( function () {
+      curr._this = (curr._this)? false : true
+      personal.chooseCard({img: curr, id: curr._id})
+    })
+
+    this.page.game.deck_panel.addChild(curr)
+  }
+}
+
+Game.prototype.viewDeckCards = function () {
+  let deck = this.phaser.input.mouse._last_over_scroll.deck_panel
+  if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
+    for (let card of deck.children) {
+      card.y -= 45
+    }
+  }
+  else {
+    for (let card of deck.children) {
+      card.y += 45
+    }
+  }
+}
+
 // param = {personal: {stat1: true, stat2: false}, opponent: {} ...}
 Game.prototype.statPanel = function (param) {
   for (let target in param) {
@@ -472,6 +517,27 @@ Game.prototype.pageInit = function () {
     }
   }
 
+  // add deck panel in game page
+  let deck_panel = game.phaser.add.sprite(this.default.game.width/2 + 25, this.default.game.height/2, 'deck_panel')
+  deck_panel.anchor.setTo(0.5)
+  deck_panel.inputEnabled = true
+  deck_panel.events.onInputOver.add( function () {
+    game.phaser.input.mouse._last_over_scroll = deck_panel
+    game.phaser.input.mouse.mouseWheelCallback = this.viewDeckCards
+  }, this)
+  deck_panel.events.onInputOut.add( function () {
+    game.phaser.input.mouse._last_over_scroll = null
+    game.phaser.input.mouse.mouseWheelCallback = null
+  }, this)
+  let mask = game.phaser.add.graphics(this.default.game.width/2 + 25 - 500, this.default.game.height/2 - 270)
+  mask.beginFill(0xffffff)
+  mask.drawRect(0,0, 1000, 540)
+  mask.endFill()
+  deck_panel.mask = mask
+  deck_panel.req = true
+  deck_panel.kill()
+  this.page.game.deck_panel = deck_panel
+
   // add cards in game page
   for (let field of ['altar', 'battle', 'hand', 'life']) {
     this.page.game[`personal_${field}`] = personal[field]
@@ -663,9 +729,11 @@ Player.prototype.effectLoop = function () {
       if (curr_eff === 'steal') {
         // flip opponent hand card
         for (let card of opponent.hand)
-          card.img.loadTexture(card.name)
+          card.flip()
+          //card.flip(card.name)
+          //card.img.loadTexture(card.name)
       }
-      if (curr_eff === 'retrieve') {
+      if (curr_eff === 'retrieve' || curr_eff === 'equip') {
         // generate a choose card list / panel
 
       }
@@ -824,66 +892,6 @@ const Deck = function (init) {
   this.rdm_btn = game.phaser.add.button((game.default.game.width-232)/2 + 84*(this.index-1), game.default.game.height/2 + 110, 'new', this.randomDeck, this)
   this.rdm_btn.kill()
 
-  // deck view
-  this.deck_panel = game.phaser.add.sprite(game.default.game.width/2 + 25, game.default.game.height/2, 'deck_panel')
-  this.deck_panel.anchor.setTo(0.5)
-  this.deck_panel.inputEnabled = true
-  this.deck_panel.events.onInputOver.add( function () {
-    game.phaser.input.mouse._last_over_scroll = this
-    game.phaser.input.mouse.mouseWheelCallback = this.viewCards
-  }, this)
-  this.deck_panel.events.onInputOut.add( function () {
-    game.phaser.input.mouse._last_over_scroll = null
-    game.phaser.input.mouse.mouseWheelCallback = null
-  }, this)
-  let mask = game.phaser.add.graphics(game.default.game.width/2 + 25 - 500, game.default.game.height/2 - 270)
-  mask.beginFill(0xffffff)
-  mask.drawRect(0,0, 1000, 540)
-  mask.endFill()
-  this.deck_panel.mask = mask
-  this.deck_panel.req = true
-  this.deck_panel.kill()
-}
-
-Deck.prototype.buildDeckPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
-  let init_x = -1 * (parseInt(width/2)) * (game.default.card.width + indent) * scaler
-  let init_y = -1 * (parseInt(height/2)) * (game.default.card.height + indent) * scaler
-
-  for (let [idx, ele] of card_list.entries()) {
-    let x = init_x + (idx % width) * (game.default.card.width + indent) * scaler
-    let y = init_y + parseInt(idx/width) * (game.default.card.height + indent) * scaler
-    let curr = game.phaser.add.sprite(x, y, ele.name)
-    curr.anchor.setTo(0.5)
-    curr.scale.setTo(scaler)
-    curr._id = ele.id
-
-    curr.inputEnabled = true
-    curr.events.onInputOver.add( function () {
-      game.textPanel({effect: ele.name})
-    })
-    curr.events.onInputOut.add( function () {
-      game.textPanel({effect: 'empty'})
-    })
-    curr.events.onInputDown.add( function () {
-      // choose card
-    })
-
-    this.deck_panel.addChild(curr)
-  }
-}
-
-Deck.prototype.viewCards = function () {
-  let deck = game.phaser.input.mouse._last_over_scroll.deck_panel
-  if (game.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    for (let card of deck.children) {
-      card.y -= 45
-    }
-  }
-  else {
-    for (let card of deck.children) {
-      card.y += 45
-    }
-  }
 }
 
 Deck.prototype.click = function (){
@@ -960,12 +968,25 @@ const Card = function (init) {
   this.body.addChild(this.frame)
 }
 
-Card.prototype.flip = function (name) {
-  if (this.img.key !== 'cardback') this.img.loadTexture('cardback')
-  else {
-    this.name = name
-    this.img.loadTexture(name)
-  }
+Card.prototype.flip = function (name = null) {
+  let card = this
+  if (name != null) card.name = name
+
+  game.tween = game.phaser.add.tween(card.body.scale).to(
+    {x: 0, y: 1}, 250, Phaser.Easing.Sinusoidal.InOut, true
+  )
+  game.tween.onComplete.add(function () {
+    card.img.loadTexture((card.img.key !== 'cardback')? 'cardback' : card.name)
+    game.tween = game.phaser.add.tween(card.body.scale).to(
+      {x: 1, y: 1}, 250, Phaser.Easing.Sinusoidal.InOut, true
+    )
+  }, game.tween)
+
+  //if (this.img.key !== 'cardback') this.img.loadTexture('cardback')
+  //else {
+  // this.name = name
+  //  this.img.loadTexture(name)
+  //}
 }
 
 Card.prototype.overScroll = function () {
@@ -1040,8 +1061,7 @@ function buildList (obj) {
 socket.on('gameStart', it => {
   // record deck
   personal.record_deck = it.card_list.deck
-  personal.deck_slot[personal.curr_deck].buildDeckPanel(personal.record_deck)
-  game.page.game.deck_panel = personal.deck_slot[personal.curr_deck].deck_panel
+  game.buildDeckPanel(personal.record_deck)
 
   // build life
   for (let target in it.card_list.life){
@@ -1189,7 +1209,9 @@ socket.on('effectTrigger', effect => {
       case 'steal':
         // flip hand card back
         for (let card of opponent.hand)
-          card.img.loadTexture('cardback')
+          if (!(card.id in effect.card[type].personal))
+            card.flip()
+          //card.img.loadTexture('cardback')
 
       // card move or turn
       default:
