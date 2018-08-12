@@ -138,8 +138,9 @@ Game.prototype.textPanel = function (text) {
   game.phaser.world.bringToTop(game.page.game.stat_panel)
 }
 
-Game.prototype.buildDeckPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
-  this.page.game.deck_panel.removeChildren()
+Game.prototype.buildFieldPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
+  let field panel = this.page.game.field_panel
+  field_panel.removeChildren()
 
   let init_x = -1 * (parseInt(width/2)) * (this.default.card.width + indent) * scaler
   let init_y = -1 * (parseInt(height/2)) * (this.default.card.height + indent) * scaler
@@ -165,19 +166,22 @@ Game.prototype.buildDeckPanel = function (card_list, width = 7, height = 3, inde
       personal.chooseCard({img: curr, id: curr._id})
     })
 
-    this.page.game.deck_panel.addChild(curr)
+    field_panel.addChild(curr)
   }
+
+  field_panel.reset(field_panel.x, field_panel.y)
+  this.phaser.world.bringToTop(field_panel)
 }
 
-Game.prototype.viewDeckCards = function () {
-  let deck = this.phaser.input.mouse._last_over_scroll.deck_panel
+Game.prototype.viewFieldCards = function () {
+  let field = this.phaser.input.mouse._last_over_scroll
   if (this.phaser.input.mouse.wheelDelta === Phaser.Mouse.WHEEL_UP) {
-    for (let card of deck.children) {
+    for (let card of field.children) {
       card.y -= 45
     }
   }
   else {
-    for (let card of deck.children) {
+    for (let card of field.children) {
       card.y += 45
     }
   }
@@ -517,15 +521,15 @@ Game.prototype.pageInit = function () {
     }
   }
 
-  // add deck panel in game page
-  let deck_panel = game.phaser.add.sprite(this.default.game.width/2 + 25, this.default.game.height/2, 'deck_panel')
-  deck_panel.anchor.setTo(0.5)
-  deck_panel.inputEnabled = true
-  deck_panel.events.onInputOver.add( function () {
-    game.phaser.input.mouse._last_over_scroll = deck_panel
-    game.phaser.input.mouse.mouseWheelCallback = this.viewDeckCards
+  // add field panel in game page
+  let field_panel = game.phaser.add.sprite(this.default.game.width/2 + 25, this.default.game.height/2, 'deck_panel')
+  field_panel.anchor.setTo(0.5)
+  field_panel.inputEnabled = true
+  field_panel.events.onInputOver.add( function () {
+    game.phaser.input.mouse._last_over_scroll = field_panel
+    game.phaser.input.mouse.mouseWheelCallback = this.viewFieldCards
   }, this)
-  deck_panel.events.onInputOut.add( function () {
+  field_panel.events.onInputOut.add( function () {
     game.phaser.input.mouse._last_over_scroll = null
     game.phaser.input.mouse.mouseWheelCallback = null
   }, this)
@@ -533,10 +537,10 @@ Game.prototype.pageInit = function () {
   mask.beginFill(0xffffff)
   mask.drawRect(0,0, 1000, 540)
   mask.endFill()
-  deck_panel.mask = mask
-  deck_panel.req = true
-  deck_panel.kill()
-  this.page.game.deck_panel = deck_panel
+  field_panel.mask = mask
+  field_panel.req = true
+  field_panel.kill()
+  this.page.game.field_panel = field_panel
 
   // add cards in game page
   for (let field of ['altar', 'battle', 'hand', 'life']) {
@@ -597,7 +601,7 @@ Game.prototype.resetPlayer = function () {
     }
     opponent[field] = []
   }
-  this.page.game.deck_panel.removeChildren()
+  this.page.game.field_panel.removeChildren()
   this.page.game.personal_grave.loadTexture('emptySlot')
   this.page.game.opponent_grave.loadTexture('emptySlot')
 }
@@ -734,7 +738,7 @@ Player.prototype.effectLoop = function () {
           //card.img.loadTexture(card.name)
       }
       if (curr_eff === 'retrieve' || curr_eff === 'equip') {
-        // generate a choose card list / panel
+        // buildFieldPanel >> record deck or grave
 
       }
       let choose_btn = game.page.game.choose
@@ -1060,8 +1064,7 @@ function buildList (obj) {
 
 socket.on('gameStart', it => {
   // record deck
-  personal.record_deck = it.card_list.deck
-  game.buildDeckPanel(personal.record_deck)
+  // personal.record_deck = it.card_list.deck
 
   // build life
   for (let target in it.card_list.life){
@@ -1239,10 +1242,14 @@ socket.on('effectLoop', effect => {
   // update covered card name
   if (effect.rlt.ext) {
     for (let field in effect.rlt.ext) {
+      let upd = effect.rlt.ext[field]
       if (field !== 'deck') {
-        let upd = effect.rlt.ext[field]
         for (let card of opponent[field])
           card.name = upd[card.id]
+      }
+      else {
+        // retrieve from deck
+        game.record_deck = upd
       }
     }
   }
