@@ -1496,8 +1496,8 @@ io.on('connection', client => {
 
     for (let id of card_pick) {
       let card = room.cards[id]
-      if (card.cover) return cb({err: 'please choose unveiled card'})
       if (card.field === 'life') {
+        if (card.cover) return cb({err: 'please choose unveiled card'})
         if (card.name === 'vanish') type.life_use[id] = {}
         else return cb({err: 'please choose vanish'})
       }
