@@ -118,6 +118,11 @@ const Game = function () {
     steal   : true,
     teleport: true
   }
+  this.card_reveal_target = { //
+    steal: 'opponent',
+    retrieve: 'personal',
+    equip: 'personal'
+  }
 
   this.pool = {}
   this.queue = []
@@ -352,7 +357,7 @@ Game.prototype.checkUse = function (client, it, cb) {
     if (!Object.keys(client.card_pause).length) {
       if (Object.keys(client.aura.dicease).length && game.default.all_card[card.name].effect.heal) return cb({err: 'cant use heal effect cards when diceased'})
       if (room.cards[it.id].type.base === 'vanish') return cb( {err: 'only available in atk phase'} )
-      if (client.action_point <= 0 && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
+      if ((client.stat.stun ||client.action_point <= 0) && room.cards[it.id].type.base !== 'item') return cb( {err: 'not enough action point'} )
       if (card.field === 'life' && client.card_amount.hand == 0) return cb( {err: 'no handcard to replace'} )
       if (card.field === 'life' && Object.keys(client.aura.silence).length) return cb({err: 'cant use life field cards when silenced'})
     }
@@ -568,9 +573,11 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
           for (let target in effect) {
             let tmp = {id: id, name: card_name, eff: avail_effect, tp: tp, tg: target}
 
-            if (effect_name === 'damage') player[target].dmg_blk.push(effect[target])
+            if (effect_name === 'damage')
+              player[target].dmg_blk.push(effect[target])
+
             if (effect_name === 'steal') {
-              if (!('ext' in tmp))tmp.ext = {}
+              if (!('ext' in tmp)) tmp.ext = {}
               tmp.ext.hand = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
                 if (this.room[personal._rid].cards[curr].curr_own === opponent._pid && this.room[personal._rid].cards[curr].field === 'hand')
                   last[curr] = this.room[personal._rid].cards[curr].name
@@ -578,7 +585,7 @@ Game.prototype.effectTrigger = function (personal, opponent, card_list) {
               }, {})
             }
             if (effect_name === 'retrieve') {
-              if (!('ext' in tmp))tmp.ext = {}
+              if (!('ext' in tmp)) tmp.ext = {}
               tmp.ext.deck = Object.keys(this.room[personal._rid].cards).reduce( (last, curr) => {
                 if (this.room[personal._rid].cards[curr].curr_own === personal._pid && this.room[personal._rid].cards[curr].field === 'deck')
                   last[curr] = this.room[personal._rid].cards[curr].name
@@ -792,9 +799,9 @@ Game.prototype.stat = function (personal, effect) {
   for (let name in effect) {
     for (let target in effect[name]) {
       let tp = (name === 'all')? Object.keys(player[target].stat) : [name]
-      for (let st_nm of tp) {
-        player[target].stat[st_nm] = effect[name][target]
-        rlt.stat[target][st_nm] = effect[name][target]
+      for (let stat_name of tp) {
+        player[target].stat[stat_name] = effect[name][target]
+        rlt.stat[target][stat_name] = effect[name][target]
       }
     }
   }
@@ -959,8 +966,8 @@ Game.prototype.draw = function (personal, effect) {
     }
   }
 
-  personal.emit('effectTrigger', {card: {draw: rlt.personal}})
-  personal._foe.emit('effectTrigger', {card: {draw: rlt.opponent}})
+  personal.emit('effectTrigger', {card: {draw: {personal: rlt.personal, opponent: {} } } })
+  personal._foe.emit('effectTrigger', {card: {draw: {opponent: rlt.opponent, personal: {} } } })
 
   return {}
 }
@@ -1056,17 +1063,32 @@ Game.prototype.receive = function (personal, param) {
 }
 
 Game.prototype.retrieve = function (personal, param) {
-  let effect = game.default.all_card[param.name].effect[param.tp][param.eff]
-  let rlt = { card: {} }
-  for (let target in effect) {
-    for (let object in effect[target]) {
-      for (let type in effect[target][object]) {
-        rlt.card['retrieve'] = {}
-      }
-    }
+  let room = this.room[personal._rid]
+  let effect = Object.assign({}, game.default.all_card[param.name].effect[param.tp][param.eff][param.tg])
+
+  let card_pick = Object.keys(param.card_pick)
+  let total_len = 0
+  for (let field in effect) {
+    total_len += effect[field]
   }
-  personal.emit('effectTrigger', rlt)
-  personal._foe.emit('effectTrigger', rlt)
+  if (card_pick.length != total_len) return {err: 'error retrieve length'}
+
+  for (let id in param.card_pick) {
+    let card = room.cards[id]
+    if (card == null) return {err: 'no card id'}
+    if (card.curr_own !== personal._pid) return {err: 'please choose personal card'}
+
+    if (card.field !== 'deck') return {err: 'error card field'}
+    if (!('card' in effect) && !(card.type.base in effect)) return {err: 'error card type'}
+    if (!effect[('card' in effect)? 'card': card.type.base]) return {err: 'error type length'}
+    effect[('card' in effect)? 'card' : card.type.base] --
+    param.card_pick[id] = {to: 'hand'}
+  }
+
+  let rlt = this.cardMove(personal, personal._foe, param.card_pick)
+
+  personal.emit('effectTrigger', {card: {retrieve: { personal: rlt.personal, opponent: {} }}})
+  personal._foe.emit('effectTrigger', {card: {retrieve: { personal: {}, opponent: rlt.opponent }}})
   return {}
 }
 
@@ -1445,6 +1467,7 @@ io.on('connection', client => {
   client.on('attack', cb => {
     let room = game.room[client._rid]
     if (Object.keys(client.aura.fear).length) return cb({err: 'cant attack when fear'})
+    if (client.stat.stun) return cb({err: 'cant attack when stunned'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1696,6 +1719,7 @@ io.on('connection', client => {
   client.on('drawCard', cb => {
     let room = game.room[client._rid]
     if (Object.keys(client.aura.cripple).length) return cb({err: 'cant draw card when crippled'})
+    if (client.stat.stun) return cb({err: 'cant draw card when stunned'})
 
     if (typeof cb !== 'function') return
     if (room.phase !== 'normal') return cb( { err: `not allowed in ${room.phase} phase`} )
@@ -1800,7 +1824,7 @@ io.on('connection', client => {
     // !-- start next player turn
     // attr check
     let nxt_ply = (room.curr_ply === client._pid)? client : (client._foe)
-    if (nxt_ply.stat.stun) nxt_ply.action_point -= 1
+    //if (nxt_ply.stat.stun) nxt_ply.action_point -= 1
 
     // chanting spell trigger
     if (!nxt_ply.stat.stun && Object.keys(nxt_ply.chanting).length) {

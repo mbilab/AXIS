@@ -139,24 +139,25 @@ Game.prototype.textPanel = function (text) {
 }
 
 Game.prototype.buildFieldPanel = function (card_list, width = 7, height = 3, indent = 20, scaler = 1.3) {
-  let field panel = this.page.game.field_panel
-  field_panel.removeChildren()
+  let field_panel = this.page.game.field_panel
+  //field_panel.removeChildren()
 
   let init_x = -1 * (parseInt(width/2)) * (this.default.card.width + indent) * scaler
   let init_y = -1 * (parseInt(height/2)) * (this.default.card.height + indent) * scaler
 
-  for (let [idx, ele] of card_list.entries()) {
+  for (let [idx, key] of Object.keys(card_list).entries()) {
+  //for (let [idx, ele] of card_list.entries()) {
     let x = init_x + (idx % width) * (game.default.card.width + indent) * scaler
     let y = init_y + parseInt(idx/width) * (game.default.card.height + indent) * scaler
-    let curr = game.phaser.add.sprite(x, y, ele.name)
+    let curr = game.phaser.add.sprite(x, y, card_list[key])//ele.name)
     curr.anchor.setTo(0.5)
     curr.scale.setTo(scaler)
-    curr._id = ele.id
+    curr._id = key//ele.id
     curr._this = false
 
     curr.inputEnabled = true
     curr.events.onInputOver.add( function () {
-      game.textPanel({effect: ele.name})
+      game.textPanel({effect: card_list[key]})//ele.name})
     })
     curr.events.onInputOut.add( function () {
       game.textPanel({effect: 'empty'})
@@ -739,7 +740,10 @@ Player.prototype.effectLoop = function () {
       }
       if (curr_eff === 'retrieve' || curr_eff === 'equip') {
         // buildFieldPanel >> record deck or grave
-
+        for (let field in personal.eff_queue[0].ext) {
+          let card_list = personal.eff_queue[0].ext[field]
+          game.buildFieldPanel(card_list)
+        }
       }
       let choose_btn = game.page.game.choose
       choose_btn.reset(choose_btn.x, choose_btn.y)
@@ -1198,10 +1202,18 @@ socket.on('effectTrigger', effect => {
         break
 
       // generate new card
+      case 'retrieve':
       case 'draw':
+        if (type === 'retrieve') {
+          let field_panel = game.page.game.field_panel
+          field_panel.removeChildren(begin = 0)
+          field_panel.kill()
+        }
+
         let fix_field = {}
-        for (let id in effect.card[type]) {
-          let curr = effect.card[type][id]
+        let tg = (Object.keys(effect.card[type].personal).length)? 'personal' : 'opponent'
+        for (let id in effect.card[type][tg]) {
+          let curr = effect.card[type][tg][id]
           game.player[curr.new_own].hand.push( new Card({name: (curr.name)? curr.name : 'cardback', id: id, cover: (curr.cover)? curr.cover : (false), owner: curr.new_own, field: curr.to}) )
           if (curr.deck_empty) game.page.game[`${curr.new_own}_deck`].kill()
           if (!fix_field[curr.new_own]) fix_field[curr.new_own] = {hand: true}
@@ -1209,12 +1221,18 @@ socket.on('effectTrigger', effect => {
         game.fixCardPos(fix_field)
         break
 
+      // flip hand card back
+      case 'recall':
       case 'steal':
-        // flip hand card back
-        for (let card of opponent.hand)
-          if (!(card.id in effect.card[type].personal))
-            card.flip()
-          //card.img.loadTexture('cardback')
+        if (type === 'steal') {
+          for (let card of opponent.hand)
+            if (!(card.id in effect.card[type].personal))
+              card.flip()
+            //card.img.loadTexture('cardback')
+        }
+        else {
+
+        }
 
       // card move or turn
       default:
@@ -1246,10 +1264,6 @@ socket.on('effectLoop', effect => {
       if (field !== 'deck') {
         for (let card of opponent[field])
           card.name = upd[card.id]
-      }
-      else {
-        // retrieve from deck
-        game.record_deck = upd
       }
     }
   }
