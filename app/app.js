@@ -1088,14 +1088,14 @@ socket.on('playerPass', it => {
   game.resetCardPick()
   game.cardMove(it.card)
   game.textPanel(it.msg)
-  game.counterPanel(it.rlt)
+  //game.counterPanel(it.rlt)
 })
 
 socket.on('playerCounter', it => {
   game.resetCardPick()
   game.cardMove(it.card)
   game.textPanel(it.msg)
-  game.counterPanel(it.rlt)
+  //game.counterPanel(it.rlt)
 })
 
 socket.on('playerAttack', it => {
@@ -1123,8 +1123,8 @@ socket.on('playerTrigger', it => {
     game.tween = game.phaser.add.tween(card.body).to(
       {angle: card.body.angle + 90}, 500, Phaser.Easing.Sinusoidal.InOut, true
     )
-
-    game.counterPanel(it.rlt)
+    if (it.foe) personal.pass()
+    //game.counterPanel(it.rlt)
   }
   else {
     game.cardMove(it.card)
@@ -1149,16 +1149,10 @@ socket.on('plyUseCard', it => {
   game.cardMove(it.card)
   game.textPanel(it.msg)
   if (it.foe) {
-    game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
-    game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
+    personal.pass()
+    //game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
+    //game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
   }
-})
-
-socket.on('foeUseCard', it => {
-  game.cardmove(it.card)
-  game.textpanel(it.msg)
-  game.page.game.counter.reset(game.page.game.counter.x, game.page.game.counter.y)
-  game.page.game.pass.reset(game.page.game.pass.x, game.page.game.pass.y)
 })
 
 socket.on('interrupt', it => {
@@ -1241,7 +1235,12 @@ socket.on('effectTrigger', effect => {
             let curr = effect.card[type][target][id]
             if (curr.turn_dn) {
               let pos = game.findCard({id: id, curr_own: target, from: 'battle'})
-              game.player[target].battle[pos].body.angle += 90
+              //game.player[target].battle[pos].body.angle += 90
+              card = game.player[target].battle[pos]
+              game.tween = game.phaser.add.tween(card.body).to(
+                {angle: card.body.angle + 90}, 500, Phaser.Easing.Sinusoidal.InOut, true
+              )
+
               delete effect.card[type][target][id]
             }
           }

@@ -444,6 +444,10 @@ Game.prototype.useCard = function (client) {
 
   let rlt = game.cardMove(client, client._foe, param)
   let msg = `${param[use_id].action} ${room.cards[use_id].name}${(swp_id != null)? ` by ${room.cards[swp_id].name}` : ''}`
+  /*
+  client.emit('plyUseCard', { msg: {phase: 'normal phase', action: msg}, card: rlt.personal })
+  client._foe.emit('plyUseCard', { msg: {phase: 'normal phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
+  */
   client.emit('plyUseCard', { msg: {phase: 'counter phase', action: msg}, card: rlt.personal })
   client._foe.emit('plyUseCard', { msg: {phase: 'counter phase', action: `foe ${msg}`}, card: rlt.opponent, foe: true })
 
@@ -484,12 +488,15 @@ Game.prototype.triggerCard = function (client, it, cb) {
       param[it.id] = false
       game.aura(client, param)
     }
-
+    /*
+    client.emit('playerTrigger', { msg: {phase: 'normal phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'}, rlt: {} })
+    client._foe.emit('playerTrigger', { msg: {phase: 'normal phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true} })
+    */
     room.phase = 'counter'
     room.counter_status = {start: 'trigger', type: 'trigger', use_id: {}, counter_id: {}}
     room.counter_status.use_id[it.id] = true
     client.emit('playerTrigger', { msg: {phase: 'counter phase', action: `trigger ${card.name}`}, card: {id: it.id, curr_own: 'personal', from: 'battle'}, rlt: {} })
-    client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true} })
+    client._foe.emit('playerTrigger', { msg: {phase: 'counter phase', action: `foe trigger ${card.name}`}, card: {id: it.id, curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true}, foe: true })
   }
   else {
     if (card.type.base === 'item' || (card.type.base === 'spell' && card.type.effect.trigger)) {
@@ -502,7 +509,7 @@ Game.prototype.triggerCard = function (client, it, cb) {
       param[it.id] = {to: 'grave'}
       let rlt = game.cardMove(client, client._foe, param)
       client.emit('playerTrigger', { msg: {phase: 'effect phase', action: `trigger ${card.name}`}, card: rlt.personal })
-      client._foe.emit('playerTrigger', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent })
+      client._foe.emit('playerTrigger', { msg: {phase: 'effect phase', action: `foe trigger ${card.name}`}, card: rlt.opponent, foe: true })
 
       console.log('send success')
 
@@ -707,12 +714,12 @@ Game.prototype.block = function (personal, param) {
     if (card.curr_own !== personal._pid) return {err: 'please choose your card'}
     if (card.field === 'life' || card.field === 'hand') return {err: 'can only choose battle, altar, socket card'}
     let eff = game.default.all_card[card.name].effect
-    if (eff.trigger) if(!eff.trigger.block) return {err: 'no block effect'}
+    if (eff.counter) if(!eff.counter.block) return {err: 'no block effect'}
     if (eff.mosaic) if(!eff.mosaic.block) return {err: 'no block effect'}
 
     if (card.type.base === 'artifact') {
       if (card.overheat) return {err: 'artifact overheat'}
-      if (card.energy) return {err: 'not enough energy'}
+      if (card.energy <= 0) return {err: 'not enough energy'}
     }
   }
 
@@ -1635,7 +1642,7 @@ io.on('connection', client => {
       card.overheat = true
       card.energy -= 1
       client.emit('playerTrigger', { msg: {action: `trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'personal', from: 'battle'}, rlt: {personal: true, counter: true}  })
-      client._foe.emit('playerTrigger', { msg: {action: `foe trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true}  })
+      client._foe.emit('playerTrigger', { msg: {action: `foe trigger ${card.name} to counter`}, card: {id: card_pick[0], curr_own: 'opponent', from: 'battle'}, rlt: {opponent: true, counter: true}, foe: true  })
     }
     else {
       if (card.type.effect.mosaic) param[card_pick[0]].off = card.bond
@@ -1751,7 +1758,7 @@ io.on('connection', client => {
     if (card == null) return {err: 'card = null'}
     //if (card.curr_own != client._pid) return
 
-    let type = (card.field === 'battle' || card.field === 'altar')? 'trigger' : 'use'
+    let type = ((card.field === 'battle' && !('counter' in game.default.all_card[card.name].effect)) || card.field === 'altar')? 'trigger' : 'use'
     if (type === 'use') game.checkUse(client, it, cb)
     else game.triggerCard(client, it, cb)
   })
